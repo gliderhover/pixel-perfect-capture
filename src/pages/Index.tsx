@@ -1,16 +1,26 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import BottomNav from "@/components/BottomNav";
+import ExploreScreen from "@/components/ExploreScreen";
+import SquadScreen from "@/components/SquadScreen";
+import TrainScreen from "@/components/TrainScreen";
+import CompeteScreen from "@/components/CompeteScreen";
+import LiveScreen from "@/components/LiveScreen";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+type Tab = "explore" | "squad" | "train" | "compete" | "live";
+
+const Index = () => {
+  const [activeTab, setActiveTab] = useState<Tab>("explore");
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen bg-background">
+      {activeTab === "explore" && <ExploreScreen />}
+      {activeTab === "squad" && <SquadScreen />}
+      {activeTab === "train" && <TrainScreen />}
+      {activeTab === "compete" && <CompeteScreen />}
+      {activeTab === "live" && <LiveScreen />}
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
