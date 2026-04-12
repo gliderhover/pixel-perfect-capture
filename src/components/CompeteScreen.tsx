@@ -3,6 +3,7 @@ import { getPlayerById, mockRivals } from "@/data/mockData";
 import { useGameProgress } from "@/context/GameProgressContext";
 import { Swords, Trophy, ChevronRight } from "lucide-react";
 import AnimatedPortrait from "./AnimatedPortrait";
+import ChallengeFlow from "./ChallengeFlow";
 
 const CompeteScreen = () => {
   const [challengeTarget, setChallengeTarget] = useState<number | null>(null);
@@ -116,7 +117,7 @@ const CompeteScreen = () => {
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <Trophy className="w-3.5 h-3.5 text-accent shrink-0" />
-                  <span className="text-[10px] text-accent font-bold truncate">+30 XP • Rare Pack</span>
+                  <span className="text-[10px] text-accent font-bold truncate">+30 XP • +2 FP</span>
                 </div>
                 <button
                   type="button"
@@ -132,47 +133,11 @@ const CompeteScreen = () => {
       </div>
 
       {challengeRival && challengeRivalPlayer && (
-        <div
-          className="fixed inset-0 z-[1350] flex items-center justify-center bg-background/70 backdrop-blur-xl p-6"
-          onClick={() => setChallengeTarget(null)}
-        >
-          <div className="glass-card-strong p-6 w-full max-w-sm animate-encounter-reveal" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-center gap-4 mb-6">
-              <div className="flex flex-col items-center gap-1 min-w-0 flex-1">
-                <AnimatedPortrait player={activePlayer} size="lg" showMood />
-                <p className="text-xs font-black text-foreground text-center truncate w-full">You</p>
-                <p className="text-[9px] text-muted-foreground text-center truncate w-full">
-                  {activePlayer.position} · {activePlayer.representedCountry}
-                </p>
-              </div>
-              <div className="flex flex-col items-center pt-4 shrink-0">
-                <Swords className="w-7 h-7 text-primary mb-1" />
-                <span className="text-[10px] font-black text-primary">VS</span>
-              </div>
-              <div className="flex flex-col items-center gap-1 min-w-0 flex-1">
-                <AnimatedPortrait player={challengeRivalPlayer} size="lg" showMood />
-                <p className="text-[10px] text-muted-foreground truncate w-full text-center">@{challengeRival.name}</p>
-                <p className="text-xs font-black text-foreground text-center truncate w-full">{challengeRivalPlayer.name}</p>
-                <p className="text-[9px] text-muted-foreground text-center truncate w-full">
-                  {challengeRivalPlayer.position} · {challengeRivalPlayer.representedCountry}
-                </p>
-              </div>
-            </div>
-
-            <div className="glass-card p-3 mb-5 flex items-center justify-center gap-2">
-              <Trophy className="w-4 h-4 text-accent shrink-0" />
-              <span className="text-sm font-bold text-accent">Win: +30 XP • Rare Pack</span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setChallengeTarget(null)}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-sm floating-button glow-primary flex items-center justify-center gap-2"
-            >
-              <Swords className="w-4 h-4" /> Start Challenge
-            </button>
-          </div>
-        </div>
+        <ChallengeFlow
+          rival={challengeRival}
+          rivalPlayer={challengeRivalPlayer}
+          onClose={() => setChallengeTarget(null)}
+        />
       )}
     </div>
   );
