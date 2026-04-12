@@ -4,7 +4,7 @@ import { rarityDifficulty } from "@/data/keeperItems";
 import AnimatedPortrait from "./AnimatedPortrait";
 
 type Direction = "left" | "center" | "right";
-type Phase = "ready" | "runup" | "shoot" | "dive" | "result";
+type Phase = "intro" | "ready" | "runup" | "shoot" | "dive" | "save" | "goal";
 
 interface PenaltyDuelProps {
   player: Player;
@@ -18,7 +18,6 @@ interface PenaltyDuelProps {
   onGoal: () => void;
 }
 
-/** Position-based difficulty bump — attackers are harder */
 function positionDifficultyMod(position: string): number {
   const p = position.toLowerCase();
   if (p.includes("st") || p.includes("cf") || p.includes("striker") || p.includes("forward")) return -120;
@@ -26,8 +25,14 @@ function positionDifficultyMod(position: string): number {
   if (p.includes("cam") || p.includes("am")) return -50;
   if (p.includes("def") || p.includes("cb") || p.includes("rb") || p.includes("lb")) return 150;
   if (p.includes("gk") || p.includes("keeper")) return 200;
-  return 0; // midfielders
+  return 0;
 }
+
+const ballTargetPos: Record<Direction, { left: string; top: string }> = {
+  left: { left: "18%", top: "32%" },
+  center: { left: "50%", top: "20%" },
+  right: { left: "82%", top: "32%" },
+};
 
 const PenaltyDuel = ({
   player,
@@ -40,378 +45,417 @@ const PenaltyDuel = ({
   onSave,
   onGoal,
 }: PenaltyDuelProps) => {
-  const [phase, setPhase] = useState<Phase>("ready");
+  const [phase, setPhase] = useState<Phase>("intro");
   const [shotDir, setShotDir] = useState<Direction | null>(null);
   const [diveDir, setDiveDir] = useState<Direction | null>(null);
   const [hint, setHint] = useState<Direction | null>(null);
-  const [saved, setSaved] = useState<boolean | null>(null);
-  const [ballPos, setBallPos] = useState<{ x: number; y: number } | null>(null);
-  const [keeperPos, setKeeperPos] = useState(50); // 0-100 horizontal %
+  const [preLine] = useState(() => getPreDuelLine(player));
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const chosenRef = useRef<Direction>("center");
-  const swipeRef = useRef<{ startX: number; startY: number; startTime: number } | null>(null);
-  const duelAreaRef = useRef<HTMLDivElement>(null);
+  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
 
   const diff = rarityDifficulty[player.rarity] ?? rarityDifficulty.common;
   const posMod = positionDifficultyMod(player.position);
   const effectiveWindow = Math.max(400, diff.windowMs + gloveTimingBonus + posMod);
   const shotSpeed = slowShot ? diff.shotSpeedMs * 1.35 : diff.shotSpeedMs;
+  const diffLabel = player.rarity === "legendary" ? "Extreme" : player.rarity === "epic" ? "Hard" : player.rarity === "rare" ? "Medium" : "Easy";
+
+  // Intro → ready after cinematic beat
+  useEffect(() => {
+    if (phase === "intro") {
+      const t = setTimeout(() => setPhase("ready"), 2200);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
   const pickDirection = useCallback((): Direction => {
     const dirs: Direction[] = ["left", "center", "right"];
     return dirs[Math.floor(Math.random() * dirs.length)];
   }, []);
 
-  // Swipe detection
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (phase !== "shoot" && phase !== "runup") return;
-    const t = e.touches[0];
-    swipeRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now() };
-  }, [phase]);
+  const startDuel = useCallback(() => {
+    setPhase("runup");
+    setShotDir(null);
+    setDiveDir(null);
+    setHint(null);
+    const chosen = pickDirection();
+    chosenRef.current = chosen;
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!swipeRef.current || (phase !== "shoot" && phase !== "runup")) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - swipeRef.current.startX;
-    const dy = t.clientY - swipeRef.current.startY;
-    const elapsed = Date.now() - swipeRef.current.startTime;
-    swipeRef.current = null;
-
-    // Must be a quick gesture
-    if (elapsed > 800) return;
-
-    const absDx = Math.abs(dx);
-    const absDy = Math.abs(dy);
-
-    let dir: Direction;
-    if (absDx < 30 && absDy < 30) {
-      // Tap = center
-      dir = "center";
-    } else if (absDx > absDy) {
-      dir = dx < 0 ? "left" : "right";
-    } else {
-      dir = "center"; // upward swipe = center
+    if (hintDirection) {
+      setTimeout(() => setHint(chosen), 500);
+      setTimeout(() => setHint(null), 1200);
     }
-    executeDive(dir);
-  }, [phase]);
 
-  // Mouse/click fallback for desktop
-  const handleClickDive = useCallback((dir: Direction) => {
-    if (phase !== "shoot" && phase !== "runup") return;
-    executeDive(dir);
-  }, [phase]);
+    const hasFeint = Math.random() < diff.feintChance;
+    const runupMs = 1400 + Math.random() * 800;
+
+    timerRef.current = setTimeout(() => {
+      if (hasFeint) {
+        const feintDirs = (["left", "center", "right"] as Direction[]).filter(d => d !== chosen);
+        const feintDir = feintDirs[Math.floor(Math.random() * feintDirs.length)];
+        setShotDir(feintDir);
+        setPhase("shoot");
+        setTimeout(() => setShotDir(chosen), 200);
+      } else {
+        setShotDir(chosen);
+        setPhase("shoot");
+      }
+      // Auto-fail
+      timerRef.current = setTimeout(() => {
+        setPhase(prev => {
+          if (prev === "shoot") { setShotDir(chosenRef.current); return "goal"; }
+          return prev;
+        });
+      }, effectiveWindow);
+    }, runupMs);
+  }, [pickDirection, diff, effectiveWindow, hintDirection]);
 
   const executeDive = useCallback((dir: Direction) => {
     if (phase !== "shoot" && phase !== "runup") return;
     setDiveDir(dir);
-    setKeeperPos(dir === "left" ? 15 : dir === "right" ? 85 : 50);
     setPhase("dive");
     clearTimeout(timerRef.current);
 
     setTimeout(() => {
       const actual = chosenRef.current;
+      // If shot hasn't been revealed yet, set it
+      setShotDir(actual);
       const isSave = dir === actual || (diveForgiveness && isAdjacent(dir, actual));
-      setSaved(isSave);
-      setPhase("result");
-    }, Math.min(shotSpeed, 500));
+      setPhase(isSave ? "save" : "goal");
+    }, Math.min(shotSpeed, 450));
   }, [phase, diveForgiveness, shotSpeed]);
 
-  const startDuel = useCallback(() => {
-    setPhase("runup");
-    setShotDir(null);
-    setDiveDir(null);
-    setSaved(null);
-    setHint(null);
-    setBallPos(null);
-    setKeeperPos(50);
+  // Swipe handling
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (phase !== "shoot" && phase !== "runup") return;
+    const t = e.touches[0];
+    swipeRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }, [phase]);
 
-    const chosen = pickDirection();
-    chosenRef.current = chosen;
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!swipeRef.current || (phase !== "shoot" && phase !== "runup")) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeRef.current.x;
+    const elapsed = Date.now() - swipeRef.current.t;
+    swipeRef.current = null;
+    if (elapsed > 800) return;
 
-    if (hintDirection) {
-      setTimeout(() => setHint(chosen), 400);
-      setTimeout(() => setHint(null), 1000);
-    }
+    let dir: Direction;
+    if (Math.abs(dx) < 35) dir = "center";
+    else dir = dx < 0 ? "left" : "right";
+    executeDive(dir);
+  }, [phase, executeDive]);
 
-    const hasFeint = Math.random() < diff.feintChance;
-    const runupDuration = 1200 + Math.random() * 800;
-
-    timerRef.current = setTimeout(() => {
-      if (hasFeint) {
-        const feintDirs: Direction[] = (["left", "center", "right"] as Direction[]).filter(d => d !== chosen);
-        const feintDir = feintDirs[Math.floor(Math.random() * feintDirs.length)];
-        setShotDir(feintDir);
-        setBallPos(dirToPos(feintDir));
-        setPhase("shoot");
-        setTimeout(() => {
-          setShotDir(chosen);
-          setBallPos(dirToPos(chosen));
-        }, 220);
-      } else {
-        setShotDir(chosen);
-        setBallPos(dirToPos(chosen));
-        setPhase("shoot");
-      }
-
-      // Auto-fail if user doesn't dive in time
-      timerRef.current = setTimeout(() => {
-        setPhase((prev) => {
-          if (prev === "shoot") {
-            setSaved(false);
-            return "result";
-          }
-          return prev;
-        });
-      }, effectiveWindow);
-    }, runupDuration);
-  }, [pickDirection, diff, effectiveWindow, hintDirection]);
-
+  // Auto-transition from result
   useEffect(() => {
-    return () => clearTimeout(timerRef.current);
-  }, []);
-
-  useEffect(() => {
-    if (phase === "result" && saved !== null) {
+    if (phase === "save" || phase === "goal") {
       const t = setTimeout(() => {
-        if (saved) onSave();
+        if (phase === "save") onSave();
         else onGoal();
-      }, 2800);
+      }, 3200);
       return () => clearTimeout(t);
     }
-  }, [phase, saved, onSave, onGoal]);
+  }, [phase, onSave, onGoal]);
 
-  const diffLabel = player.rarity === "legendary" ? "Extreme" : player.rarity === "epic" ? "Hard" : player.rarity === "rare" ? "Medium" : "Easy";
+  useEffect(() => { return () => clearTimeout(timerRef.current); }, []);
 
+  const rarityColor = {
+    legendary: "hsl(42 95% 55%)",
+    epic: "hsl(270 60% 55%)",
+    rare: "hsl(210 80% 55%)",
+    common: "hsl(var(--muted-foreground))",
+  }[player.rarity];
+
+  // ========================= RENDER =========================
   return (
     <div
-      className="fixed inset-0 z-[1500] flex flex-col bg-background overflow-hidden select-none"
+      className="fixed inset-0 z-[1500] flex flex-col overflow-hidden select-none"
+      style={{ background: "hsl(225 35% 4%)" }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Atmospheric background */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: `radial-gradient(ellipse at 50% 30%, hsl(var(--primary) / 0.08), transparent 60%),
-                     radial-gradient(ellipse at 50% 90%, hsl(153 70% 20% / 0.15), transparent 50%)`
-      }} />
+      {/* Stadium atmosphere layers */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Pitch gradient */}
+        <div className="absolute inset-x-0 bottom-0 h-[45%]"
+          style={{ background: "linear-gradient(to top, hsl(153 40% 8% / 0.5), transparent)" }} />
+        {/* Stadium light cones */}
+        <div className="absolute top-0 left-[15%] w-32 h-60 animate-duel-stadium-pulse"
+          style={{ background: "linear-gradient(180deg, hsl(45 80% 90% / 0.04), transparent)", transform: "rotate(-8deg)" }} />
+        <div className="absolute top-0 right-[15%] w-32 h-60 animate-duel-stadium-pulse"
+          style={{ background: "linear-gradient(180deg, hsl(45 80% 90% / 0.04), transparent)", transform: "rotate(8deg)", animationDelay: "1.5s" }} />
+        {/* Rarity ambience */}
+        <div className="absolute inset-0" style={{
+          background: `radial-gradient(ellipse at 50% 25%, ${rarityColor} / 0.06, transparent 55%)`
+        }} />
+        {/* Vignette */}
+        <div className="absolute inset-0"
+          style={{ background: "radial-gradient(ellipse at 50% 50%, transparent 40%, hsl(225 35% 2% / 0.7) 100%)" }} />
+      </div>
 
-      {/* HUD strip */}
-      <div className="relative z-30 flex items-center justify-between px-4 pt-[max(3rem,env(safe-area-inset-top))] pb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm">🧤</span>
-          <span className="text-[10px] font-bold text-foreground/70">{gloveName}</span>
-        </div>
-        <div className="flex items-center gap-1.5 glass-card px-2.5 py-1 rounded-full">
-          <span className="text-sm">🎯</span>
-          <span className="text-xs font-black text-accent">{focusPoints}</span>
-          <span className="text-[9px] text-muted-foreground">FP</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] font-bold text-muted-foreground">Difficulty:</span>
-          <span className={`text-[10px] font-black ${
+      {/* ─── INTRO CINEMATIC ─── */}
+      {phase === "intro" && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center px-8">
+          {/* Spotlight sweep */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-0 left-0 w-40 h-full opacity-[0.04] animate-duel-spotlight"
+              style={{ background: "linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.8), transparent)", width: "30%" }} />
+          </div>
+          <div className="animate-encounter-reveal">
+            <AnimatedPortrait player={player} size="xl" className="mb-4" />
+          </div>
+          <p className={`text-[10px] font-black uppercase tracking-[0.2em] mt-2 ${
             player.rarity === "legendary" ? "text-accent" :
             player.rarity === "epic" ? "text-glow-epic" :
             player.rarity === "rare" ? "text-glow-rare" : "text-muted-foreground"
-          }`}>{diffLabel}</span>
+          }`}>{player.rarity} encounter</p>
+          <h2 className="text-3xl font-black text-foreground mt-1 tracking-tight animate-fade-in-up">{player.name}</h2>
+          <p className="text-xs text-muted-foreground mt-1 animate-fade-in-up" style={{ animationDelay: "0.2s" }}>
+            {player.position} · {player.representedCountry}
+          </p>
+          <div className="mt-6 animate-fade-in-up" style={{ animationDelay: "0.6s" }}>
+            <p className="text-sm text-foreground/80 italic text-center max-w-[250px] leading-relaxed">
+              "{preLine}"
+            </p>
+            <p className="text-[10px] text-muted-foreground text-center mt-1.5">— {player.name}</p>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Main duel area */}
-      <div ref={duelAreaRef} className="relative flex-1 flex flex-col items-center justify-center px-4">
-        {/* Player portrait — floating above goal */}
-        <div className="relative z-20 mb-4">
-          <AnimatedPortrait player={player} size="lg" className={`
-            transition-all duration-500
-            ${phase === "runup" ? "scale-110" : ""}
-            ${phase === "shoot" ? "scale-105 brightness-125" : ""}
-            ${phase === "result" && saved ? "opacity-80 scale-95" : ""}
-            ${phase === "result" && !saved ? "scale-110 brightness-110" : ""}
-          `} />
+      {/* ─── HUD (visible from ready onward) ─── */}
+      {phase !== "intro" && (
+        <div className="relative z-30 flex items-center justify-between px-4 pt-[max(2.75rem,env(safe-area-inset-top))] pb-1.5 animate-fade-in">
+          {/* Glove */}
+          <div className="flex items-center gap-1.5 glass-card px-2 py-1 rounded-xl">
+            <span className="text-sm">🧤</span>
+            <span className="text-[9px] font-bold text-foreground/70 max-w-[5rem] truncate">{gloveName}</span>
+          </div>
+          {/* Difficulty */}
+          <div className="text-center">
+            <p className="text-[8px] uppercase tracking-widest text-muted-foreground/60">Penalty Duel</p>
+            <p className={`text-[10px] font-black ${
+              player.rarity === "legendary" ? "text-accent" :
+              player.rarity === "epic" ? "text-glow-epic" :
+              player.rarity === "rare" ? "text-glow-rare" : "text-muted-foreground"
+            }`}>{diffLabel}</p>
+          </div>
+          {/* Focus Points */}
+          <div className="flex items-center gap-1 glass-card px-2 py-1 rounded-xl">
+            <span className="text-sm">🎯</span>
+            <span className="text-xs font-black text-accent">{focusPoints}</span>
+            <span className="text-[8px] text-muted-foreground">FP</span>
+          </div>
         </div>
+      )}
 
-        {/* Player name */}
-        <p className="relative z-20 text-lg font-black text-foreground mb-1">{player.name}</p>
-        <p className="relative z-20 text-[10px] text-muted-foreground mb-4">
-          {player.position} · {player.representedCountry} · {player.clubTeam}
-        </p>
-
-        {/* Goal frame */}
-        <div className="relative z-20 w-full max-w-xs aspect-[5/3] mx-auto">
-          <div className="absolute inset-0 rounded-t-xl overflow-hidden"
-            style={{
-              border: "2.5px solid hsl(var(--foreground) / 0.2)",
-              borderBottom: "none",
-              background: "linear-gradient(180deg, hsl(var(--foreground) / 0.03), transparent)",
-            }}
-          >
-            {/* Net */}
-            <div className="absolute inset-0 opacity-[0.06]" style={{
-              backgroundImage: `repeating-linear-gradient(90deg, hsl(var(--foreground)) 0px, transparent 1px, transparent 16px),
-                                repeating-linear-gradient(0deg, hsl(var(--foreground)) 0px, transparent 1px, transparent 16px)`,
+      {/* ─── MAIN DUEL AREA ─── */}
+      {phase !== "intro" && (
+        <div className="relative flex-1 flex flex-col items-center justify-center px-4">
+          {/* Shooter portrait (compact badge above goal) */}
+          <div className={`relative z-20 mb-3 transition-all duration-700 ${
+            phase === "runup" ? "animate-duel-runup" :
+            phase === "shoot" ? "animate-duel-tension" : ""
+          }`}>
+            <AnimatedPortrait player={player} size="md" className={`
+              ${phase === "save" ? "opacity-70 scale-90 transition-all duration-500" : ""}
+              ${phase === "goal" ? "scale-105 transition-all duration-500" : ""}
+            `} />
+            {/* Rarity ring */}
+            <div className="absolute -inset-1 rounded-full pointer-events-none" style={{
+              boxShadow: `0 0 20px ${rarityColor} / 0.25, 0 0 60px ${rarityColor} / 0.08`,
             }} />
+          </div>
 
-            {/* Zone dividers */}
-            <div className="absolute top-0 bottom-0 left-1/3 w-px bg-foreground/8" />
-            <div className="absolute top-0 bottom-0 left-2/3 w-px bg-foreground/8" />
+          <p className="relative z-20 text-sm font-black text-foreground mb-0.5">{player.name}</p>
+          <p className="relative z-20 text-[9px] text-muted-foreground mb-4">
+            {player.position} · {player.clubTeam}
+          </p>
 
-            {/* Hint highlight */}
-            {hint && (
-              <div className={`absolute top-0 bottom-0 bg-primary/15 animate-pulse transition-all duration-200
-                ${hint === "left" ? "left-0 w-1/3" : hint === "center" ? "left-1/3 w-1/3" : "left-2/3 w-1/3"}`}
-              />
-            )}
+          {/* ─── GOAL FRAME ─── */}
+          <div className={`relative z-20 w-full max-w-[320px] aspect-[5/3] mx-auto ${
+            phase === "save" ? "animate-duel-save-shake" : ""
+          }`}>
+            {/* Frame structure */}
+            <div className="absolute inset-0 rounded-t-2xl overflow-hidden"
+              style={{
+                border: "3px solid hsl(var(--foreground) / 0.15)",
+                borderBottom: "3px solid hsl(var(--foreground) / 0.1)",
+                background: "linear-gradient(175deg, hsl(var(--foreground) / 0.04) 0%, transparent 60%)",
+              }}>
 
-            {/* Ball */}
-            {ballPos && (phase === "shoot" || phase === "dive" || phase === "result") && (
-              <div
-                className="absolute w-8 h-8 flex items-center justify-center text-xl transition-all z-10"
-                style={{
-                  left: `${ballPos.x}%`,
-                  top: `${ballPos.y}%`,
-                  transform: "translate(-50%, -50%)",
-                  transitionDuration: `${shotSpeed}ms`,
-                  transitionTimingFunction: "cubic-bezier(0.1, 0, 0.2, 1)",
-                }}
-              >
-                ⚽
+              {/* Net pattern */}
+              <div className="absolute inset-0 opacity-[0.04]" style={{
+                backgroundImage: `repeating-linear-gradient(90deg, hsl(var(--foreground)) 0px, transparent 1px, transparent 14px),
+                                  repeating-linear-gradient(0deg, hsl(var(--foreground)) 0px, transparent 1px, transparent 14px)`,
+              }} />
+
+              {/* Zone lines */}
+              <div className="absolute top-0 bottom-0 left-[33.3%] w-px bg-foreground/5" />
+              <div className="absolute top-0 bottom-0 left-[66.6%] w-px bg-foreground/5" />
+
+              {/* Hint zone highlight */}
+              {hint && (
+                <div className={`absolute top-0 bottom-0 rounded-sm transition-all duration-200 ${
+                  hint === "left" ? "left-0 w-[33.3%]" :
+                  hint === "center" ? "left-[33.3%] w-[33.3%]" : "left-[66.6%] w-[33.3%]"
+                }`} style={{ background: `${rarityColor} / 0.12` }} />
+              )}
+
+              {/* Ball */}
+              {shotDir && (phase === "shoot" || phase === "dive" || phase === "save" || phase === "goal") && (
+                <div
+                  className="absolute w-9 h-9 flex items-center justify-center text-2xl animate-duel-ball-flight z-10"
+                  style={{
+                    left: ballTargetPos[shotDir].left,
+                    top: ballTargetPos[shotDir].top,
+                    transform: "translate(-50%, -50%)",
+                  }}
+                >
+                  <span className="drop-shadow-lg">⚽</span>
+                </div>
+              )}
+
+              {/* Keeper gloves */}
+              <div className={`absolute bottom-1 left-1/2 -translate-x-1/2 text-3xl z-20 transition-all
+                ${diveDir === "left" ? "animate-duel-dive-left" : ""}
+                ${diveDir === "right" ? "animate-duel-dive-right" : ""}
+                ${diveDir === "center" ? "animate-duel-dive-center" : ""}
+                ${!diveDir ? "" : ""}
+              `}>
+                🧤
+              </div>
+
+              {/* Save burst effect */}
+              {phase === "save" && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-24 h-24 rounded-full animate-duel-save-burst"
+                    style={{ background: `radial-gradient(circle, hsl(var(--primary) / 0.5), transparent)` }} />
+                </div>
+              )}
+
+              {/* Goal flash */}
+              {phase === "goal" && (
+                <div className="absolute inset-0 bg-destructive/20 animate-duel-goal-flash rounded-t-2xl" />
+              )}
+            </div>
+
+            {/* Grass edge */}
+            <div className="absolute -bottom-3 inset-x-0 h-6 rounded-b-xl"
+              style={{ background: "linear-gradient(to top, hsl(153 45% 15% / 0.35), transparent)" }} />
+
+            {/* Penalty spot */}
+            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-foreground/15" />
+          </div>
+
+          {/* ─── PHASE MESSAGES ─── */}
+          <div className="relative z-20 mt-6 text-center min-h-[4.5rem] flex flex-col items-center justify-center">
+            {phase === "ready" && (
+              <div className="animate-fade-in-up">
+                <p className="text-sm text-foreground/80 italic max-w-[260px] leading-relaxed">
+                  "{preLine}"
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
               </div>
             )}
-
-            {/* Keeper */}
-            <div
-              className="absolute bottom-1 w-10 h-12 flex items-end justify-center text-2xl transition-all duration-300 z-20"
-              style={{
-                left: `${keeperPos}%`,
-                transform: `translateX(-50%) ${diveDir === "left" ? "rotate(-35deg)" : diveDir === "right" ? "rotate(35deg)" : ""}`,
-              }}
-            >
-              🧤
-            </div>
-
-            {/* Result flash overlay */}
-            {phase === "result" && saved && (
-              <div className="absolute inset-0 bg-primary/20 animate-pulse rounded-t-xl" />
+            {phase === "runup" && (
+              <div className="animate-fade-in">
+                <p className="text-base font-black tracking-wide animate-pulse" style={{ color: rarityColor }}>
+                  Running up…
+                </p>
+                <p className="text-[10px] text-foreground/40 mt-1">Get ready to dive</p>
+              </div>
             )}
-            {phase === "result" && saved === false && (
-              <div className="absolute inset-0 bg-destructive/15 rounded-t-xl" />
+            {phase === "shoot" && (
+              <div className="animate-fade-in">
+                <p className="text-2xl font-black text-foreground tracking-tight animate-bounce">
+                  DIVE NOW!
+                </p>
+                <p className="text-[10px] text-foreground/30 mt-0.5">← Swipe left · Tap center · Swipe right →</p>
+              </div>
+            )}
+            {phase === "dive" && (
+              <p className="text-sm font-bold text-primary animate-fade-in">Diving {diveDir}…</p>
+            )}
+            {phase === "save" && (
+              <div className="animate-duel-result-slam">
+                <p className="text-5xl font-black text-primary mb-2 tracking-tighter">SAVE!</p>
+                <p className="text-sm text-foreground/80 italic max-w-[250px]">"{getPostSaveLine(player)}"</p>
+                <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
+              </div>
+            )}
+            {phase === "goal" && (
+              <div className="animate-duel-result-slam">
+                <p className="text-5xl font-black text-destructive mb-2 tracking-tighter">GOAL</p>
+                <p className="text-sm text-foreground/80 italic max-w-[250px]">"{getPostGoalLine(player)}"</p>
+                <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
+              </div>
             )}
           </div>
-
-          {/* Grass line */}
-          <div className="absolute -bottom-2 inset-x-0 h-6 rounded-b-2xl"
-            style={{ background: "linear-gradient(to top, hsl(153 50% 20% / 0.3), transparent)" }} />
         </div>
+      )}
 
-        {/* Phase messages */}
-        <div className="relative z-20 mt-5 text-center min-h-[4rem] flex flex-col items-center justify-center">
+      {/* ─── BOTTOM CONTROLS ─── */}
+      {phase !== "intro" && (
+        <div className="relative z-30 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           {phase === "ready" && (
-            <div className="animate-fade-in">
-              <p className="text-sm font-bold text-foreground/90 italic">
-                "{getPreDuelLine(player)}"
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
+            <button type="button" onClick={startDuel}
+              className="w-full py-4 rounded-2xl font-black text-base active:scale-[0.97] transition-all animate-duel-ready-pulse"
+              style={{
+                background: `linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8))`,
+                color: "hsl(var(--primary-foreground))",
+                boxShadow: `0 0 30px hsl(var(--primary) / 0.3), 0 4px 20px rgba(0,0,0,0.3)`,
+              }}>
+              ⚡ Take the Penalty
+            </button>
+          )}
+
+          {(phase === "runup" || phase === "shoot") && (
+            <div className="flex gap-2">
+              {(["left", "center", "right"] as Direction[]).map((dir) => (
+                <button key={dir} type="button"
+                  onClick={() => executeDive(dir)}
+                  className={`flex-1 py-4 rounded-2xl font-black text-base transition-all active:scale-90 ${
+                    phase === "shoot"
+                      ? "text-primary-foreground"
+                      : "glass-card-strong text-foreground/50"
+                  }`}
+                  style={phase === "shoot" ? {
+                    background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.7))",
+                    boxShadow: "0 0 20px hsl(var(--primary) / 0.25)",
+                  } : undefined}>
+                  <span className="text-2xl block">{dir === "left" ? "←" : dir === "right" ? "→" : "↑"}</span>
+                  <span className="text-[8px] uppercase tracking-widest block mt-0.5 opacity-50">{dir}</span>
+                </button>
+              ))}
             </div>
           )}
-          {phase === "runup" && (
-            <div>
-              <p className="text-base font-black text-accent animate-pulse tracking-wide">
-                {player.name} is running up…
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-1 animate-pulse">Swipe or tap to dive!</p>
+
+          {phase === "save" && (
+            <div className="text-center py-3 rounded-2xl font-bold text-sm animate-fade-in-up"
+              style={{ background: "hsl(var(--primary) / 0.1)", color: "hsl(var(--primary))" }}>
+              Player recruited! Starting at Level 1 ✨
             </div>
           )}
-          {phase === "shoot" && (
-            <div>
-              <p className="text-xl font-black text-destructive animate-bounce">
-                DIVE NOW!
-              </p>
-              <p className="text-[10px] text-foreground/50 mt-0.5">← Swipe left · Tap center · Swipe right →</p>
-            </div>
-          )}
-          {phase === "dive" && (
-            <p className="text-sm font-bold text-primary">
-              Diving {diveDir}…
-            </p>
-          )}
-          {phase === "result" && saved === true && (
-            <div className="animate-scale-in">
-              <p className="text-4xl font-black text-primary mb-2 tracking-tight">SAVE! 🧤</p>
-              <p className="text-sm text-foreground/80 italic">"{getPostSaveLine(player)}"</p>
-              <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
-            </div>
-          )}
-          {phase === "result" && saved === false && (
-            <div className="animate-scale-in">
-              <p className="text-4xl font-black text-destructive mb-2 tracking-tight">GOAL ⚽</p>
-              <p className="text-sm text-foreground/80 italic">"{getPostGoalLine(player)}"</p>
-              <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
+
+          {phase === "goal" && (
+            <div className="text-center py-3 rounded-2xl font-bold text-sm animate-fade-in-up"
+              style={{ background: "hsl(var(--destructive) / 0.1)", color: "hsl(var(--destructive))" }}>
+              The player escaped…
             </div>
           )}
         </div>
-      </div>
-
-      {/* Bottom controls */}
-      <div className="relative z-30 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-        {phase === "ready" && (
-          <button
-            type="button"
-            onClick={startDuel}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-base glow-primary active:scale-[0.97] transition-transform"
-          >
-            ⚡ Start Penalty Duel
-          </button>
-        )}
-
-        {/* Tap fallback buttons for desktop / accessibility */}
-        {(phase === "runup" || phase === "shoot") && (
-          <div className="flex gap-2">
-            {(["left", "center", "right"] as Direction[]).map((dir) => (
-              <button
-                key={dir}
-                type="button"
-                onClick={() => handleClickDive(dir)}
-                className={`flex-1 py-4 rounded-2xl font-black text-base transition-all active:scale-90 ${
-                  phase === "shoot"
-                    ? "bg-primary text-primary-foreground glow-primary"
-                    : "glass-card-strong text-foreground/60"
-                }`}
-              >
-                <span className="text-xl block">{dir === "left" ? "←" : dir === "right" ? "→" : "↑"}</span>
-                <span className="text-[9px] uppercase tracking-wider block mt-0.5 opacity-60">
-                  {dir}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {phase === "result" && (
-          <div className={`text-center py-3 rounded-2xl font-bold text-sm ${
-            saved ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
-          }`}>
-            {saved ? "Player recruited! Starting at Level 1 ✨" : "The player escaped…"}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };
 
-function dirToPos(dir: Direction): { x: number; y: number } {
-  if (dir === "left") return { x: 18, y: 35 };
-  if (dir === "right") return { x: 82, y: 35 };
-  return { x: 50, y: 22 };
-}
-
 function isAdjacent(a: Direction, b: Direction): boolean {
-  if (a === b) return true;
-  if (a === "center" || b === "center") return true;
-  return false;
+  return a === b || a === "center" || b === "center";
 }
 
 function getPreDuelLine(player: Player): string {
   const pos = player.position.toLowerCase();
   const isAttacker = pos.includes("st") || pos.includes("cf") || pos.includes("fw") || pos.includes("wing") || pos.includes("rw") || pos.includes("lw");
-
   const lines: Record<string, string[]> = {
     legendary: [
       "You'll need fast hands for this one.",
