@@ -1,21 +1,23 @@
 import { useState } from "react";
-import { mockRivals, mockPlayers } from "@/data/mockData";
-import { Swords, Trophy, ChevronRight, Shield } from "lucide-react";
+import { getPlayerById, mockRivals } from "@/data/mockData";
+import { useActivePlayer } from "@/context/ActivePlayerContext";
+import { Swords, Trophy, ChevronRight } from "lucide-react";
 import AnimatedPortrait from "./AnimatedPortrait";
 
 const CompeteScreen = () => {
   const [challengeTarget, setChallengeTarget] = useState<number | null>(null);
-  const activePlayer = mockPlayers[0];
+  const { activePlayer } = useActivePlayer();
+
+  const challengeRival = challengeTarget !== null ? mockRivals[challengeTarget] : null;
+  const challengeRivalPlayer = challengeRival ? getPlayerById(challengeRival.signaturePlayerId) : undefined;
 
   return (
     <div className="min-h-screen safe-pb-nav pt-6 px-4">
-      {/* Header */}
       <div className="mb-5">
         <h1 className="text-2xl font-black text-foreground">Compete</h1>
         <p className="text-xs text-muted-foreground mt-1">Challenge nearby rivals</p>
       </div>
 
-      {/* Division Card */}
       <div className="glass-card-strong p-5 mb-5 card-shimmer">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -33,7 +35,6 @@ const CompeteScreen = () => {
         <p className="text-[10px] text-muted-foreground mt-2 font-medium">350 / 500 points to Gold I</p>
       </div>
 
-      {/* Stats row */}
       <div className="grid grid-cols-3 gap-2.5 mb-5">
         {[
           { label: "Wins", value: "7", icon: "🏆" },
@@ -47,60 +48,77 @@ const CompeteScreen = () => {
         ))}
       </div>
 
-      {/* Rivals */}
       <h2 className="text-xs font-black text-foreground uppercase tracking-wider mb-3">Nearby Rivals</h2>
       <div className="space-y-2.5">
         {mockRivals.map((rival, i) => {
-          const rivalPlayer = mockPlayers[Math.min(i + 1, mockPlayers.length - 1)];
+          const rivalPlayer = getPlayerById(rival.signaturePlayerId);
+          if (!rivalPlayer) return null;
+          const youOvr = activePlayer.stats.overall;
+          const themOvr = rivalPlayer.stats.overall;
+          const sum = youOvr + themOvr;
           return (
             <div
               key={rival.id}
               className="glass-card p-4 animate-fade-in-up"
               style={{ animationDelay: `${i * 0.08}s` }}
             >
-              {/* Matchup header */}
-              <div className="flex items-center gap-3 mb-3">
-                <AnimatedPortrait player={activePlayer} size="sm" />
-                <div className="flex-1 flex flex-col items-center">
-                  <Swords className="w-5 h-5 text-muted-foreground mb-1" />
-                  <span className="text-[9px] text-muted-foreground font-bold uppercase">VS</span>
+              <div className="flex items-start gap-2 mb-3">
+                <div className="flex flex-1 min-w-0 flex-col items-center gap-1">
+                  <AnimatedPortrait player={activePlayer} size="sm" />
+                  <p className="text-[10px] font-black text-foreground truncate w-full text-center">{activePlayer.name}</p>
+                  <p className="text-[9px] text-muted-foreground truncate w-full text-center">
+                    {activePlayer.position} · {activePlayer.representedCountry}
+                  </p>
                 </div>
-                <AnimatedPortrait player={rivalPlayer} size="sm" />
+                <div className="flex flex-col items-center justify-center pt-2 shrink-0 px-1">
+                  <Swords className="w-4 h-4 text-muted-foreground mb-0.5" />
+                  <span className="text-[8px] text-muted-foreground font-bold uppercase">VS</span>
+                </div>
+                <div className="flex flex-1 min-w-0 flex-col items-center gap-1">
+                  <AnimatedPortrait player={rivalPlayer} size="sm" />
+                  <p className="text-[10px] font-black text-foreground truncate w-full text-center">{rivalPlayer.name}</p>
+                  <p className="text-[9px] text-muted-foreground truncate w-full text-center">
+                    {rivalPlayer.position} · {rivalPlayer.representedCountry}
+                  </p>
+                </div>
               </div>
 
-              {/* Strength comparison */}
-              <div className="flex items-center justify-between mb-3 px-2">
-                <div className="text-center">
-                  <p className="text-lg font-black text-foreground">{activePlayer.overall}</p>
+              <p className="text-[9px] text-center text-muted-foreground mb-2 truncate px-1">
+                @{rival.name} · Lvl {rival.level}
+              </p>
+
+              <div className="flex items-center justify-between mb-3 px-1">
+                <div className="text-center min-w-[2.5rem]">
+                  <p className="text-lg font-black text-foreground">{youOvr}</p>
                   <p className="text-[9px] text-muted-foreground">You</p>
                 </div>
-                <div className="flex-1 mx-4">
+                <div className="flex-1 mx-3">
                   <div className="h-1.5 bg-muted rounded-full overflow-hidden flex">
                     <div
                       className="h-full bg-gradient-to-r from-primary to-primary rounded-l-full"
-                      style={{ width: `${(activePlayer.overall / (activePlayer.overall + rival.overall)) * 100}%` }}
+                      style={{ width: `${(youOvr / sum) * 100}%` }}
                     />
                     <div
                       className="h-full bg-destructive/60 rounded-r-full"
-                      style={{ width: `${(rival.overall / (activePlayer.overall + rival.overall)) * 100}%` }}
+                      style={{ width: `${(themOvr / sum) * 100}%` }}
                     />
                   </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-black text-foreground">{rival.overall}</p>
-                  <p className="text-[9px] text-muted-foreground">{rival.name}</p>
+                <div className="text-center min-w-[2.5rem]">
+                  <p className="text-lg font-black text-foreground">{themOvr}</p>
+                  <p className="text-[9px] text-muted-foreground truncate max-w-[4.5rem]">{rivalPlayer.name.split(" ").pop()}</p>
                 </div>
               </div>
 
-              {/* Reward preview */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Trophy className="w-3.5 h-3.5 text-accent" />
-                  <span className="text-[10px] text-accent font-bold">+30 XP • Rare Pack</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Trophy className="w-3.5 h-3.5 text-accent shrink-0" />
+                  <span className="text-[10px] text-accent font-bold truncate">+30 XP • Rare Pack</span>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setChallengeTarget(i)}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-primary text-primary-foreground text-xs font-black floating-button flex items-center gap-1.5"
+                  className="shrink-0 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-primary text-primary-foreground text-xs font-black floating-button flex items-center gap-1.5"
                 >
                   Challenge <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -110,31 +128,41 @@ const CompeteScreen = () => {
         })}
       </div>
 
-      {/* Challenge confirmation overlay */}
-      {challengeTarget !== null && (
-        <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-xl flex items-center justify-center p-6" onClick={() => setChallengeTarget(null)}>
+      {challengeRival && challengeRivalPlayer && (
+        <div
+          className="fixed inset-0 z-[1350] flex items-center justify-center bg-background/70 backdrop-blur-xl p-6"
+          onClick={() => setChallengeTarget(null)}
+        >
           <div className="glass-card-strong p-6 w-full max-w-sm animate-encounter-reveal" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-center gap-6 mb-6">
-              <div className="text-center">
+            <div className="flex items-start justify-center gap-4 mb-6">
+              <div className="flex flex-col items-center gap-1 min-w-0 flex-1">
                 <AnimatedPortrait player={activePlayer} size="lg" showMood />
-                <p className="text-xs font-black text-foreground mt-2">You</p>
+                <p className="text-xs font-black text-foreground text-center truncate w-full">You</p>
+                <p className="text-[9px] text-muted-foreground text-center truncate w-full">
+                  {activePlayer.position} · {activePlayer.representedCountry}
+                </p>
               </div>
-              <div className="flex flex-col items-center">
-                <Swords className="w-8 h-8 text-primary mb-1" />
-                <span className="text-xs font-black text-primary">VS</span>
+              <div className="flex flex-col items-center pt-4 shrink-0">
+                <Swords className="w-7 h-7 text-primary mb-1" />
+                <span className="text-[10px] font-black text-primary">VS</span>
               </div>
-              <div className="text-center">
-                <AnimatedPortrait player={mockPlayers[Math.min(challengeTarget + 1, mockPlayers.length - 1)]} size="lg" showMood />
-                <p className="text-xs font-black text-foreground mt-2">{mockRivals[challengeTarget].name}</p>
+              <div className="flex flex-col items-center gap-1 min-w-0 flex-1">
+                <AnimatedPortrait player={challengeRivalPlayer} size="lg" showMood />
+                <p className="text-[10px] text-muted-foreground truncate w-full text-center">@{challengeRival.name}</p>
+                <p className="text-xs font-black text-foreground text-center truncate w-full">{challengeRivalPlayer.name}</p>
+                <p className="text-[9px] text-muted-foreground text-center truncate w-full">
+                  {challengeRivalPlayer.position} · {challengeRivalPlayer.representedCountry}
+                </p>
               </div>
             </div>
 
             <div className="glass-card p-3 mb-5 flex items-center justify-center gap-2">
-              <Trophy className="w-4 h-4 text-accent" />
+              <Trophy className="w-4 h-4 text-accent shrink-0" />
               <span className="text-sm font-bold text-accent">Win: +30 XP • Rare Pack</span>
             </div>
 
             <button
+              type="button"
               onClick={() => setChallengeTarget(null)}
               className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-sm floating-button glow-primary flex items-center justify-center gap-2"
             >

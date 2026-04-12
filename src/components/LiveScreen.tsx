@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { mockLiveEvents } from "@/data/mockData";
+import { getPlayerById, mockLiveEvents } from "@/data/mockData";
 import { Zap, Trophy, Gift, Clock, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 
 const eventConfig: Record<string, {
@@ -44,14 +44,14 @@ const eventConfig: Record<string, {
   },
 };
 
-// Simulated match events with attribute deltas
+/** Simulated match events — `playerId` resolves via `mockPlayers` only. */
 const matchEvents = [
-  { id: "me1", type: "goal", player: "Mbappé", minute: "67'", delta: "+5 Form", mood: "🔥", visual: "celebratory" },
-  { id: "me2", type: "assist", player: "Bellingham", minute: "67'", delta: "+3 Confidence", mood: "💪", visual: "energetic" },
-  { id: "me3", type: "injury", player: "Pedri", minute: "54'", delta: "-4 Form", mood: "😰", visual: "serious" },
-  { id: "me4", type: "yellow", player: "Foden", minute: "41'", delta: "-2 Morale", mood: "😤", visual: "tense" },
-  { id: "me5", type: "cleansheet", player: "Vinícius Jr", minute: "90'", delta: "+3 Morale", mood: "😎", visual: "stable" },
-];
+  { id: "me1", type: "goal", playerId: "1", minute: "67'", delta: "+5 Form", mood: "🔥", visual: "celebratory" },
+  { id: "me2", type: "assist", playerId: "2", minute: "67'", delta: "+3 Confidence", mood: "💪", visual: "energetic" },
+  { id: "me3", type: "injury", playerId: "4", minute: "54'", delta: "-4 Form", mood: "😰", visual: "serious" },
+  { id: "me4", type: "yellow", playerId: "5", minute: "41'", delta: "-2 Morale", mood: "😤", visual: "tense" },
+  { id: "me5", type: "cleansheet", playerId: "3", minute: "90'", delta: "+3 Morale", mood: "😎", visual: "stable" },
+] as const;
 
 const eventTypeStyles: Record<string, { bg: string; border: string; icon: string; label: string }> = {
   goal: { bg: "bg-primary/15", border: "border-primary/30", icon: "⚽", label: "GOAL" },
@@ -94,6 +94,8 @@ const LiveScreen = () => {
         {matchEvents.map((event, i) => {
           const style = eventTypeStyles[event.type];
           const isPositive = !event.delta.startsWith("-");
+          const evPlayer = getPlayerById(event.playerId);
+          const labelName = evPlayer?.name ?? "Player";
           return (
             <div
               key={event.id}
@@ -122,7 +124,7 @@ const LiveScreen = () => {
                     </span>
                     <span className="text-[10px] text-muted-foreground">{event.minute}</span>
                   </div>
-                  <p className="text-sm font-bold text-foreground">{event.player}</p>
+                  <p className="text-sm font-bold text-foreground">{labelName}</p>
                 </div>
 
                 {/* Attribute delta chip */}

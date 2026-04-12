@@ -1,25 +1,51 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Player } from "@/data/mockData";
 
 interface AnimatedPortraitProps {
   player: Player;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
   showMood?: boolean;
   className?: string;
 }
 
 const sizeClasses = {
-  sm: "w-12 h-12",
-  md: "w-16 h-16",
-  lg: "w-24 h-24",
-  xl: "w-32 h-32",
+  xs: "w-8 h-8 rounded-xl",
+  sm: "w-12 h-12 rounded-2xl",
+  md: "w-16 h-16 rounded-2xl",
+  lg: "w-24 h-24 rounded-[1.35rem]",
+  xl: "w-32 h-32 rounded-3xl",
 };
 
-const fontSizes = {
-  sm: "text-lg",
-  md: "text-xl",
-  lg: "text-3xl",
-  xl: "text-4xl",
+const auraRounded = {
+  xs: "rounded-xl",
+  sm: "rounded-2xl",
+  md: "rounded-2xl",
+  lg: "rounded-[1.35rem]",
+  xl: "rounded-3xl",
+};
+
+const framePad = {
+  xs: "p-[2px]",
+  sm: "p-[2px]",
+  md: "p-[3px]",
+  lg: "p-[3px]",
+  xl: "p-[3px]",
+};
+
+const imgRounded = {
+  xs: "rounded-[10px]",
+  sm: "rounded-[14px]",
+  md: "rounded-[13px]",
+  lg: "rounded-[1.15rem]",
+  xl: "rounded-[1.35rem]",
+};
+
+const ovrBadge = {
+  xs: "text-[8px] px-1 py-0",
+  sm: "text-[9px] px-1 py-0",
+  md: "text-[10px] px-1 py-0.5",
+  lg: "text-xs px-1.5 py-0.5",
+  xl: "text-sm px-2 py-0.5",
 };
 
 const rarityGradients: Record<string, string> = {
@@ -44,43 +70,81 @@ const moodEmoji = (attributes: Player["attributes"]) => {
   return "😓";
 };
 
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
 const AnimatedPortrait = ({ player, size = "md", showMood = false, className = "" }: AnimatedPortraitProps) => {
+  const [imgFailed, setImgFailed] = useState(false);
   const mood = useMemo(() => moodEmoji(player.attributes), [player.attributes]);
   const avgMorale = (player.attributes.confidence + player.attributes.morale) / 2;
+  const ovr = player.stats.overall;
 
   return (
-    <div className={`relative ${className}`}>
-      {/* Pulsing aura ring */}
-      <div className={`absolute inset-0 ${sizeClasses[size]} rounded-2xl bg-gradient-to-br ${rarityGradients[player.rarity]} opacity-20 blur-md portrait-breathe`} />
-
-      {/* Main portrait container */}
+    <div className={`relative inline-flex shrink-0 ${className}`}>
+      {/* Outer aura — rarity glow + float */}
       <div
-        className={`relative ${sizeClasses[size]} rounded-2xl bg-gradient-to-br ${rarityGradients[player.rarity]} 
-        flex items-center justify-center overflow-hidden card-shimmer portrait-breathe ${rarityGlow[player.rarity]}`}
+        className={`pointer-events-none absolute -inset-1 ${auraRounded[size]} bg-gradient-to-br ${rarityGradients[player.rarity]} opacity-25 blur-md portrait-float-slow`}
+        aria-hidden
+      />
+
+      {/* Rarity frame ring */}
+      <div
+        className={`relative ${framePad[size]} ${auraRounded[size]} bg-gradient-to-br ${rarityGradients[player.rarity]} portrait-float-layer ${rarityGlow[player.rarity]}`}
       >
-        {/* Overall rating */}
-        <span className={`${fontSizes[size]} font-black text-background/90 relative z-10 drop-shadow-lg`}>
-          {player.overall}
-        </span>
+        <div
+          className={`relative ${sizeClasses[size]} overflow-hidden bg-muted ${imgRounded[size]} shadow-inner`}
+        >
+          {!imgFailed ? (
+            <img
+              src={player.portrait}
+              alt=""
+              className={`absolute inset-0 h-full w-full object-cover scale-[1.08] portrait-parallax-img ${imgRounded[size]}`}
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              onError={() => setImgFailed(true)}
+            />
+          ) : (
+            <div
+              className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br ${rarityGradients[player.rarity]} font-black text-background/90 ${size === "xs" ? "text-xs" : size === "sm" ? "text-sm" : "text-lg"}`}
+            >
+              {initials(player.name)}
+            </div>
+          )}
 
-        {/* Ambient light overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-white/10" />
+          {/* Parallax / depth read layer */}
+          <div
+            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/50 via-transparent to-white/[0.07] mix-blend-soft-light"
+            aria-hidden
+          />
 
-        {/* Low morale darkening */}
-        {avgMorale < 60 && (
-          <div className="absolute inset-0 bg-background/40 z-20" />
-        )}
+          {avgMorale < 60 && <div className="absolute inset-0 bg-background/35 z-[1]" aria-hidden />}
+
+          {/* OVR chip — does not cover the face */}
+          <div
+            className={`absolute bottom-0.5 right-0.5 z-[2] rounded-md bg-background/85 font-black tabular-nums text-foreground shadow-sm backdrop-blur-sm ${ovrBadge[size]}`}
+          >
+            {ovr}
+          </div>
+        </div>
       </div>
 
-      {/* Mood indicator */}
       {showMood && (
-        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-card border-2 border-border flex items-center justify-center text-xs z-30">
+        <div className="absolute -bottom-0.5 -right-0.5 z-30 flex h-6 w-6 items-center justify-center rounded-full border-2 border-border bg-card text-xs">
           {mood}
         </div>
       )}
 
-      {/* Rarity dot */}
-      <div className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-gradient-to-br ${rarityGradients[player.rarity]} border border-background z-30`} />
+      <div
+        className={`absolute -right-0.5 -top-0.5 z-30 h-3 w-3 rounded-full border border-background bg-gradient-to-br ${rarityGradients[player.rarity]}`}
+        aria-hidden
+      />
     </div>
   );
 };

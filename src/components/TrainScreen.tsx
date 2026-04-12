@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Send } from "lucide-react";
-import { mockPlayers } from "@/data/mockData";
+import { useActivePlayer } from "@/context/ActivePlayerContext";
 import AnimatedPortrait from "./AnimatedPortrait";
 
 const suggestedPrompts = [
@@ -17,11 +17,19 @@ interface ChatMessage {
 }
 
 const TrainScreen = () => {
-  const player = mockPlayers[0];
+  const { activePlayer: player } = useActivePlayer();
   const chatRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: 1, from: "player", text: `Hey Coach! Feeling great today. Ready to push! 💪` },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  useEffect(() => {
+    setMessages([
+      {
+        id: 1,
+        from: "player",
+        text: `Hey Coach! ${player.name} here — ${player.age} y/o ${player.position} for ${player.clubTeam}. Ready to push! 💪`,
+      },
+    ]);
+  }, [player.id, player.name, player.age, player.position, player.clubTeam]);
   const [input, setInput] = useState("");
   const [deltas, setDeltas] = useState<Record<string, number>>({});
 
@@ -54,8 +62,11 @@ const TrainScreen = () => {
         <div className="glass-card-strong p-3 flex items-center gap-3">
           <AnimatedPortrait player={player} size="md" showMood />
           <div className="flex-1">
-            <p className="text-sm font-black text-foreground">{player.name}</p>
-            <p className="text-[10px] text-muted-foreground">{player.country} {player.position}</p>
+            <p className="text-sm font-black text-foreground truncate">{player.name}</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {player.position} · {player.representedCountry}
+            </p>
+            <p className="text-[9px] text-muted-foreground/80 truncate mt-0.5">{player.clubTeam}</p>
           </div>
           <div className="flex flex-col items-end gap-1">
             <span className="text-[10px] text-primary font-black uppercase tracking-wider">Training</span>

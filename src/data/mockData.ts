@@ -1,17 +1,40 @@
+export type PlayerRarity = "common" | "rare" | "epic" | "legendary";
+
+/** Core football stats (single source of truth for OVR + card math). */
+export interface PlayerStats {
+  overall: number;
+  pace: number;
+  shooting: number;
+  passing: number;
+  dribbling: number;
+  defending: number;
+  physical: number;
+}
+
+/** Canonical mock player — all UI resolves from this shape only. */
 export interface Player {
   id: string;
   name: string;
-  country: string;
+  portrait: string;
+  age: number;
   position: string;
-  rarity: "common" | "rare" | "epic" | "legendary";
+  clubTeam: string;
+  nationalTeam: string;
+  representedCountry: string;
+  rarity: PlayerRarity;
+  traits: string[];
+  stats: PlayerStats;
   attributes: {
     confidence: number;
     form: number;
     morale: number;
     fanBond: number;
   };
-  overall: number;
-  image?: string;
+}
+
+/** Deterministic illustrated portraits from a stable seed (matches player id). */
+export function dicebearPortrait(seed: string): string {
+  return `https://api.dicebear.com/9.x/micah/png?seed=${encodeURIComponent(seed)}&size=256`;
 }
 
 export interface MapZone {
@@ -43,8 +66,8 @@ export interface Rival {
   id: string;
   name: string;
   level: number;
-  player: string;
-  overall: number;
+  /** Squad card / strength bar uses this player from `mockPlayers`. */
+  signaturePlayerId: string;
 }
 
 export interface LiveEvent {
@@ -56,15 +79,123 @@ export interface LiveEvent {
 }
 
 export const mockPlayers: Player[] = [
-  { id: "1", name: "Kylian Mbappé", country: "🇫🇷", position: "ST", rarity: "legendary", overall: 95, attributes: { confidence: 92, form: 88, morale: 95, fanBond: 90 } },
-  { id: "2", name: "Jude Bellingham", country: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", position: "CM", rarity: "epic", overall: 91, attributes: { confidence: 85, form: 90, morale: 88, fanBond: 82 } },
-  { id: "3", name: "Vinícius Jr", country: "🇧🇷", position: "LW", rarity: "legendary", overall: 93, attributes: { confidence: 90, form: 85, morale: 92, fanBond: 95 } },
-  { id: "4", name: "Pedri", country: "🇪🇸", position: "CM", rarity: "epic", overall: 89, attributes: { confidence: 80, form: 86, morale: 84, fanBond: 78 } },
-  { id: "5", name: "Phil Foden", country: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", position: "RW", rarity: "rare", overall: 88, attributes: { confidence: 82, form: 84, morale: 80, fanBond: 75 } },
-  { id: "6", name: "Florian Wirtz", country: "🇩🇪", position: "AM", rarity: "epic", overall: 90, attributes: { confidence: 86, form: 88, morale: 85, fanBond: 80 } },
-  { id: "7", name: "Lamine Yamal", country: "🇪🇸", position: "RW", rarity: "legendary", overall: 92, attributes: { confidence: 88, form: 91, morale: 90, fanBond: 93 } },
-  { id: "8", name: "Bukayo Saka", country: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", position: "RW", rarity: "rare", overall: 87, attributes: { confidence: 78, form: 82, morale: 80, fanBond: 76 } },
+  {
+    id: "1",
+    name: "Kylian Mbappé",
+    portrait: dicebearPortrait("ppc-player-1-mbappe"),
+    age: 26,
+    position: "ST",
+    clubTeam: "Paris Saint-Germain",
+    nationalTeam: "France",
+    representedCountry: "France",
+    rarity: "legendary",
+    traits: ["Clinical Finisher", "Lightning Acceleration", "Big-game instinct"],
+    stats: { overall: 95, pace: 97, shooting: 94, passing: 87, dribbling: 93, defending: 38, physical: 78 },
+    attributes: { confidence: 92, form: 88, morale: 95, fanBond: 90 },
+  },
+  {
+    id: "2",
+    name: "Jude Bellingham",
+    portrait: dicebearPortrait("ppc-player-2-bellingham"),
+    age: 22,
+    position: "CM",
+    clubTeam: "Real Madrid",
+    nationalTeam: "England",
+    representedCountry: "England",
+    rarity: "epic",
+    traits: ["Box-to-box engine", "Late runs", "Composed finisher"],
+    stats: { overall: 91, pace: 84, shooting: 88, passing: 89, dribbling: 88, defending: 82, physical: 86 },
+    attributes: { confidence: 85, form: 90, morale: 88, fanBond: 82 },
+  },
+  {
+    id: "3",
+    name: "Vinícius Jr",
+    portrait: dicebearPortrait("ppc-player-3-vinicius"),
+    age: 25,
+    position: "LW",
+    clubTeam: "Real Madrid",
+    nationalTeam: "Brazil",
+    representedCountry: "Brazil",
+    rarity: "legendary",
+    traits: ["Explosive dribbler", "Wide threat", "1v1 specialist"],
+    stats: { overall: 93, pace: 95, shooting: 84, passing: 83, dribbling: 95, defending: 29, physical: 74 },
+    attributes: { confidence: 90, form: 85, morale: 92, fanBond: 95 },
+  },
+  {
+    id: "4",
+    name: "Pedri",
+    portrait: dicebearPortrait("ppc-player-4-pedri"),
+    age: 22,
+    position: "CM",
+    clubTeam: "FC Barcelona",
+    nationalTeam: "Spain",
+    representedCountry: "Spain",
+    rarity: "epic",
+    traits: ["Tempo controller", "Press-resistant", "Vision"],
+    stats: { overall: 89, pace: 76, shooting: 78, passing: 92, dribbling: 90, defending: 72, physical: 68 },
+    attributes: { confidence: 80, form: 86, morale: 84, fanBond: 78 },
+  },
+  {
+    id: "5",
+    name: "Phil Foden",
+    portrait: dicebearPortrait("ppc-player-5-foden"),
+    age: 25,
+    position: "RW",
+    clubTeam: "Manchester City",
+    nationalTeam: "England",
+    representedCountry: "England",
+    rarity: "rare",
+    traits: ["Creative playmaker", "Tight-space technician", "Set-piece threat"],
+    stats: { overall: 88, pace: 86, shooting: 85, passing: 88, dribbling: 91, defending: 56, physical: 62 },
+    attributes: { confidence: 82, form: 84, morale: 80, fanBond: 75 },
+  },
+  {
+    id: "6",
+    name: "Florian Wirtz",
+    portrait: dicebearPortrait("ppc-player-6-wirtz"),
+    age: 22,
+    position: "AM",
+    clubTeam: "Bayer 04 Leverkusen",
+    nationalTeam: "Germany",
+    representedCountry: "Germany",
+    rarity: "epic",
+    traits: ["Playmaker", "Final-third entries", "Pressing IQ"],
+    stats: { overall: 90, pace: 84, shooting: 86, passing: 91, dribbling: 92, defending: 48, physical: 66 },
+    attributes: { confidence: 86, form: 88, morale: 85, fanBond: 80 },
+  },
+  {
+    id: "7",
+    name: "Lamine Yamal",
+    portrait: dicebearPortrait("ppc-player-7-yamal"),
+    age: 18,
+    position: "RW",
+    clubTeam: "FC Barcelona",
+    nationalTeam: "Spain",
+    representedCountry: "Spain",
+    rarity: "legendary",
+    traits: ["Generational wide talent", "1v1 menace", "Crossing range"],
+    stats: { overall: 92, pace: 90, shooting: 84, passing: 86, dribbling: 94, defending: 34, physical: 62 },
+    attributes: { confidence: 88, form: 91, morale: 90, fanBond: 93 },
+  },
+  {
+    id: "8",
+    name: "Bukayo Saka",
+    portrait: dicebearPortrait("ppc-player-8-saka"),
+    age: 23,
+    position: "RW",
+    clubTeam: "Arsenal",
+    nationalTeam: "England",
+    representedCountry: "England",
+    rarity: "rare",
+    traits: ["Two-footed wide threat", "Defensive work-rate", "Composure"],
+    stats: { overall: 87, pace: 88, shooting: 86, passing: 84, dribbling: 90, defending: 65, physical: 74 },
+    attributes: { confidence: 78, form: 82, morale: 80, fanBond: 76 },
+  },
 ];
+
+export function getPlayerById(id: string): Player | undefined {
+  return mockPlayers.find((p) => p.id === id);
+}
 
 /** Curated World Cup 2026-style activity across US, Canada, and Mexico only */
 export const mockZones: MapZone[] = [
@@ -185,17 +316,17 @@ export const mockNearbyActivity: string[] = [
 ];
 
 export const mockRivals: Rival[] = [
-  { id: "r1", name: "Alex_FC", level: 12, player: "Haaland", overall: 89 },
-  { id: "r2", name: "GoalKing99", level: 15, player: "Salah", overall: 91 },
-  { id: "r3", name: "TikiTaka", level: 10, player: "Pedri", overall: 85 },
+  { id: "r1", name: "Alex_FC", level: 12, signaturePlayerId: "6" },
+  { id: "r2", name: "GoalKing99", level: 15, signaturePlayerId: "3" },
+  { id: "r3", name: "TikiTaka", level: 10, signaturePlayerId: "4" },
 ];
 
 export const mockLiveEvents: LiveEvent[] = [
-  { id: "e1", title: "Mbappé scores hat-trick!", description: "Your player gets +5 Form boost", type: "boost", timeAgo: "2m ago" },
+  { id: "e1", title: "Hat-trick for your active striker!", description: "Your player gets +5 Form boost", type: "boost", timeAgo: "2m ago" },
   { id: "e2", title: "CONCACAF Derby Live", description: "USA vs Mexico in Arlington — tune in for bonuses", type: "match", timeAgo: "15m ago" },
   { id: "e3", title: "Limited: Golden Hour", description: "2x rewards for next 30 minutes", type: "limited", timeAgo: "28m ago" },
   { id: "e4", title: "Daily Reward Ready", description: "Claim your daily cultivation bonus", type: "reward", timeAgo: "1h ago" },
-  { id: "e5", title: "Bellingham assists twice", description: "Your player gets +3 Confidence", type: "boost", timeAgo: "2h ago" },
+  { id: "e5", title: "Midfield maestro assists twice", description: "Your player gets +3 Confidence", type: "boost", timeAgo: "2h ago" },
 ];
 
 export const rarityColors: Record<string, string> = {

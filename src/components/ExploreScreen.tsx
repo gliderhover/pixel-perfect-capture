@@ -4,8 +4,10 @@ import L from "leaflet";
 import { Scan, ChevronRight, ZoomIn, ZoomOut, Crosshair } from "lucide-react";
 import { mockZones, mockMission, mockPlayers, mockPlayerMarkers, mockNearbyActivity, zoneIcons } from "@/data/mockData";
 import type { MapZone, Player } from "@/data/mockData";
+import { useActivePlayer } from "@/context/ActivePlayerContext";
 import PlayerEncounter from "./PlayerEncounter";
 import CameraMission from "./CameraMission";
+import AnimatedPortrait from "./AnimatedPortrait";
 import "leaflet/dist/leaflet.css";
 
 // Fix default marker icon issue in webpack/vite
@@ -26,12 +28,15 @@ const createZoneIcon = (type: string) => {
   });
 };
 
-const playerIcon = L.divIcon({
-  className: "custom-player-marker",
-  html: `<div class="player-marker-inner"><span>⚡</span></div>`,
-  iconSize: [40, 40],
-  iconAnchor: [20, 20],
-});
+const createPlayerMarkerIcon = (portrait: string) => {
+  const safe = portrait.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  return L.divIcon({
+    className: "custom-player-marker",
+    html: `<div class="player-marker-face"><img src="${safe}" alt="" loading="lazy" referrerpolicy="no-referrer" /></div>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+  });
+};
 
 const NA_FALLBACK_CENTER: [number, number] = [40, -98];
 const NA_MAX_BOUNDS: [[number, number], [number, number]] = [
@@ -80,6 +85,7 @@ const MapControls = () => {
 };
 
 const ExploreScreen = () => {
+  const { activePlayer } = useActivePlayer();
   const [selectedZone, setSelectedZone] = useState<MapZone | null>(null);
   const [encounterPlayer, setEncounterPlayer] = useState<Player | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -133,7 +139,7 @@ const ExploreScreen = () => {
             <Marker
               key={pm.id}
               position={[pm.lat, pm.lng]}
-              icon={playerIcon}
+              icon={createPlayerMarkerIcon(player.portrait)}
               eventHandlers={{
                 click: () => { setEncounterPlayer(player); setSelectedZone(null); },
               }}
@@ -163,12 +169,13 @@ const ExploreScreen = () => {
 
       {/* Active Player Shortcut */}
       <div className="absolute top-[env(safe-area-inset-top,12px)] right-3 z-[1210] mt-3 animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
-        <div className="glass-card-strong p-1.5 pr-2.5 flex items-center gap-2 rounded-2xl">
-          <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary">
-            {mockPlayers[0].overall}
-          </div>
-          <div>
-            <p className="text-[9px] font-bold text-foreground leading-tight">Mbappé</p>
+        <div className="glass-card-strong p-1.5 pr-2.5 flex items-center gap-2 rounded-2xl max-w-[9.5rem]">
+          <AnimatedPortrait player={activePlayer} size="xs" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-bold text-foreground leading-tight truncate">{activePlayer.name}</p>
+            <p className="text-[8px] text-muted-foreground truncate">
+              {activePlayer.position} · {activePlayer.representedCountry}
+            </p>
             <p className="text-[8px] text-primary font-semibold">Active</p>
           </div>
         </div>

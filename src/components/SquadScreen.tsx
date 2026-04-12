@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { mockPlayers } from "@/data/mockData";
 import type { Player } from "@/data/mockData";
+import { useActivePlayer } from "@/context/ActivePlayerContext";
 import AnimatedPortrait from "./AnimatedPortrait";
 
 const rarityBorder: Record<string, string> = {
@@ -10,14 +11,8 @@ const rarityBorder: Record<string, string> = {
   legendary: "border-amber-400/20",
 };
 
-const rarityGlow: Record<string, string> = {
-  legendary: "portrait-glow-legendary",
-  epic: "portrait-glow-epic",
-  rare: "portrait-glow-rare",
-  common: "",
-};
-
 const SquadScreen = () => {
+  const { activePlayer, setActivePlayerId } = useActivePlayer();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [filter, setFilter] = useState<string>("all");
 
@@ -34,11 +29,13 @@ const SquadScreen = () => {
 
       {/* Active Player Hero */}
       <div className="glass-card-strong p-4 mb-5 flex items-center gap-4 card-shimmer">
-        <AnimatedPortrait player={mockPlayers[0]} size="md" showMood />
-        <div className="flex-1">
+        <AnimatedPortrait player={activePlayer} size="md" showMood />
+        <div className="flex-1 min-w-0">
           <p className="text-[10px] text-primary font-black uppercase tracking-widest">Active Player</p>
-          <p className="text-lg font-black text-foreground mt-0.5">Kylian Mbappé</p>
-          <p className="text-xs text-muted-foreground mt-0.5">🇫🇷 ST • Legendary</p>
+          <p className="text-lg font-black text-foreground mt-0.5 truncate">{activePlayer.name}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            {activePlayer.position} · {activePlayer.clubTeam}
+          </p>
         </div>
       </div>
 
@@ -70,21 +67,47 @@ const SquadScreen = () => {
           >
             <AnimatedPortrait player={player} size="sm" />
             <p className="text-sm font-black text-foreground truncate mt-3">{player.name}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{player.country} {player.position}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{player.position}</p>
+            <p className="text-[9px] text-muted-foreground/90 mt-0.5 truncate">{player.clubTeam}</p>
           </button>
         ))}
       </div>
 
       {/* Player Detail Sheet */}
       {selectedPlayer && (
-        <div className="fixed inset-0 z-50 bg-background/60 backdrop-blur-md" onClick={() => setSelectedPlayer(null)}>
+        <div className="fixed inset-0 z-[1350] bg-background/60 backdrop-blur-md" onClick={() => setSelectedPlayer(null)}>
           <div className="bottom-sheet p-6 pb-8 animate-slide-up max-h-[75vh]" onClick={(e) => e.stopPropagation()}>
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-5" />
 
-            <div className="flex flex-col items-center mb-6 animate-encounter-reveal">
+            <div className="flex flex-col items-center mb-5 animate-encounter-reveal">
               <AnimatedPortrait player={selectedPlayer} size="xl" showMood />
-              <h3 className="text-2xl font-black text-foreground mt-4">{selectedPlayer.name}</h3>
-              <p className="text-sm text-muted-foreground mt-1">{selectedPlayer.country} {selectedPlayer.position}</p>
+              <h3 className="text-2xl font-black text-foreground mt-4 text-center px-2">{selectedPlayer.name}</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Age {selectedPlayer.age} · {selectedPlayer.position}
+              </p>
+              <p className="text-xs text-foreground/90 mt-1 text-center px-4">{selectedPlayer.clubTeam}</p>
+              <p className="text-xs text-primary font-semibold mt-0.5">
+                {selectedPlayer.representedCountry} · {selectedPlayer.nationalTeam}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-2 text-center max-w-xs leading-snug">
+                {selectedPlayer.traits[0]}
+              </p>
+            </div>
+
+            {/* Core stats — compact */}
+            <div className="grid grid-cols-3 gap-2 mb-5 text-center">
+              {(
+                [
+                  ["PAC", selectedPlayer.stats.pace],
+                  ["SHO", selectedPlayer.stats.shooting],
+                  ["PAS", selectedPlayer.stats.passing],
+                ] as const
+              ).map(([k, v]) => (
+                <div key={k} className="glass-card py-2 rounded-xl">
+                  <p className="text-lg font-black text-foreground">{v}</p>
+                  <p className="text-[9px] text-muted-foreground font-bold">{k}</p>
+                </div>
+              ))}
             </div>
 
             {/* Attributes */}
@@ -103,7 +126,14 @@ const SquadScreen = () => {
               ))}
             </div>
 
-            <button className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary via-emerald-400 to-primary text-primary-foreground font-black text-sm floating-button glow-primary">
+            <button
+              type="button"
+              onClick={() => {
+                setActivePlayerId(selectedPlayer.id);
+                setSelectedPlayer(null);
+              }}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary via-emerald-400 to-primary text-primary-foreground font-black text-sm floating-button glow-primary"
+            >
               Set as Active
             </button>
           </div>
