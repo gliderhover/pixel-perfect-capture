@@ -55,6 +55,9 @@ type GameProgressContextValue = {
   livePulse: LivePulse;
   setLivePulse: (p: LivePulse) => void;
   competitiveStreak: number;
+  focusPoints: number;
+  spendFocusPoints: (n: number) => boolean;
+  addFocusPoints: (n: number) => void;
   addXp: (playerId: string, amount: number) => void;
   addBond: (playerId: string, delta: number) => void;
   addShards: (playerId: string, n: number) => void;
