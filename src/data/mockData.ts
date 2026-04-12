@@ -18,9 +18,16 @@ export interface MapZone {
   id: string;
   type: "training" | "recovery" | "fan-arena" | "rival" | "pressure" | "stadium";
   name: string;
-  x: number;
-  y: number;
+  lat: number;
+  lng: number;
   benefit: string;
+}
+
+export interface PlayerMarker {
+  id: string;
+  playerId: string;
+  lat: number;
+  lng: number;
 }
 
 export interface Mission {
@@ -60,12 +67,18 @@ export const mockPlayers: Player[] = [
 ];
 
 export const mockZones: MapZone[] = [
-  { id: "z1", type: "training", name: "Training Ground", x: 25, y: 30, benefit: "+Form" },
-  { id: "z2", type: "recovery", name: "Recovery Center", x: 65, y: 20, benefit: "+Morale" },
-  { id: "z3", type: "fan-arena", name: "Fan Arena", x: 45, y: 55, benefit: "+Fan Bond" },
-  { id: "z4", type: "rival", name: "Rival Pitch", x: 75, y: 45, benefit: "Battle" },
-  { id: "z5", type: "pressure", name: "Pressure Zone", x: 20, y: 65, benefit: "+Confidence" },
-  { id: "z6", type: "stadium", name: "Stadium Zone", x: 55, y: 75, benefit: "Live Bonus" },
+  { id: "z1", type: "training", name: "Training Ground", lat: 48.858, lng: 2.347, benefit: "+Form" },
+  { id: "z2", type: "recovery", name: "Recovery Center", lat: 51.505, lng: -0.09, benefit: "+Morale" },
+  { id: "z3", type: "fan-arena", name: "Fan Arena", lat: 40.416, lng: -3.703, benefit: "+Fan Bond" },
+  { id: "z4", type: "rival", name: "Rival Pitch", lat: 41.390, lng: 2.154, benefit: "Battle" },
+  { id: "z5", type: "pressure", name: "Pressure Zone", lat: 52.520, lng: 13.405, benefit: "+Confidence" },
+  { id: "z6", type: "stadium", name: "Stadium Zone", lat: 45.464, lng: 9.190, benefit: "Live Bonus" },
+];
+
+export const mockPlayerMarkers: PlayerMarker[] = [
+  { id: "pm1", playerId: "1", lat: 48.870, lng: 2.320 },
+  { id: "pm2", playerId: "2", lat: 51.515, lng: -0.075 },
+  { id: "pm3", playerId: "3", lat: 40.430, lng: -3.680 },
 ];
 
 export const mockMission: Mission = {
