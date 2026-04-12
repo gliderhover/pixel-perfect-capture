@@ -57,6 +57,8 @@ export default {
         glow: {
           primary: "hsl(var(--glow-primary))",
           accent: "hsl(var(--glow-accent))",
+          epic: "hsl(var(--glow-epic))",
+          rare: "hsl(var(--glow-rare))",
         },
         surface: {
           elevated: "hsl(var(--surface-elevated))",

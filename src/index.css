@@ -6,51 +6,53 @@
 
 @layer base {
   :root {
-    --background: 222 47% 6%;
+    --background: 225 30% 5%;
     --foreground: 210 40% 96%;
 
-    --card: 222 40% 10%;
+    --card: 225 25% 8%;
     --card-foreground: 210 40% 96%;
 
-    --popover: 222 40% 10%;
+    --popover: 225 25% 8%;
     --popover-foreground: 210 40% 96%;
 
-    --primary: 153 60% 45%;
-    --primary-foreground: 222 47% 6%;
+    --primary: 153 70% 42%;
+    --primary-foreground: 225 30% 5%;
 
-    --secondary: 222 30% 16%;
-    --secondary-foreground: 210 40% 90%;
+    --secondary: 225 20% 13%;
+    --secondary-foreground: 210 40% 85%;
 
-    --muted: 222 25% 14%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 225 18% 11%;
+    --muted-foreground: 215 15% 48%;
 
-    --accent: 42 90% 55%;
-    --accent-foreground: 222 47% 6%;
+    --accent: 42 95% 55%;
+    --accent-foreground: 225 30% 5%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 222 25% 18%;
-    --input: 222 25% 18%;
-    --ring: 153 60% 45%;
+    --border: 225 18% 14%;
+    --input: 225 18% 14%;
+    --ring: 153 70% 42%;
 
     --radius: 1rem;
 
     /* Custom tokens */
-    --glow-primary: 153 60% 45%;
-    --glow-accent: 42 90% 55%;
-    --glass: 222 40% 12%;
-    --glass-border: 222 25% 22%;
-    --surface-elevated: 222 35% 13%;
+    --glow-primary: 153 70% 42%;
+    --glow-accent: 42 95% 55%;
+    --glow-epic: 270 60% 55%;
+    --glow-rare: 210 80% 55%;
+    --glass: 225 25% 9%;
+    --glass-border: 225 18% 16%;
+    --surface-elevated: 225 22% 11%;
 
-    --sidebar-background: 222 47% 6%;
+    --sidebar-background: 225 30% 5%;
     --sidebar-foreground: 210 40% 96%;
-    --sidebar-primary: 153 60% 45%;
-    --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 222 30% 16%;
-    --sidebar-accent-foreground: 210 40% 90%;
-    --sidebar-border: 222 25% 18%;
-    --sidebar-ring: 153 60% 45%;
+    --sidebar-primary: 153 70% 42%;
+    --sidebar-primary-foreground: 225 30% 5%;
+    --sidebar-accent: 225 20% 13%;
+    --sidebar-accent-foreground: 210 40% 85%;
+    --sidebar-border: 225 18% 14%;
+    --sidebar-ring: 153 70% 42%;
   }
 }
 
@@ -62,38 +64,68 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @layer utilities {
   .glass-card {
-    @apply bg-glass/80 backdrop-blur-xl border border-glass-border rounded-2xl;
+    @apply backdrop-blur-xl border rounded-2xl;
+    background: linear-gradient(135deg, hsl(var(--glass) / 0.85), hsl(var(--glass) / 0.6));
+    border-color: hsl(var(--glass-border) / 0.6);
+  }
+
+  .glass-card-strong {
+    @apply backdrop-blur-2xl border rounded-2xl;
+    background: linear-gradient(135deg, hsl(var(--glass) / 0.95), hsl(var(--glass) / 0.8));
+    border-color: hsl(var(--glass-border) / 0.8);
   }
 
   .glow-primary {
-    box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.3), 0 0 60px hsl(var(--glow-primary) / 0.1);
+    box-shadow: 0 0 24px hsl(var(--glow-primary) / 0.35), 0 0 80px hsl(var(--glow-primary) / 0.12);
   }
 
   .glow-accent {
-    box-shadow: 0 0 20px hsl(var(--glow-accent) / 0.3), 0 0 60px hsl(var(--glow-accent) / 0.1);
+    box-shadow: 0 0 24px hsl(var(--glow-accent) / 0.35), 0 0 80px hsl(var(--glow-accent) / 0.12);
+  }
+
+  .glow-epic {
+    box-shadow: 0 0 24px hsl(var(--glow-epic) / 0.4), 0 0 80px hsl(var(--glow-epic) / 0.15);
+  }
+
+  .glow-rare {
+    box-shadow: 0 0 24px hsl(var(--glow-rare) / 0.35), 0 0 80px hsl(var(--glow-rare) / 0.12);
   }
 
   .text-gradient-primary {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(153 70% 60%));
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(153 80% 60%));
   }
 
   .text-gradient-accent {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(var(--accent)), hsl(30 90% 60%));
+    background-image: linear-gradient(135deg, hsl(var(--accent)), hsl(30 95% 60%));
+  }
+
+  .text-gradient-legendary {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(42 95% 55%), hsl(25 90% 50%));
+  }
+
+  .text-gradient-epic {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(270 60% 55%), hsl(280 70% 65%));
   }
 
   .stadium-glow {
-    background: radial-gradient(ellipse at 50% 0%, hsl(var(--glow-primary) / 0.08) 0%, transparent 60%);
+    background: radial-gradient(ellipse at 50% 0%, hsl(var(--glow-primary) / 0.1) 0%, transparent 50%);
   }
 
   .bottom-sheet {
-    @apply fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-xl border-t border-glass-border rounded-t-3xl;
+    @apply fixed bottom-0 left-0 right-0 backdrop-blur-2xl border-t rounded-t-3xl;
+    background: linear-gradient(180deg, hsl(var(--card) / 0.97), hsl(var(--card)));
+    border-color: hsl(var(--glass-border) / 0.5);
   }
 
   .floating-button {
@@ -107,6 +139,51 @@
   .marker-float {
     animation: markerFloat 3s ease-in-out infinite;
   }
+
+  .portrait-breathe {
+    animation: portraitBreathe 4s ease-in-out infinite;
+  }
+
+  .portrait-glow-legendary {
+    animation: glowLegendary 3s ease-in-out infinite;
+  }
+
+  .portrait-glow-epic {
+    animation: glowEpic 3s ease-in-out infinite;
+  }
+
+  .portrait-glow-rare {
+    animation: glowRare 3s ease-in-out infinite;
+  }
+
+  .light-sweep {
+    animation: lightSweep 4s ease-in-out infinite;
+  }
+
+  .card-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 40%, hsl(0 0% 100% / 0.06) 45%, hsl(0 0% 100% / 0.12) 50%, hsl(0 0% 100% / 0.06) 55%, transparent 60%);
+    animation: shimmer 5s ease-in-out infinite;
+  }
+
+  .zone-pulse {
+    animation: zonePulse 2.5s ease-in-out infinite;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes rewardPulse {
@@ -116,7 +193,42 @@
 
 @keyframes markerFloat {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes portraitBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.015); }
+}
+
+@keyframes glowLegendary {
+  0%, 100% { box-shadow: 0 0 20px hsl(42 95% 55% / 0.3), 0 0 60px hsl(42 95% 55% / 0.1), inset 0 0 30px hsl(42 95% 55% / 0.05); }
+  50% { box-shadow: 0 0 30px hsl(42 95% 55% / 0.5), 0 0 90px hsl(42 95% 55% / 0.2), inset 0 0 40px hsl(42 95% 55% / 0.1); }
+}
+
+@keyframes glowEpic {
+  0%, 100% { box-shadow: 0 0 20px hsl(270 60% 55% / 0.3), 0 0 60px hsl(270 60% 55% / 0.1), inset 0 0 30px hsl(270 60% 55% / 0.05); }
+  50% { box-shadow: 0 0 30px hsl(270 60% 55% / 0.5), 0 0 90px hsl(270 60% 55% / 0.2), inset 0 0 40px hsl(270 60% 55% / 0.1); }
+}
+
+@keyframes glowRare {
+  0%, 100% { box-shadow: 0 0 20px hsl(210 80% 55% / 0.3), 0 0 60px hsl(210 80% 55% / 0.1); }
+  50% { box-shadow: 0 0 30px hsl(210 80% 55% / 0.4), 0 0 80px hsl(210 80% 55% / 0.15); }
+}
+
+@keyframes lightSweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes shimmer {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
+}
+
+@keyframes zonePulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.4); opacity: 0; }
 }
 
 @keyframes slideUp {
@@ -129,10 +241,47 @@
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes encounterReveal {
+  0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+  60% { opacity: 1; transform: scale(1.03) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes energyBurst {
+  0% { transform: scale(0); opacity: 1; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+@keyframes scanRipple {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
 .animate-slide-up {
   animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+.animate-encounter-reveal {
+  animation: encounterReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-energy-burst {
+  animation: energyBurst 0.8s ease-out forwards;
+}
+
+.animate-scan-ripple {
+  animation: scanRipple 1.5s ease-out infinite;
 }
