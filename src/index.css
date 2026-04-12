@@ -53,6 +53,11 @@
     --sidebar-accent-foreground: 210 40% 85%;
     --sidebar-border: 225 18% 14%;
     --sidebar-ring: 153 70% 42%;
+
+    /* Bottom nav + Explore FAB spacing (sync with BottomNav compact height) */
+    --nav-stack: calc(env(safe-area-inset-bottom, 0px) + 3.375rem);
+    --explore-activity-bottom: calc(var(--nav-stack) + 0.375rem);
+    --explore-fab-bottom: calc(var(--nav-stack) + 0.375rem + 2.75rem + 0.75rem);
   }
 }
 
@@ -183,6 +188,10 @@
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  .safe-pb-nav {
+    padding-bottom: calc(var(--nav-stack) + 0.75rem);
   }
 }
 
@@ -321,6 +330,11 @@
 .zone-type-stadium {
   border-color: hsl(45 100% 50% / 0.4);
   box-shadow: 0 0 14px hsl(45 100% 50% / 0.2), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.zone-type-mission {
+  border-color: hsl(210 90% 55% / 0.45);
+  box-shadow: 0 0 12px hsl(210 90% 55% / 0.25), 0 2px 8px rgba(0,0,0,0.3);
 }
 
 .player-marker-inner {

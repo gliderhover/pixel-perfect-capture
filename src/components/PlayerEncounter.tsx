@@ -44,7 +44,7 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50" onClick={onClose}>
+    <div className="fixed inset-0 z-[1400]" onClick={onClose}>
       {/* Backdrop with rarity-colored radial glow */}
       <div className="absolute inset-0 bg-background/80 backdrop-blur-xl" />
       <div

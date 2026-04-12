@@ -45,7 +45,7 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-background">
+    <div className="fixed inset-0 z-[1400] bg-background">
       {/* Close */}
       <button onClick={onClose} className="absolute top-12 right-4 z-50 w-10 h-10 rounded-full glass-card flex items-center justify-center">
         <X className="w-5 h-5 text-muted-foreground" />

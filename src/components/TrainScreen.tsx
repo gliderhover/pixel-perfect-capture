@@ -48,7 +48,7 @@ const TrainScreen = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen pb-24 pt-4">
+    <div className="flex flex-col h-[100dvh] min-h-[100dvh] safe-pb-nav pt-4">
       {/* Player Header */}
       <div className="px-4 mb-3">
         <div className="glass-card-strong p-3 flex items-center gap-3">

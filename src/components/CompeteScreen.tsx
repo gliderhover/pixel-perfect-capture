@@ -8,7 +8,7 @@ const CompeteScreen = () => {
   const activePlayer = mockPlayers[0];
 
   return (
-    <div className="min-h-screen pb-28 pt-6 px-4">
+    <div className="min-h-screen safe-pb-nav pt-6 px-4">
       {/* Header */}
       <div className="mb-5">
         <h1 className="text-2xl font-black text-foreground">Compete</h1>

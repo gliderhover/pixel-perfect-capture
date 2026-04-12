@@ -1,0 +1,18 @@
+<!--
+  Pixel Perfect Capture — placeholder app mark (3×3 pixel grid on brand background).
+  Replace this file and regenerate PNGs via: powershell -File scripts/generate-pwa-icons.ps1
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Pixel Perfect Capture">
+  <rect width="512" height="512" fill="#0b1020"/>
+  <g>
+    <rect x="105" y="105" width="82" height="82" fill="#1eb87a"/>
+    <rect x="215" y="105" width="82" height="82" fill="#1eb87a"/>
+    <rect x="325" y="105" width="82" height="82" fill="#1eb87a"/>
+    <rect x="105" y="215" width="82" height="82" fill="#1eb87a"/>
+    <rect x="215" y="215" width="82" height="82" fill="#2ee8b8"/>
+    <rect x="325" y="215" width="82" height="82" fill="#1eb87a"/>
+    <rect x="105" y="325" width="82" height="82" fill="#1eb87a"/>
+    <rect x="215" y="325" width="82" height="82" fill="#1eb87a"/>
+    <rect x="325" y="325" width="82" height="82" fill="#1eb87a"/>
+  </g>
+</svg>

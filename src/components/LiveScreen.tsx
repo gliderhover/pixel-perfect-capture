@@ -65,7 +65,7 @@ const LiveScreen = () => {
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
 
   return (
-    <div className="min-h-screen pb-28 pt-6 px-4">
+    <div className="min-h-screen safe-pb-nav pt-6 px-4">
       {/* Header */}
       <div className="mb-5">
         <h1 className="text-2xl font-black text-foreground">Live</h1>
@@ -81,7 +81,7 @@ const LiveScreen = () => {
             <p className="text-[10px] text-destructive font-black uppercase tracking-widest">Live Now</p>
           </div>
           <h2 className="text-xl font-black text-foreground mb-1">World Cup Qualifier</h2>
-          <p className="text-sm text-muted-foreground mb-4">France vs Germany • 67'</p>
+          <p className="text-sm text-muted-foreground mb-4">USA vs Mexico • Arlington • 67'</p>
           <button className="px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-primary text-primary-foreground text-xs font-black floating-button glow-primary">
             Watch for Bonuses ⚡
           </button>
