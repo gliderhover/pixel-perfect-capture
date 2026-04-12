@@ -55,6 +55,9 @@ type GameProgressContextValue = {
   livePulse: LivePulse;
   setLivePulse: (p: LivePulse) => void;
   competitiveStreak: number;
+  focusPoints: number;
+  spendFocusPoints: (n: number) => boolean;
+  addFocusPoints: (n: number) => void;
   addXp: (playerId: string, amount: number) => void;
   addBond: (playerId: string, delta: number) => void;
   addShards: (playerId: string, n: number) => void;
@@ -77,6 +80,21 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   const [matchPhase, setMatchPhase] = useState<MatchPhase>("prematch");
   const [livePulse, setLivePulse] = useState<LivePulse>("neutral");
   const [competitiveStreak] = useState(3);
+  const [focusPoints, setFocusPoints] = useState(() => {
+    try { const v = localStorage.getItem("ppc-focus-points"); return v ? Number(v) : 10; } catch { return 10; }
+  });
+
+  useEffect(() => { localStorage.setItem("ppc-focus-points", String(focusPoints)); }, [focusPoints]);
+
+  const spendFocusPoints = useCallback((n: number) => {
+    if (focusPoints < n) return false;
+    setFocusPoints((p) => p - n);
+    return true;
+  }, [focusPoints]);
+
+  const addFocusPoints = useCallback((n: number) => {
+    setFocusPoints((p) => p + n);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(playersById));
@@ -199,6 +217,9 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       livePulse,
       setLivePulse,
       competitiveStreak,
+      focusPoints,
+      spendFocusPoints,
+      addFocusPoints,
       addXp,
       addBond,
       addShards,
@@ -215,6 +236,9 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       matchPhase,
       livePulse,
       competitiveStreak,
+      focusPoints,
+      spendFocusPoints,
+      addFocusPoints,
       addXp,
       addBond,
       addShards,
