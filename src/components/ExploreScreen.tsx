@@ -7,6 +7,7 @@ import type { MapZone, Player } from "@/data/mockData";
 import { useGameProgress } from "@/context/GameProgressContext";
 import PlayerEncounter from "./PlayerEncounter";
 import CameraMission from "./CameraMission";
+import ZoneExperience from "./ZoneExperience";
 import AnimatedPortrait from "./AnimatedPortrait";
 import "leaflet/dist/leaflet.css";
 
@@ -94,6 +95,7 @@ const ExploreScreen = () => {
   const [encounterPlayer, setEncounterPlayer] = useState<Player | null>(null);
   const [scanning, setScanning] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [activeZone, setActiveZone] = useState<MapZone | null>(null);
   const handleScan = () => {
     setScanning(true);
     setTimeout(() => {
@@ -231,7 +233,7 @@ const ExploreScreen = () => {
       </div>
 
       {/* Zone Bottom Sheet */}
-      {selectedZone && (
+      {selectedZone && !activeZone && (
         <div className="fixed inset-0 z-[1300] bg-background/40 backdrop-blur-sm" onClick={() => setSelectedZone(null)}>
           <div
             className="absolute bottom-0 left-0 right-0 p-5 rounded-t-3xl bg-background/95 backdrop-blur-xl border-t border-border/20 animate-slide-up"
@@ -248,11 +250,18 @@ const ExploreScreen = () => {
                 <p className="text-sm text-primary font-semibold">{selectedZone.benefit}</p>
               </div>
             </div>
-            <button className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-sm flex items-center justify-center gap-2 glow-primary active:scale-[0.98] transition-transform">
+            <button
+              onClick={() => setActiveZone(selectedZone)}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-sm flex items-center justify-center gap-2 glow-primary active:scale-[0.98] transition-transform">
               Enter Zone <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
+      )}
+
+      {/* Zone Experience */}
+      {activeZone && (
+        <ZoneExperience zone={activeZone} onClose={() => { setActiveZone(null); setSelectedZone(null); }} />
       )}
 
       {/* Player Encounter */}
