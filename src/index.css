@@ -285,3 +285,63 @@
 .animate-scan-ripple {
   animation: scanRipple 1.5s ease-out infinite;
 }
+
+/* Leaflet custom markers */
+.custom-zone-marker,
+.custom-player-marker {
+  background: none !important;
+  border: none !important;
+}
+
+.zone-marker-inner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background: hsl(225 30% 10% / 0.85);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid hsl(var(--primary) / 0.3);
+  box-shadow: 0 0 12px hsl(var(--primary) / 0.2), 0 2px 8px rgba(0,0,0,0.3);
+  animation: markerFloat 3s ease-in-out infinite;
+  transition: transform 0.2s;
+}
+
+.zone-marker-inner:active {
+  transform: scale(0.9);
+}
+
+.zone-type-rival {
+  border-color: hsl(var(--accent) / 0.4);
+  box-shadow: 0 0 12px hsl(var(--accent) / 0.25), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.zone-type-stadium {
+  border-color: hsl(45 100% 50% / 0.4);
+  box-shadow: 0 0 14px hsl(45 100% 50% / 0.2), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.player-marker-inner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: hsl(var(--accent) / 0.15);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid hsl(var(--accent) / 0.4);
+  box-shadow: 0 0 14px hsl(var(--accent) / 0.3), 0 2px 8px rgba(0,0,0,0.3);
+  animation: markerFloat 3s ease-in-out infinite 0.5s;
+}
+
+.player-marker-inner:active {
+  transform: scale(0.9);
+}
+
+/* Hide leaflet default chrome */
+.leaflet-control-attribution { display: none !important; }
+.leaflet-container { font-family: inherit; }
