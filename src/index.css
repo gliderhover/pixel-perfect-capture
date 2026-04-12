@@ -54,10 +54,11 @@
     --sidebar-border: 225 18% 14%;
     --sidebar-ring: 153 70% 42%;
 
-    /* Bottom nav + Explore FAB spacing (sync with BottomNav compact height) */
-    --nav-stack: calc(env(safe-area-inset-bottom, 0px) + 3.375rem);
-    --explore-activity-bottom: calc(var(--nav-stack) + 0.375rem);
-    --explore-fab-bottom: calc(var(--nav-stack) + 0.375rem + 2.75rem + 0.75rem);
+    /* Explore FAB + strip — map-first, no bottom bar */
+    --explore-stack-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
+    --explore-activity-bottom: calc(var(--explore-stack-bottom) + 0.25rem);
+    --explore-fab-bottom: calc(var(--explore-stack-bottom) + 0.25rem + 2.75rem + 0.75rem + 2.5rem);
+    --game-sidebar-width: 56px;
   }
 }
 
@@ -190,8 +191,12 @@
     display: none;
   }
 
-  .safe-pb-nav {
-    padding-bottom: calc(var(--nav-stack) + 0.75rem);
+  .safe-page-bottom {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .with-sidebar-pad {
+    padding-left: calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px);
   }
 }
 
@@ -231,6 +236,10 @@
 .portrait-parallax-img {
   animation: portraitParallaxImg 7s ease-in-out infinite;
 }
+
+.evo-frame-1 { filter: drop-shadow(0 0 6px hsl(var(--primary) / 0.25)); }
+.evo-frame-2 { filter: drop-shadow(0 0 10px hsl(var(--accent) / 0.3)); }
+.evo-frame-3 { filter: drop-shadow(0 0 14px hsl(42 95% 55% / 0.35)); }
 
 @keyframes portraitBreathe {
   0%, 100% { transform: scale(1); }

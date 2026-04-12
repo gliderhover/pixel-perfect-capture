@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { getPlayerById, mockRivals } from "@/data/mockData";
-import { useActivePlayer } from "@/context/ActivePlayerContext";
+import { useGameProgress } from "@/context/GameProgressContext";
 import { Swords, Trophy, ChevronRight } from "lucide-react";
 import AnimatedPortrait from "./AnimatedPortrait";
 
 const CompeteScreen = () => {
   const [challengeTarget, setChallengeTarget] = useState<number | null>(null);
-  const { activePlayer } = useActivePlayer();
+  const { activePlayer, playersById } = useGameProgress();
 
   const challengeRival = challengeTarget !== null ? mockRivals[challengeTarget] : null;
-  const challengeRivalPlayer = challengeRival ? getPlayerById(challengeRival.signaturePlayerId) : undefined;
+  const challengeRivalPlayer = challengeRival
+    ? playersById[challengeRival.signaturePlayerId] ?? getPlayerById(challengeRival.signaturePlayerId)
+    : undefined;
 
   return (
-    <div className="min-h-screen safe-pb-nav pt-6 px-4">
+    <div className="min-h-screen safe-page-bottom with-sidebar-pad pt-6 pr-4">
       <div className="mb-5">
         <h1 className="text-2xl font-black text-foreground">Compete</h1>
         <p className="text-xs text-muted-foreground mt-1">Challenge nearby rivals</p>
@@ -51,7 +53,8 @@ const CompeteScreen = () => {
       <h2 className="text-xs font-black text-foreground uppercase tracking-wider mb-3">Nearby Rivals</h2>
       <div className="space-y-2.5">
         {mockRivals.map((rival, i) => {
-          const rivalPlayer = getPlayerById(rival.signaturePlayerId);
+          const rivalPlayer =
+            playersById[rival.signaturePlayerId] ?? getPlayerById(rival.signaturePlayerId);
           if (!rivalPlayer) return null;
           const youOvr = activePlayer.stats.overall;
           const themOvr = rivalPlayer.stats.overall;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { mockPlayers } from "@/data/mockData";
 import type { Player } from "@/data/mockData";
-import { useActivePlayer } from "@/context/ActivePlayerContext";
+import { useGameProgress } from "@/context/GameProgressContext";
 import AnimatedPortrait from "./AnimatedPortrait";
 
 const rarityBorder: Record<string, string> = {
@@ -11,20 +11,26 @@ const rarityBorder: Record<string, string> = {
   legendary: "border-amber-400/20",
 };
 
+const evoLabel = ["Rookie", "Developing", "Rising", "Elite"] as const;
+
 const SquadScreen = () => {
-  const { activePlayer, setActivePlayerId } = useActivePlayer();
+  const { activePlayer, setActivePlayerId, playersById, tryEvolutionUpgrade } = useGameProgress();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [filter, setFilter] = useState<string>("all");
 
+  const roster = mockPlayers.map((m) => playersById[m.id] ?? m);
+
   const filters = ["all", "legendary", "epic", "rare"];
-  const filtered = filter === "all" ? mockPlayers : mockPlayers.filter((p) => p.rarity === filter);
+  const filtered = filter === "all" ? roster : roster.filter((p) => p.rarity === filter);
+
+  const detail = selectedPlayer ? playersById[selectedPlayer.id] ?? selectedPlayer : null;
 
   return (
-    <div className="min-h-screen safe-pb-nav pt-6 px-4">
+    <div className="min-h-screen safe-page-bottom with-sidebar-pad pt-6 pr-4">
       {/* Header */}
       <div className="mb-5">
         <h1 className="text-2xl font-black text-foreground">My Squad</h1>
-        <p className="text-xs text-muted-foreground mt-1">{mockPlayers.length} players collected</p>
+        <p className="text-xs text-muted-foreground mt-1">{roster.length} players collected</p>
       </div>
 
       {/* Active Player Hero */}
@@ -33,9 +39,12 @@ const SquadScreen = () => {
         <div className="flex-1 min-w-0">
           <p className="text-[10px] text-primary font-black uppercase tracking-widest">Active Player</p>
           <p className="text-lg font-black text-foreground mt-0.5 truncate">{activePlayer.name}</p>
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
             {activePlayer.position} · {activePlayer.clubTeam}
           </p>
+            <p className="text-[10px] text-primary font-bold mt-1">
+              Lv {activePlayer.level} · {evoLabel[activePlayer.evolutionStage]} · OVR {activePlayer.stats.overall}
+            </p>
         </div>
       </div>
 
@@ -69,28 +78,46 @@ const SquadScreen = () => {
             <p className="text-sm font-black text-foreground truncate mt-3">{player.name}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{player.position}</p>
             <p className="text-[9px] text-muted-foreground/90 mt-0.5 truncate">{player.clubTeam}</p>
+            <p className="text-[9px] font-bold text-primary/90 mt-1">Lv {player.level} · OVR {player.stats.overall}</p>
           </button>
         ))}
       </div>
 
       {/* Player Detail Sheet */}
-      {selectedPlayer && (
+      {detail && (
         <div className="fixed inset-0 z-[1350] bg-background/60 backdrop-blur-md" onClick={() => setSelectedPlayer(null)}>
           <div className="bottom-sheet p-6 pb-8 animate-slide-up max-h-[75vh]" onClick={(e) => e.stopPropagation()}>
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-5" />
 
-            <div className="flex flex-col items-center mb-5 animate-encounter-reveal">
-              <AnimatedPortrait player={selectedPlayer} size="xl" showMood />
-              <h3 className="text-2xl font-black text-foreground mt-4 text-center px-2">{selectedPlayer.name}</h3>
+            <div className="flex flex-col items-center mb-4 animate-encounter-reveal">
+              <AnimatedPortrait player={detail} size="xl" showMood />
+              <h3 className="text-2xl font-black text-foreground mt-4 text-center px-2">{detail.name}</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Age {selectedPlayer.age} · {selectedPlayer.position}
+                Age {detail.age} · {detail.position}
               </p>
-              <p className="text-xs text-foreground/90 mt-1 text-center px-4">{selectedPlayer.clubTeam}</p>
+              <p className="text-xs text-foreground/90 mt-1 text-center px-4">{detail.clubTeam}</p>
               <p className="text-xs text-primary font-semibold mt-0.5">
-                {selectedPlayer.representedCountry} · {selectedPlayer.nationalTeam}
+                {detail.representedCountry} · {detail.nationalTeam}
               </p>
+              <div className="mt-3 w-full max-w-xs space-y-2">
+                <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
+                  <span>
+                    Level {detail.level} · {evoLabel[detail.evolutionStage]}
+                  </span>
+                  <span>{detail.currentXp} / {detail.xpToNext} XP</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400"
+                    style={{ width: `${Math.min(100, (detail.currentXp / detail.xpToNext) * 100)}%` }}
+                  />
+                </div>
+                <p className="text-center text-[10px] text-muted-foreground">
+                  Shards {detail.shardsCollected}/10 to evolve
+                </p>
+              </div>
               <p className="text-[10px] text-muted-foreground mt-2 text-center max-w-xs leading-snug">
-                {selectedPlayer.traits[0]}
+                {detail.traits[0]}
               </p>
             </div>
 
@@ -98,9 +125,9 @@ const SquadScreen = () => {
             <div className="grid grid-cols-3 gap-2 mb-5 text-center">
               {(
                 [
-                  ["PAC", selectedPlayer.stats.pace],
-                  ["SHO", selectedPlayer.stats.shooting],
-                  ["PAS", selectedPlayer.stats.passing],
+                  ["PAC", detail.stats.pace],
+                  ["SHO", detail.stats.shooting],
+                  ["PAS", detail.stats.passing],
                 ] as const
               ).map(([k, v]) => (
                 <div key={k} className="glass-card py-2 rounded-xl">
@@ -112,7 +139,7 @@ const SquadScreen = () => {
 
             {/* Attributes */}
             <div className="space-y-3 mb-6">
-              {Object.entries(selectedPlayer.attributes).map(([key, value]) => (
+              {Object.entries(detail.attributes).map(([key, value]) => (
                 <div key={key} className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground capitalize w-20 font-medium">{key === "fanBond" ? "Fan Bond" : key}</span>
                   <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
@@ -126,10 +153,22 @@ const SquadScreen = () => {
               ))}
             </div>
 
+            {detail.shardsCollected >= 10 && detail.evolutionStage < 3 && (
+              <button
+                type="button"
+                onClick={() => {
+                  tryEvolutionUpgrade(detail.id);
+                }}
+                className="mb-3 w-full py-3 rounded-2xl border border-accent/40 bg-accent/10 text-accent font-black text-xs floating-button"
+              >
+                Evolve (uses 10 shards)
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
-                setActivePlayerId(selectedPlayer.id);
+                setActivePlayerId(detail.id);
                 setSelectedPlayer(null);
               }}
               className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary via-emerald-400 to-primary text-primary-foreground font-black text-sm floating-button glow-primary"

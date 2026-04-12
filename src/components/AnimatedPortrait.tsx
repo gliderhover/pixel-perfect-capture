@@ -95,7 +95,7 @@ const AnimatedPortrait = ({ player, size = "md", showMood = false, className = "
 
       {/* Rarity frame ring */}
       <div
-        className={`relative ${framePad[size]} ${auraRounded[size]} bg-gradient-to-br ${rarityGradients[player.rarity]} portrait-float-layer ${rarityGlow[player.rarity]}`}
+        className={`relative ${framePad[size]} ${auraRounded[size]} bg-gradient-to-br ${rarityGradients[player.rarity]} portrait-float-layer ${rarityGlow[player.rarity]} evo-frame-${player.evolutionStage ?? 0}`}
       >
         <div
           className={`relative ${sizeClasses[size]} overflow-hidden bg-muted ${imgRounded[size]} shadow-inner`}

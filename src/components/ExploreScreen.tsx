@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import { Scan, ChevronRight, ZoomIn, ZoomOut, Crosshair } from "lucide-react";
-import { mockZones, mockMission, mockPlayers, mockPlayerMarkers, mockNearbyActivity, zoneIcons } from "@/data/mockData";
+import { mockZones, mockMission, mockPlayerMarkers, mockNearbyActivity, zoneIcons, getPlayerById } from "@/data/mockData";
 import type { MapZone, Player } from "@/data/mockData";
-import { useActivePlayer } from "@/context/ActivePlayerContext";
+import { useGameProgress } from "@/context/GameProgressContext";
 import PlayerEncounter from "./PlayerEncounter";
 import CameraMission from "./CameraMission";
 import AnimatedPortrait from "./AnimatedPortrait";
@@ -44,10 +44,14 @@ const NA_MAX_BOUNDS: [[number, number], [number, number]] = [
   [72, -48],
 ];
 
+const mapControlLeft = {
+  left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)",
+} as const;
+
 const MapControls = () => {
   const map = useMap();
   return (
-    <div className="absolute top-28 left-3 z-[1210] flex flex-col gap-1.5">
+    <div className="absolute top-28 z-[1210] flex flex-col gap-1.5" style={mapControlLeft}>
       <button
         type="button"
         onClick={() => map.zoomIn()}
@@ -85,7 +89,7 @@ const MapControls = () => {
 };
 
 const ExploreScreen = () => {
-  const { activePlayer } = useActivePlayer();
+  const { activePlayer, playersById, setExplorationZoneType } = useGameProgress();
   const [selectedZone, setSelectedZone] = useState<MapZone | null>(null);
   const [encounterPlayer, setEncounterPlayer] = useState<Player | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -97,6 +101,10 @@ const ExploreScreen = () => {
       setShowCamera(true);
     }, 800);
   };
+
+  useEffect(() => {
+    setExplorationZoneType(selectedZone?.type ?? null);
+  }, [selectedZone, setExplorationZoneType]);
 
   return (
     <div className="relative w-full min-h-[100dvh] h-[100dvh] overflow-hidden">
@@ -133,7 +141,7 @@ const ExploreScreen = () => {
 
         {/* Player encounter markers */}
         {mockPlayerMarkers.map((pm) => {
-          const player = mockPlayers.find((p) => p.id === pm.playerId);
+          const player = playersById[pm.playerId] ?? getPlayerById(pm.playerId);
           if (!player) return null;
           return (
             <Marker
@@ -141,7 +149,11 @@ const ExploreScreen = () => {
               position={[pm.lat, pm.lng]}
               icon={createPlayerMarkerIcon(player.portrait)}
               eventHandlers={{
-                click: () => { setEncounterPlayer(player); setSelectedZone(null); },
+                click: () => {
+                  const full = playersById[pm.playerId] ?? player;
+                  setEncounterPlayer(full);
+                  setSelectedZone(null);
+                },
               }}
             />
           );
@@ -149,7 +161,10 @@ const ExploreScreen = () => {
       </MapContainer>
 
       {/* Floating Mission Pill */}
-      <div className="absolute top-[env(safe-area-inset-top,12px)] left-3 right-14 z-[1210] mt-3 animate-fade-in-up">
+      <div
+        className="absolute top-[env(safe-area-inset-top,12px)] right-14 z-[1210] mt-3 animate-fade-in-up max-w-[min(100%-7rem,16rem)]"
+        style={{ left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)" }}
+      >
         <div className="glass-card-strong px-3 py-2.5 flex items-center gap-2.5 rounded-2xl">
           <span className="text-base">🎯</span>
           <div className="flex-1 min-w-0">

@@ -11,6 +11,8 @@ export interface PlayerStats {
   physical: number;
 }
 
+export type EvolutionStage = 0 | 1 | 2 | 3;
+
 /** Canonical mock player — all UI resolves from this shape only. */
 export interface Player {
   id: string;
@@ -30,6 +32,26 @@ export interface Player {
     morale: number;
     fanBond: number;
   };
+  /** Progression — starters are intentionally modest; grow via play. */
+  level: number;
+  currentXp: number;
+  xpToNext: number;
+  evolutionStage: EvolutionStage;
+  shardsCollected: number;
+  /** Coach–player bond (unlocks dialogue & bonus morale). */
+  bondTrust: number;
+}
+
+export function computeOverallFromStats(stats: PlayerStats): number {
+  return Math.round(
+    (stats.pace +
+      stats.shooting +
+      stats.passing +
+      stats.dribbling +
+      stats.defending +
+      stats.physical) /
+      6
+  );
 }
 
 /** Deterministic illustrated portraits from a stable seed (matches player id). */
@@ -78,6 +100,7 @@ export interface LiveEvent {
   timeAgo: string;
 }
 
+/** Starter roster — low floor so growth through play feels meaningful. */
 export const mockPlayers: Player[] = [
   {
     id: "1",
@@ -90,8 +113,14 @@ export const mockPlayers: Player[] = [
     representedCountry: "France",
     rarity: "legendary",
     traits: ["Clinical Finisher", "Lightning Acceleration", "Big-game instinct"],
-    stats: { overall: 95, pace: 97, shooting: 94, passing: 87, dribbling: 93, defending: 38, physical: 78 },
-    attributes: { confidence: 92, form: 88, morale: 95, fanBond: 90 },
+    stats: { overall: 42, pace: 44, shooting: 41, passing: 36, dribbling: 40, defending: 32, physical: 39 },
+    attributes: { confidence: 26, form: 24, morale: 25, fanBond: 22 },
+    level: 1,
+    currentXp: 15,
+    xpToNext: 100,
+    evolutionStage: 0,
+    shardsCollected: 1,
+    bondTrust: 18,
   },
   {
     id: "2",
@@ -104,8 +133,14 @@ export const mockPlayers: Player[] = [
     representedCountry: "England",
     rarity: "epic",
     traits: ["Box-to-box engine", "Late runs", "Composed finisher"],
-    stats: { overall: 91, pace: 84, shooting: 88, passing: 89, dribbling: 88, defending: 82, physical: 86 },
-    attributes: { confidence: 85, form: 90, morale: 88, fanBond: 82 },
+    stats: { overall: 41, pace: 38, shooting: 36, passing: 40, dribbling: 38, defending: 40, physical: 42 },
+    attributes: { confidence: 24, form: 26, morale: 25, fanBond: 23 },
+    level: 1,
+    currentXp: 8,
+    xpToNext: 100,
+    evolutionStage: 0,
+    shardsCollected: 0,
+    bondTrust: 20,
   },
   {
     id: "3",
@@ -118,8 +153,14 @@ export const mockPlayers: Player[] = [
     representedCountry: "Brazil",
     rarity: "legendary",
     traits: ["Explosive dribbler", "Wide threat", "1v1 specialist"],
-    stats: { overall: 93, pace: 95, shooting: 84, passing: 83, dribbling: 95, defending: 29, physical: 74 },
-    attributes: { confidence: 90, form: 85, morale: 92, fanBond: 95 },
+    stats: { overall: 41, pace: 43, shooting: 35, passing: 34, dribbling: 42, defending: 30, physical: 38 },
+    attributes: { confidence: 25, form: 23, morale: 26, fanBond: 21 },
+    level: 1,
+    currentXp: 22,
+    xpToNext: 100,
+    evolutionStage: 0,
+    shardsCollected: 2,
+    bondTrust: 16,
   },
   {
     id: "4",
@@ -132,8 +173,14 @@ export const mockPlayers: Player[] = [
     representedCountry: "Spain",
     rarity: "epic",
     traits: ["Tempo controller", "Press-resistant", "Vision"],
-    stats: { overall: 89, pace: 76, shooting: 78, passing: 92, dribbling: 90, defending: 72, physical: 68 },
-    attributes: { confidence: 80, form: 86, morale: 84, fanBond: 78 },
+    stats: { overall: 40, pace: 34, shooting: 33, passing: 42, dribbling: 40, defending: 36, physical: 35 },
+    attributes: { confidence: 23, form: 25, morale: 24, fanBond: 22 },
+    level: 1,
+    currentXp: 5,
+    xpToNext: 100,
+    evolutionStage: 0,
+    shardsCollected: 0,
+    bondTrust: 19,
   },
   {
     id: "5",
@@ -146,8 +193,14 @@ export const mockPlayers: Player[] = [
     representedCountry: "England",
     rarity: "rare",
     traits: ["Creative playmaker", "Tight-space technician", "Set-piece threat"],
-    stats: { overall: 88, pace: 86, shooting: 85, passing: 88, dribbling: 91, defending: 56, physical: 62 },
-    attributes: { confidence: 82, form: 84, morale: 80, fanBond: 75 },
+    stats: { overall: 39, pace: 38, shooting: 37, passing: 39, dribbling: 40, defending: 33, physical: 34 },
+    attributes: { confidence: 23, form: 24, morale: 23, fanBond: 21 },
+    level: 1,
+    currentXp: 0,
+    xpToNext: 100,
+    evolutionStage: 0,
+    shardsCollected: 0,
+    bondTrust: 17,
   },
   {
     id: "6",
@@ -160,8 +213,14 @@ export const mockPlayers: Player[] = [
     representedCountry: "Germany",
     rarity: "epic",
     traits: ["Playmaker", "Final-third entries", "Pressing IQ"],
-    stats: { overall: 90, pace: 84, shooting: 86, passing: 91, dribbling: 92, defending: 48, physical: 66 },
-    attributes: { confidence: 86, form: 88, morale: 85, fanBond: 80 },
+    stats: { overall: 40, pace: 36, shooting: 37, passing: 41, dribbling: 41, defending: 31, physical: 34 },
+    attributes: { confidence: 24, form: 25, morale: 24, fanBond: 22 },
+    level: 1,
+    currentXp: 12,
+    xpToNext: 100,
+    evolutionStage: 0,
+    shardsCollected: 1,
+    bondTrust: 18,
   },
   {
     id: "7",
@@ -174,8 +233,14 @@ export const mockPlayers: Player[] = [
     representedCountry: "Spain",
     rarity: "legendary",
     traits: ["Generational wide talent", "1v1 menace", "Crossing range"],
-    stats: { overall: 92, pace: 90, shooting: 84, passing: 86, dribbling: 94, defending: 34, physical: 62 },
-    attributes: { confidence: 88, form: 91, morale: 90, fanBond: 93 },
+    stats: { overall: 41, pace: 40, shooting: 35, passing: 36, dribbling: 43, defending: 29, physical: 33 },
+    attributes: { confidence: 24, form: 26, morale: 25, fanBond: 22 },
+    level: 1,
+    currentXp: 30,
+    xpToNext: 100,
+    evolutionStage: 0,
+    shardsCollected: 1,
+    bondTrust: 15,
   },
   {
     id: "8",
@@ -188,8 +253,14 @@ export const mockPlayers: Player[] = [
     representedCountry: "England",
     rarity: "rare",
     traits: ["Two-footed wide threat", "Defensive work-rate", "Composure"],
-    stats: { overall: 87, pace: 88, shooting: 86, passing: 84, dribbling: 90, defending: 65, physical: 74 },
-    attributes: { confidence: 78, form: 82, morale: 80, fanBond: 76 },
+    stats: { overall: 39, pace: 39, shooting: 37, passing: 36, dribbling: 39, defending: 37, physical: 38 },
+    attributes: { confidence: 22, form: 24, morale: 23, fanBond: 21 },
+    level: 1,
+    currentXp: 0,
+    xpToNext: 100,
+    evolutionStage: 0,
+    shardsCollected: 0,
+    bondTrust: 21,
   },
 ];
 
