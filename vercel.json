@@ -13,6 +13,6 @@
     { "source": "/api/challenges/result", "destination": "/api/user/challenges-result" },
     { "source": "/api/camera-scans/reward", "destination": "/api/user/camera-scans-reward" },
     { "source": "/api/cultivation/apply", "destination": "/api/user/cultivation-apply" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|@|src/|node_modules/|assets/|icons/|.*\\..*).*)", "destination": "/index.html" }
   ]
 }
