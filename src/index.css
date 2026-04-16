@@ -412,3 +412,96 @@
 /* Hide leaflet default chrome */
 .leaflet-control-attribution { display: none !important; }
 .leaflet-container { font-family: inherit; }
+
+/* ===== Penalty Duel Animations ===== */
+@keyframes duelBallFlight {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+  15% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes duelKeeperDiveLeft {
+  0% { transform: translateX(0) rotate(0deg); }
+  100% { transform: translateX(-90px) rotate(-30deg); }
+}
+@keyframes duelKeeperDiveRight {
+  0% { transform: translateX(0) rotate(0deg); }
+  100% { transform: translateX(90px) rotate(30deg); }
+}
+@keyframes duelKeeperDiveCenter {
+  0% { transform: translateY(0) scaleY(1); }
+  100% { transform: translateY(-12px) scaleY(1.15); }
+}
+
+@keyframes duelSaveBurst {
+  0% { transform: scale(0); opacity: 1; }
+  50% { transform: scale(1.8); opacity: 0.6; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+@keyframes duelSaveShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+@keyframes duelGoalFlash {
+  0% { opacity: 0; }
+  30% { opacity: 0.3; }
+  100% { opacity: 0; }
+}
+
+@keyframes duelRunup {
+  0% { transform: translateY(0) scale(1); }
+  60% { transform: translateY(-4px) scale(1.04); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes duelStadiumPulse {
+  0%, 100% { opacity: 0.03; }
+  50% { opacity: 0.08; }
+}
+
+@keyframes duelTensionGrow {
+  0% { transform: scale(1); filter: brightness(1); }
+  100% { transform: scale(1.06); filter: brightness(1.15); }
+}
+
+@keyframes duelResultSlam {
+  0% { transform: scale(0.3) translateY(30px); opacity: 0; }
+  50% { transform: scale(1.15) translateY(-8px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes duelCardUnlock {
+  0% { transform: scale(0.6) rotateY(90deg); opacity: 0; }
+  60% { transform: scale(1.05) rotateY(-5deg); opacity: 1; }
+  100% { transform: scale(1) rotateY(0deg); opacity: 1; }
+}
+
+@keyframes duelSpotlightSweep {
+  0% { transform: translateX(-100%) rotate(15deg); }
+  100% { transform: translateX(200%) rotate(15deg); }
+}
+
+@keyframes duelReadyPulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+.animate-duel-ball-flight { animation: duelBallFlight 0.4s cubic-bezier(0.2, 0, 0.3, 1) forwards; }
+.animate-duel-dive-left { animation: duelKeeperDiveLeft 0.3s cubic-bezier(0.2, 0, 0.3, 1) forwards; }
+.animate-duel-dive-right { animation: duelKeeperDiveRight 0.3s cubic-bezier(0.2, 0, 0.3, 1) forwards; }
+.animate-duel-dive-center { animation: duelKeeperDiveCenter 0.3s cubic-bezier(0.2, 0, 0.3, 1) forwards; }
+.animate-duel-save-burst { animation: duelSaveBurst 0.6s ease-out forwards; }
+.animate-duel-save-shake { animation: duelSaveShake 0.4s ease-out; }
+.animate-duel-goal-flash { animation: duelGoalFlash 0.8s ease-out forwards; }
+.animate-duel-runup { animation: duelRunup 0.8s ease-in-out infinite; }
+.animate-duel-stadium-pulse { animation: duelStadiumPulse 3s ease-in-out infinite; }
+.animate-duel-tension { animation: duelTensionGrow 1.5s ease-in-out forwards; }
+.animate-duel-result-slam { animation: duelResultSlam 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-duel-card-unlock { animation: duelCardUnlock 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-duel-spotlight { animation: duelSpotlightSweep 2s ease-in-out; }
+.animate-duel-ready-pulse { animation: duelReadyPulse 2s ease-in-out infinite; }

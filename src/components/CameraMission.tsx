@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Camera, X, Check, MapPin } from "lucide-react";
+import { Camera, X, Check, MapPin, Zap } from "lucide-react";
+import { useGameProgress } from "@/context/GameProgressContext";
 
 interface CameraMissionProps {
   onClose: () => void;
@@ -7,10 +8,12 @@ interface CameraMissionProps {
 }
 
 const missions = [
-  "Find a football pitch nearby ⚽",
-  "Spot a team crest or logo 🏟️",
-  "Capture your training ground 🌱",
-  "Show your match-day spot 📍",
+  { text: "Find a football pitch nearby ⚽", reward: "form", fpReward: 2 },
+  { text: "Spot a team crest or logo 🏟️", reward: "fanBond", fpReward: 1 },
+  { text: "Capture your training ground 🌱", reward: "form", fpReward: 2 },
+  { text: "Show your match-day spot 📍", reward: "confidence", fpReward: 3 },
+  { text: "Scout a fan gathering area 📣", reward: "fanBond", fpReward: 2 },
+  { text: "Find a pressure moment 🔥", reward: "confidence", fpReward: 2 },
 ];
 
 const surfaceTags = ["Turf", "Grass", "Concrete"];
@@ -19,11 +22,19 @@ const timeTags = ["Day", "Night"];
 
 type Step = "camera" | "tag" | "reward";
 
+const rewardDescriptions: Record<string, string> = {
+  form: "+Form Boost",
+  fanBond: "+Fan Bond",
+  confidence: "+Confidence",
+  morale: "+Morale",
+};
+
 const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
   const [step, setStep] = useState<Step>("camera");
-  const [mission] = useState(missions[Math.floor(Math.random() * missions.length)]);
+  const [missionData] = useState(() => missions[Math.floor(Math.random() * missions.length)]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [captured, setCaptured] = useState(false);
+  const { activePlayer, addXp, applyAttributeDelta, addFocusPoints } = useGameProgress();
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -37,11 +48,22 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
   };
 
   const handleSubmit = () => {
+    // Apply connected rewards
+    const xpReward = 25 + selectedTags.length * 5;
+    addXp(activePlayer.id, xpReward);
+    applyAttributeDelta(activePlayer.id, { [missionData.reward as keyof typeof activePlayer.attributes]: 3 });
+    addFocusPoints(missionData.fpReward);
+
+    // Bonus for more tags
+    if (selectedTags.length >= 3) {
+      addFocusPoints(1); // Extra FP for thorough scouting
+    }
+
     setStep("reward");
     setTimeout(() => {
       onComplete();
       onClose();
-    }, 2000);
+    }, 2500);
   };
 
   return (
@@ -53,12 +75,27 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
 
       {step === "camera" && (
         <div className="h-full flex flex-col">
-          {/* Simulated camera viewfinder */}
           <div className="flex-1 relative bg-muted/30 flex items-center justify-center">
             <div className="absolute inset-8 border-2 border-primary/30 rounded-3xl" />
             <div className="absolute top-4 left-0 right-0 text-center">
               <div className="inline-block glass-card-strong px-4 py-2 mx-auto">
-                <p className="text-xs font-bold text-foreground">{mission}</p>
+                <p className="text-xs font-bold text-foreground">{missionData.text}</p>
+              </div>
+            </div>
+
+            {/* Connected reward preview */}
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
+              <div className="glass-card px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                <span className="text-sm">⭐</span>
+                <span className="text-[10px] font-bold text-foreground">+25 XP</span>
+              </div>
+              <div className="glass-card px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                <span className="text-sm">🎯</span>
+                <span className="text-[10px] font-bold text-accent">+{missionData.fpReward} FP</span>
+              </div>
+              <div className="glass-card px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                <span className="text-sm">📈</span>
+                <span className="text-[10px] font-bold text-primary">{rewardDescriptions[missionData.reward]}</span>
               </div>
             </div>
 
@@ -78,7 +115,6 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
             )}
           </div>
 
-          {/* Capture button */}
           {!captured && (
             <div className="p-8 flex justify-center">
               <button
@@ -101,27 +137,28 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
               </div>
               <div>
                 <p className="text-sm font-black text-foreground">Quick Tag</p>
-                <p className="text-[10px] text-muted-foreground">Optional — tap to tag your spot</p>
+                <p className="text-[10px] text-muted-foreground">Tag your spot for bonus rewards</p>
               </div>
             </div>
 
-            {/* Tag groups */}
+            <div className="glass-card px-3 py-2 rounded-xl mb-4 flex items-center gap-2">
+              <Zap className="w-3.5 h-3.5 text-accent" />
+              <p className="text-[10px] text-muted-foreground">
+                More tags = more XP. Tag 3+ for <span className="text-accent font-bold">+1 bonus FP</span>
+              </p>
+            </div>
+
             <div className="space-y-3 mb-6">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">Surface</p>
                 <div className="flex gap-2">
                   {surfaceTags.map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => toggleTag(tag)}
+                    <button key={tag} onClick={() => toggleTag(tag)}
                       className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
                         selectedTags.includes(tag)
                           ? "bg-primary/15 text-primary border border-primary/30"
                           : "glass-card text-muted-foreground"
-                      }`}
-                    >
-                      {tag}
-                    </button>
+                      }`}>{tag}</button>
                   ))}
                 </div>
               </div>
@@ -129,17 +166,12 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">Activity</p>
                 <div className="flex gap-2">
                   {activityTags.map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => toggleTag(tag)}
+                    <button key={tag} onClick={() => toggleTag(tag)}
                       className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
                         selectedTags.includes(tag)
                           ? "bg-primary/15 text-primary border border-primary/30"
                           : "glass-card text-muted-foreground"
-                      }`}
-                    >
-                      {tag}
-                    </button>
+                      }`}>{tag}</button>
                   ))}
                 </div>
               </div>
@@ -147,26 +179,19 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">Time</p>
                 <div className="flex gap-2">
                   {timeTags.map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => toggleTag(tag)}
+                    <button key={tag} onClick={() => toggleTag(tag)}
                       className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
                         selectedTags.includes(tag)
                           ? "bg-primary/15 text-primary border border-primary/30"
                           : "glass-card text-muted-foreground"
-                      }`}
-                    >
-                      {tag}
-                    </button>
+                      }`}>{tag}</button>
                   ))}
                 </div>
               </div>
             </div>
 
-            <button
-              onClick={handleSubmit}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-sm floating-button glow-primary"
-            >
+            <button onClick={handleSubmit}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-sm floating-button glow-primary">
               Submit & Claim Reward
             </button>
           </div>
@@ -179,7 +204,18 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
             <span className="text-5xl">🎁</span>
           </div>
           <h2 className="text-2xl font-black text-foreground mb-2">Mission Complete!</h2>
-          <p className="text-sm text-muted-foreground mb-1">+25 XP • +2 Fan Bond</p>
+          <div className="flex gap-2 mb-2">
+            <span className="glass-card px-3 py-1 rounded-full text-[11px] font-bold text-foreground">
+              ⭐ +{25 + selectedTags.length * 5} XP
+            </span>
+            <span className="glass-card px-3 py-1 rounded-full text-[11px] font-bold text-accent">
+              🎯 +{missionData.fpReward + (selectedTags.length >= 3 ? 1 : 0)} FP
+            </span>
+            <span className="glass-card px-3 py-1 rounded-full text-[11px] font-bold text-primary">
+              📈 {rewardDescriptions[missionData.reward]}
+            </span>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1">Rewards applied to {activePlayer.name}</p>
           <div className="flex gap-2 mt-4">
             {selectedTags.map((tag) => (
               <span key={tag} className="px-3 py-1 rounded-full glass-card text-[10px] font-bold text-primary">
