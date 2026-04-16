@@ -15,9 +15,7 @@ import {
   type Player,
   type PlayerStats,
 } from "@/data/mockData";
-import { fetchPlayers } from "@/lib/apiService";
-
-const STORAGE_KEY = "ppc-game-progress-v2";
+import { fetchPlayers, fetchUserPlayers, type ApiUserPlayer } from "@/lib/apiService";
 
 type MatchPhase = "idle" | "prematch" | "live" | "halftime" | "postwin" | "postloss";
 type LivePulse = "goal" | "injury" | "neutral";
@@ -31,22 +29,42 @@ function cloneInitialRoster(): Record<string, Player> {
   return Object.fromEntries(mockPlayers.map((p) => [p.id, normalizePlayer({ ...p })]));
 }
 
-function loadStored(): Record<string, Player> | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Record<string, Player>;
-    if (parsed && typeof parsed === "object") return parsed;
-  } catch {
-    /* ignore */
-  }
-  return null;
+function xpToNextAtLevel(level: number) {
+  return 80 + level * 40;
+}
+
+function toOwnedByPlayerId(rows: ApiUserPlayer[]): Record<string, ApiUserPlayer> {
+  return Object.fromEntries(rows.map((row) => [row.playerId, row]));
+}
+
+function applyOwnedProgress(seed: Player, owned?: ApiUserPlayer): Player {
+  if (!owned) return normalizePlayer(seed);
+  const level = owned.level ?? seed.level;
+  const xpToNext = xpToNextAtLevel(level);
+  return normalizePlayer({
+    ...seed,
+    level,
+    currentXp: Math.max(0, Math.min(owned.xp ?? seed.currentXp, xpToNext)),
+    xpToNext,
+    evolutionStage: Math.max(0, Math.min(owned.evolutionStage ?? seed.evolutionStage, 3)) as 0 | 1 | 2 | 3,
+    shardsCollected: owned.shards ?? seed.shardsCollected,
+    attributes: {
+      confidence: owned.stats.confidence,
+      form: owned.stats.form,
+      morale: owned.stats.morale,
+      fanBond: owned.stats.fanBond,
+    },
+  });
 }
 
 type GameProgressContextValue = {
+  userId: string;
   activePlayer: Player;
   setActivePlayerId: (id: string) => void;
   playersById: Record<string, Player>;
+  ownedPlayersById: Record<string, ApiUserPlayer>;
+  refreshOwnedPlayers: () => Promise<void>;
+  isPlayerOwned: (id: string) => boolean;
   updatePlayer: (id: string, patch: Partial<Player>) => void;
   /** Exploration zone last opened on map — drives chat flavor. */
   explorationZoneType: MapZone["type"] | null;
@@ -73,12 +91,8 @@ type GameProgressContextValue = {
 const GameProgressContext = createContext<GameProgressContextValue | null>(null);
 
 export function GameProgressProvider({ children }: { children: ReactNode }) {
-  const [playersById, setPlayersById] = useState<Record<string, Player>>(() => {
-    const s = loadStored();
-    const first = s && mockPlayers[0]?.id ? s[mockPlayers[0].id] : null;
-    if (s && first && typeof first.level === "number" && typeof first.bondTrust === "number") return s;
-    return cloneInitialRoster();
-  });
+  const [catalogPlayersById, setCatalogPlayersById] = useState<Record<string, Player>>(() => cloneInitialRoster());
+  const [ownedPlayersById, setOwnedPlayersById] = useState<Record<string, ApiUserPlayer>>({});
   const [activePlayerId, setActivePlayerIdState] = useState(mockPlayers[0]?.id ?? "1");
   const [explorationZoneType, setExplorationZoneType] = useState<MapZone["type"] | null>(null);
   const [matchPhase, setMatchPhase] = useState<MatchPhase>("prematch");
@@ -87,6 +101,7 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [usingMockPlayers, setUsingMockPlayers] = useState(true);
+  const userId = import.meta.env.VITE_DEMO_USER_ID?.trim() || "demo-user";
   const [focusPoints, setFocusPoints] = useState(() => {
     try { const v = localStorage.getItem("ppc-focus-points"); return v ? Number(v) : 10; } catch { return 10; }
   });
@@ -103,9 +118,10 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
     setFocusPoints((p) => p + n);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(playersById));
-  }, [playersById]);
+  const refreshOwnedPlayers = useCallback(async () => {
+    const result = await fetchUserPlayers(userId);
+    setOwnedPlayersById(toOwnedByPlayerId(result.data));
+  }, [userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,13 +131,13 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       try {
         const result = await fetchPlayers();
         const byId = Object.fromEntries(mockPlayers.map((p) => [p.id, p]));
-        const merged = cloneInitialRoster();
+        const mergedCatalog = cloneInitialRoster();
         for (const apiPlayer of result.data) {
           const seed = byId[apiPlayer.externalId];
           if (!seed) continue;
           const level = apiPlayer.level ?? seed.level;
-          const xpToNext = 80 + level * 40;
-          merged[seed.id] = normalizePlayer({
+          const xpToNext = xpToNextAtLevel(level);
+          mergedCatalog[seed.id] = normalizePlayer({
             ...seed,
             name: apiPlayer.name,
             portrait: apiPlayer.portrait,
@@ -144,8 +160,10 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
             },
           });
         }
+        const ownedResult = await fetchUserPlayers(userId);
         if (!cancelled) {
-          setPlayersById(merged);
+          setCatalogPlayersById(mergedCatalog);
+          setOwnedPlayersById(toOwnedByPlayerId(ownedResult.data));
           setUsingMockPlayers(false);
         }
       } catch (error) {
@@ -162,7 +180,15 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
+
+  const playersById = useMemo(() => {
+    const merged: Record<string, Player> = {};
+    for (const [id, player] of Object.entries(catalogPlayersById)) {
+      merged[id] = applyOwnedProgress(player, ownedPlayersById[id]);
+    }
+    return merged;
+  }, [catalogPlayersById, ownedPlayersById]);
 
   const activePlayer = useMemo(() => {
     const p = playersById[activePlayerId] ?? playersById[mockPlayers[0].id];
@@ -173,8 +199,10 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
     if (getPlayerById(id)) setActivePlayerIdState(id);
   }, []);
 
+  const isPlayerOwned = useCallback((id: string) => Boolean(ownedPlayersById[id]), [ownedPlayersById]);
+
   const updatePlayer = useCallback((id: string, patch: Partial<Player>) => {
-    setPlayersById((prev) => {
+    setCatalogPlayersById((prev) => {
       const cur = prev[id];
       if (!cur) return prev;
       const next = normalizePlayer({ ...cur, ...patch, stats: { ...cur.stats, ...patch.stats } });
@@ -183,9 +211,10 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addXp = useCallback((playerId: string, amount: number) => {
-    setPlayersById((prev) => {
+    setCatalogPlayersById((prev) => {
       const cur = prev[playerId];
       if (!cur) return prev;
+      if (ownedPlayersById[playerId]) return prev;
       let xp = cur.currentXp + amount;
       let level = cur.level;
       let xpToNext = cur.xpToNext;
@@ -202,10 +231,10 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       });
       return { ...prev, [playerId]: next };
     });
-  }, []);
+  }, [ownedPlayersById]);
 
   const addBond = useCallback((playerId: string, delta: number) => {
-    setPlayersById((prev) => {
+    setCatalogPlayersById((prev) => {
       const cur = prev[playerId];
       if (!cur) return prev;
       const bondTrust = Math.min(100, Math.max(0, cur.bondTrust + delta));
@@ -214,17 +243,19 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addShards = useCallback((playerId: string, n: number) => {
-    setPlayersById((prev) => {
+    setCatalogPlayersById((prev) => {
       const cur = prev[playerId];
       if (!cur) return prev;
+      if (ownedPlayersById[playerId]) return prev;
       return { ...prev, [playerId]: { ...cur, shardsCollected: cur.shardsCollected + n } };
     });
-  }, []);
+  }, [ownedPlayersById]);
 
   const applyAttributeDelta = useCallback((playerId: string, delta: Partial<Player["attributes"]>) => {
-    setPlayersById((prev) => {
+    setCatalogPlayersById((prev) => {
       const cur = prev[playerId];
       if (!cur) return prev;
+      if (ownedPlayersById[playerId]) return prev;
       const attributes = { ...cur.attributes };
       (Object.keys(delta) as (keyof Player["attributes"])[]).forEach((k) => {
         const d = delta[k];
@@ -233,12 +264,13 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       });
       return { ...prev, [playerId]: normalizePlayer({ ...cur, attributes }) };
     });
-  }, []);
+  }, [ownedPlayersById]);
 
   const bumpStats = useCallback((playerId: string, bump: Partial<PlayerStats>) => {
-    setPlayersById((prev) => {
+    setCatalogPlayersById((prev) => {
       const cur = prev[playerId];
       if (!cur) return prev;
+      if (ownedPlayersById[playerId]) return prev;
       const stats = { ...cur.stats };
       (Object.keys(bump) as (keyof PlayerStats)[]).forEach((k) => {
         const d = bump[k];
@@ -247,11 +279,12 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       });
       return { ...prev, [playerId]: normalizePlayer({ ...cur, stats }) };
     });
-  }, []);
+  }, [ownedPlayersById]);
 
   const tryEvolutionUpgrade = useCallback((playerId: string) => {
+    if (ownedPlayersById[playerId]) return false;
     let ok = false;
-    setPlayersById((prev) => {
+    setCatalogPlayersById((prev) => {
       const cur = prev[playerId];
       if (!cur || cur.shardsCollected < 10 || cur.evolutionStage >= 3) return prev;
       ok = true;
@@ -266,13 +299,17 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       };
     });
     return ok;
-  }, []);
+  }, [ownedPlayersById]);
 
   const value = useMemo(
     () => ({
+      userId,
       activePlayer,
       setActivePlayerId,
       playersById,
+      ownedPlayersById,
+      refreshOwnedPlayers,
+      isPlayerOwned,
       updatePlayer,
       explorationZoneType,
       setExplorationZoneType,
@@ -295,9 +332,13 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       usingMockPlayers,
     }),
     [
+      userId,
       activePlayer,
       setActivePlayerId,
       playersById,
+      ownedPlayersById,
+      refreshOwnedPlayers,
+      isPlayerOwned,
       updatePlayer,
       explorationZoneType,
       matchPhase,

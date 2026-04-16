@@ -2,13 +2,13 @@
  * Local helper script to run the player seed route.
  *
  * Usage:
- *   1) Start app locally: npm run dev
+ *   1) Start app locally: npx vercel dev
  *   2) In another terminal: npm run seed:players
  *
  * Optional:
  *   SEED_BASE_URL=http://localhost:3000 npm run seed:players
  */
-const baseUrl = process.env.SEED_BASE_URL || "http://localhost:8080";
+const baseUrl = process.env.SEED_BASE_URL || "http://localhost:3000";
 const url = `${baseUrl.replace(/\/$/, "")}/api/seed/players`;
 
 async function run() {

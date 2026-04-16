@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Swords, Trophy, ChevronRight, TrendingUp, TrendingDown, RotateCcw } from "lucide-react";
 import type { Player, Rival } from "@/data/mockData";
 import { useGameProgress } from "@/context/GameProgressContext";
+import { recalculateLeaderboard, submitChallengeResult } from "@/lib/apiService";
 import AnimatedPortrait from "./AnimatedPortrait";
 
 interface ChallengeFlowProps {
@@ -23,7 +24,8 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
   const [step, setStep] = useState<ChallengeStep>("setup");
   const [result, setResult] = useState<ChallengeResult | null>(null);
   const [battleProgress, setBattleProgress] = useState(0);
-  const { activePlayer, addXp, applyAttributeDelta, addFocusPoints } = useGameProgress();
+  const [resultError, setResultError] = useState<string | null>(null);
+  const { userId, activePlayer, refreshOwnedPlayers } = useGameProgress();
 
   const statComparisons = [
     { label: "Overall", you: activePlayer.stats.overall, them: rivalPlayer.stats.overall },
@@ -63,17 +65,28 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
         const r: ChallengeResult = diff > 5 ? "win" : diff < -5 ? "lose" : "draw";
         setResult(r);
 
-        // Apply rewards
-        const rew = rewards[r];
-        addXp(activePlayer.id, rew.xp);
-        if (rew.fp > 0) addFocusPoints(rew.fp);
-        if (rew.confidence !== 0) applyAttributeDelta(activePlayer.id, { confidence: rew.confidence });
+        setResultError(null);
+        try {
+          await submitChallengeResult({
+            userId,
+            playerId: activePlayer.id,
+            result: r === "lose" ? "loss" : r,
+            opponentPower: Math.max(0, Math.round(theirScore)),
+            region: "CONCACAF · NA",
+            opponentUserId: rival.name,
+          });
+          await recalculateLeaderboard("global", undefined, userId);
+          await recalculateLeaderboard("region", "CONCACAF · NA", userId);
+          await refreshOwnedPlayers();
+        } catch (error) {
+          setResultError(error instanceof Error ? error.message : "Failed to persist challenge");
+        }
 
         setStep("result");
       }, 500);
       return () => clearTimeout(t);
     }
-  }, [step, battleProgress]);
+  }, [step, battleProgress, activePlayer, refreshOwnedPlayers, rival.name, userId]);
 
   const startBattle = () => {
     setBattleProgress(0);
@@ -197,6 +210,9 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
                 </div>
               ))}
             </div>
+            {resultError && (
+              <p className="mb-3 text-[10px] text-destructive">{resultError}</p>
+            )}
 
             <div className="flex gap-2">
               <button type="button" onClick={() => { setStep("setup"); setResult(null); setBattleProgress(0); }}

@@ -5,6 +5,7 @@ import { keeperGloves, recruitBoosts, type KeeperGloves, type RecruitBoost } fro
 import AnimatedPortrait from "./AnimatedPortrait";
 import PenaltyDuel from "./PenaltyDuel";
 import { useGameProgress } from "@/context/GameProgressContext";
+import { recruitUserPlayer } from "@/lib/apiService";
 
 interface PlayerEncounterProps {
   player: Player;
@@ -33,7 +34,9 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
   const [selectedGloves, setSelectedGloves] = useState<KeeperGloves>(keeperGloves[0]);
   const [activeBoosts, setActiveBoosts] = useState<RecruitBoost[]>([]);
   const [hasUsedRetry, setHasUsedRetry] = useState(false);
-  const { updatePlayer, focusPoints, spendFocusPoints } = useGameProgress();
+  const [recruitError, setRecruitError] = useState<string | null>(null);
+  const [isRecruiting, setIsRecruiting] = useState(false);
+  const { userId, refreshOwnedPlayers, focusPoints, spendFocusPoints } = useGameProgress();
   const rarity = rarityLabel[player.rarity];
   const headlineTrait = player.traits[0] ?? "Elite prospect";
   const retryCost = focusCostByRarity[player.rarity] ?? 2;
@@ -59,17 +62,19 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
     setPhase("duel");
   };
 
-  const handleSave = () => {
-    updatePlayer(player.id, {
-      level: 1,
-      currentXp: 0,
-      xpToNext: 120,
-      evolutionStage: 0,
-      shardsCollected: 0,
-      bondTrust: 10,
-      attributes: { confidence: 25, form: 30, morale: 40, fanBond: 5 },
-    });
-    setPhase("recruited");
+  const handleSave = async () => {
+    setRecruitError(null);
+    setIsRecruiting(true);
+    try {
+      await recruitUserPlayer(userId, player.id);
+      await refreshOwnedPlayers();
+      setPhase("recruited");
+    } catch (error) {
+      setRecruitError(error instanceof Error ? error.message : "Recruit failed");
+      setPhase("escaped");
+    } finally {
+      setIsRecruiting(false);
+    }
   };
 
   const handleGoal = () => {
@@ -165,6 +170,9 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
           </div>
 
           <div className="mt-6 flex flex-col gap-2 w-full max-w-xs mx-auto">
+            {recruitError && (
+              <p className="text-[10px] text-destructive text-center">{recruitError}</p>
+            )}
             {canRetry && (
               <button
                 type="button"
@@ -261,9 +269,13 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
 
         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background/95 to-transparent"
           style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}>
+          {recruitError && (
+            <p className="mb-2 text-[10px] text-destructive text-center">{recruitError}</p>
+          )}
           <button type="button" onClick={() => setPhase("duel")}
+            disabled={isRecruiting}
             className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-base glow-primary active:scale-[0.97] transition-transform flex items-center justify-center gap-2">
-            ⚡ Start Penalty Duel <ChevronRight className="w-4 h-4" />
+            ⚡ {isRecruiting ? "Saving recruit..." : "Start Penalty Duel"} <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -327,6 +339,9 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
 
         {/* Focus Points + CTA */}
         <div className={`mt-6 w-full max-w-sm transition-all delay-500 duration-500 ${revealed ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}`}>
+          {recruitError && (
+            <p className="mb-2 text-center text-[10px] text-destructive">{recruitError}</p>
+          )}
           <div className="flex items-center justify-center gap-3 mb-3">
             <div className="glass-card px-3 py-1.5 rounded-full flex items-center gap-1.5">
               <span className="text-sm">🎯</span>

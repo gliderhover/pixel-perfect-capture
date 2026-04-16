@@ -55,6 +55,33 @@ export type ApiZone = {
   updatedAt: string;
 };
 
+export type ApiLiveEvent = {
+  id: string;
+  title: string;
+  description: string;
+  type: "boost" | "match" | "reward" | "limited";
+  timeAgo: string;
+};
+
+export type ApiUserPlayer = {
+  userId: string;
+  playerId: string;
+  level: number;
+  xp: number;
+  evolutionStage: number;
+  stats: {
+    confidence: number;
+    form: number;
+    morale: number;
+    fanBond: number;
+  };
+  shards: number;
+  recruitedAt: string;
+  lastTrainedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type ApiListResponse<T> = {
   data: T[];
   count?: number;
@@ -71,6 +98,24 @@ async function fetchJson<T>(url: string): Promise<T> {
     throw new Error(message);
   }
   return body as T;
+}
+
+async function postJson<T>(url: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message =
+      typeof payload?.error === "string" ? payload.error : `Request failed: ${response.status}`;
+    throw new Error(message);
+  }
+  return payload as T;
 }
 
 export async function fetchPlayers(filters?: {
@@ -104,4 +149,123 @@ export async function fetchZones(region?: string) {
   const qs = search.toString();
   const url = qs ? `/api/zones?${qs}` : "/api/zones";
   return fetchJson<ApiListResponse<ApiZone>>(url);
+}
+
+export async function fetchUserPlayers(userId: string) {
+  const search = new URLSearchParams();
+  search.set("userId", userId);
+  return fetchJson<ApiListResponse<ApiUserPlayer> & { userId: string }>(
+    `/api/user-players?${search.toString()}`
+  );
+}
+
+export async function recruitUserPlayer(userId: string, playerId: string) {
+  return postJson<{
+    ok: boolean;
+    recruited: boolean;
+    message?: string;
+    data: ApiUserPlayer;
+  }>("/api/user-players/recruit", { userId, playerId });
+}
+
+export async function trainUserPlayer(
+  userId: string,
+  playerId: string,
+  mode: "balanced" | "confidence" | "form" | "morale" | "bond" = "balanced"
+) {
+  return postJson<{
+    ok: boolean;
+    mode: string;
+    xpGained: number;
+    delta: Partial<ApiUserPlayer["stats"]>;
+    data: ApiUserPlayer | null;
+  }>("/api/user-players/train", { userId, playerId, mode });
+}
+
+export async function submitChallengeResult(input: {
+  userId: string;
+  playerId: string;
+  result: "win" | "loss" | "draw";
+  opponentPower: number;
+  region?: string;
+  opponentUserId?: string;
+}) {
+  return postJson<{
+    ok: boolean;
+    challenge: Record<string, unknown>;
+    userPlayer: ApiUserPlayer | null;
+  }>("/api/challenges/result", input);
+}
+
+export async function recalculateLeaderboard(scope: "global" | "region", region?: string, userId?: string) {
+  return postJson<{
+    ok: boolean;
+    updated: number;
+    scope: "global" | "region";
+    region: string | null;
+  }>("/api/leaderboard/recalculate", { scope, region, userId });
+}
+
+export async function rewardCameraScan(input: {
+  userId: string;
+  playerId: string;
+  zoneType?: ApiZone["zoneType"];
+  missionId?: string;
+}) {
+  return postJson<{
+    ok: boolean;
+    reward: Record<string, unknown>;
+    userPlayer: ApiUserPlayer | null;
+  }>("/api/camera-scans/reward", input);
+}
+
+export async function fetchLiveEvents() {
+  return fetchJson<ApiListResponse<ApiLiveEvent> & { source: string }>("/api/live-events");
+}
+
+export async function sendPlayerChat(input: {
+  playerId: string;
+  message: string;
+  state?: {
+    confidence: number;
+    form: number;
+    morale: number;
+    fanBond: number;
+  };
+  history?: { role: "user" | "assistant"; content: string }[];
+}) {
+  return postJson<{
+    reply: string;
+    attributeDeltas: {
+      confidence: number;
+      form: number;
+      morale: number;
+      fanBond: number;
+    };
+    meta: { model: string };
+  }>("/api/chat", input);
+}
+
+export async function applyCultivation(input: {
+  userId: string;
+  playerId: string;
+  attributeDeltas: {
+    confidence: number;
+    form: number;
+    morale: number;
+    fanBond: number;
+  };
+  xpGain?: number;
+}) {
+  return postJson<{
+    ok: boolean;
+    xpGained: number;
+    attributeDeltas: {
+      confidence: number;
+      form: number;
+      morale: number;
+      fanBond: number;
+    };
+    data: ApiUserPlayer | null;
+  }>("/api/cultivation/apply", input);
 }

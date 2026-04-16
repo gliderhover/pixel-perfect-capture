@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Camera, X, Check, MapPin, Zap } from "lucide-react";
 import { useGameProgress } from "@/context/GameProgressContext";
+import { rewardCameraScan } from "@/lib/apiService";
 
 interface CameraMissionProps {
   onClose: () => void;
@@ -34,7 +35,8 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
   const [missionData] = useState(() => missions[Math.floor(Math.random() * missions.length)]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [captured, setCaptured] = useState(false);
-  const { activePlayer, addXp, applyAttributeDelta, addFocusPoints } = useGameProgress();
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const { userId, activePlayer, refreshOwnedPlayers, addFocusPoints } = useGameProgress();
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -48,22 +50,34 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
   };
 
   const handleSubmit = () => {
-    // Apply connected rewards
-    const xpReward = 25 + selectedTags.length * 5;
-    addXp(activePlayer.id, xpReward);
-    applyAttributeDelta(activePlayer.id, { [missionData.reward as keyof typeof activePlayer.attributes]: 3 });
-    addFocusPoints(missionData.fpReward);
+    const run = async () => {
+      setSubmitError(null);
+      try {
+        // Persist core progression rewards via backend.
+        await rewardCameraScan({
+          userId,
+          playerId: activePlayer.id,
+          zoneType: "mission",
+          missionId: `camera-${Date.now()}`,
+        });
+        await refreshOwnedPlayers();
 
-    // Bonus for more tags
-    if (selectedTags.length >= 3) {
-      addFocusPoints(1); // Extra FP for thorough scouting
-    }
+        // Keep FP as local session economy reward.
+        addFocusPoints(missionData.fpReward);
+        if (selectedTags.length >= 3) {
+          addFocusPoints(1);
+        }
 
-    setStep("reward");
-    setTimeout(() => {
-      onComplete();
-      onClose();
-    }, 2500);
+        setStep("reward");
+        setTimeout(() => {
+          onComplete();
+          onClose();
+        }, 2500);
+      } catch (error) {
+        setSubmitError(error instanceof Error ? error.message : "Failed to submit camera mission");
+      }
+    };
+    void run();
   };
 
   return (
@@ -147,6 +161,9 @@ const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
                 More tags = more XP. Tag 3+ for <span className="text-accent font-bold">+1 bonus FP</span>
               </p>
             </div>
+            {submitError && (
+              <p className="mb-3 text-[10px] text-destructive">{submitError}</p>
+            )}
 
             <div className="space-y-3 mb-6">
               <div>

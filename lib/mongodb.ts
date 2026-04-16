@@ -7,6 +7,7 @@ import { MongoClient, Db } from "mongodb";
 const globalForMongo = globalThis as typeof globalThis & {
   __mongoClientPromise?: Promise<MongoClient>;
   __mongoPoolAttached?: boolean;
+  __mongoLoggedOnce?: boolean;
 };
 
 function getMongoEnv() {
@@ -56,10 +57,37 @@ export function getMongoClient(): Promise<MongoClient> {
       serverSelectionTimeoutMS: 10000,
     });
 
-    globalForMongo.__mongoClientPromise = client.connect().then(async (connected) => {
-      await maybeAttachDatabasePool(connected);
-      return connected;
-    });
+    const debugLoggingEnabled = process.env.DB_DEBUG_LOGS === "1";
+
+    const connectPromise = client
+      .connect()
+      .then(async (connected) => {
+        if (debugLoggingEnabled && !globalForMongo.__mongoLoggedOnce) {
+          // Safe, env-gated debug log — no secrets or full URIs.
+          // eslint-disable-next-line no-console
+          console.info(
+            "[mongo] Connected successfully",
+            new Date().toISOString()
+          );
+          globalForMongo.__mongoLoggedOnce = true;
+        }
+        await maybeAttachDatabasePool(connected);
+        return connected;
+      })
+      .catch((error) => {
+        if (debugLoggingEnabled) {
+          // eslint-disable-next-line no-console
+          console.error(
+            "[mongo] Connection failed",
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+        // Allow a future retry attempt on the next invocation.
+        globalForMongo.__mongoClientPromise = undefined;
+        throw error;
+      });
+
+    globalForMongo.__mongoClientPromise = connectPromise;
   }
 
   return globalForMongo.__mongoClientPromise;

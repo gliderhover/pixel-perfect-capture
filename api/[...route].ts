@@ -5,7 +5,9 @@ import {
   getCameraScanRewardCollection,
   getChallengeResultCollection,
   getLeaderboardCollection,
+  getPlayerCollection,
   getUserPlayerCollection,
+  getZoneCollection,
 } from "../lib/server/dbCollections";
 import { clampStat, nextXpThreshold } from "../lib/server/progression";
 
@@ -15,9 +17,18 @@ function cleanDoc<T extends Record<string, unknown>>(doc: T) {
 }
 
 function getRouteParts(req: VercelRequest) {
-  const route = req.query.route;
-  if (!route) return [];
-  return Array.isArray(route) ? route : [route];
+  const dynamicQuery = req.query as Record<string, string | string[] | undefined>;
+  const route = dynamicQuery.route ?? dynamicQuery["...route"];
+  if (route) {
+    return Array.isArray(route) ? route : [route];
+  }
+
+  const pathname = (req.url ?? "").split("?")[0] ?? "";
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] === "api") {
+    return parts.slice(1);
+  }
+  return parts;
 }
 
 const cameraRewardBodySchema = z.object({
@@ -56,14 +67,95 @@ function computeScore(level: number, xp: number, evolutionStage: number, stats: 
   return Math.round(level * 120 + xp * 0.6 + evolutionStage * 400 + statSum * 8);
 }
 
+const DEV_HEALTH_ALLOW =
+  process.env.NODE_ENV !== "production" || process.env.HEALTH_DEBUG_ENABLED === "1";
+const DEBUG_API_LOGS = process.env.API_DEBUG_LOGS === "1" || process.env.DB_DEBUG_LOGS === "1";
+
+function debugLog(message: string, payload?: Record<string, unknown>) {
+  if (!DEBUG_API_LOGS) return;
+  // eslint-disable-next-line no-console
+  console.info("[api]", message, payload ?? {});
+}
+
+function errorLog(message: string, payload?: Record<string, unknown>) {
+  if (!DEBUG_API_LOGS) return;
+  // eslint-disable-next-line no-console
+  console.error("[api]", message, payload ?? {});
+}
+
 async function handleHealth(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });
   }
+  if (!DEV_HEALTH_ALLOW) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  const started = Date.now();
   const db = await getMongoDb();
   await db.command({ ping: 1 });
-  return res.status(200).json({ ok: true, db: db.databaseName });
+
+  const players = await getPlayerCollection(db);
+  const leaderboard = await getLeaderboardCollection(db);
+  const zones = await getZoneCollection(db);
+  const [playerCount, leaderboardCount, zoneCount] = await Promise.all([
+    players.countDocuments({}),
+    leaderboard.countDocuments({}),
+    zones.countDocuments({}),
+  ]);
+
+  if (playerCount === 0 || leaderboardCount === 0 || zoneCount === 0) {
+    debugLog("Health check found empty collection(s)", {
+      players: playerCount,
+      leaderboard: leaderboardCount,
+      zones: zoneCount,
+    });
+  }
+
+  const elapsedMs = Date.now() - started;
+
+  return res.status(200).json({
+    ok: true,
+    db: db.databaseName,
+    latencyMs: elapsedMs,
+    environment: process.env.NODE_ENV ?? "development",
+    collections: {
+      players: playerCount,
+      leaderboard: leaderboardCount,
+      zones: zoneCount,
+    },
+  });
+}
+
+async function handleCounts(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+  if (!DEV_HEALTH_ALLOW) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  const db = await getMongoDb();
+  const players = await getPlayerCollection(db);
+  const leaderboard = await getLeaderboardCollection(db);
+  const zones = await getZoneCollection(db);
+
+  const [playerCount, leaderboardCount, zoneCount] = await Promise.all([
+    players.countDocuments({}),
+    leaderboard.countDocuments({}),
+    zones.countDocuments({}),
+  ]);
+
+  return res.status(200).json({
+    ok: true,
+    collections: {
+      players: playerCount,
+      leaderboard: leaderboardCount,
+      zones: zoneCount,
+    },
+  });
 }
 
 async function handleCameraReward(req: VercelRequest, res: VercelResponse) {
@@ -316,11 +408,12 @@ async function handleLeaderboardRecalculate(req: VercelRequest, res: VercelRespo
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  try {
-    const parts = getRouteParts(req);
-    const path = parts.join("/");
+  const parts = getRouteParts(req);
+  const path = parts.join("/");
 
+  try {
     if (path === "health") return await handleHealth(req, res);
+    if (path === "health/counts") return await handleCounts(req, res);
     if (path === "camera-scans/reward") return await handleCameraReward(req, res);
     if (path === "challenges/result") return await handleChallengeResult(req, res);
     if (path === "leaderboard/recalculate") return await handleLeaderboardRecalculate(req, res);
@@ -328,6 +421,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ error: "Not found" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown merged route error";
+    errorLog("Merged route failure", {
+      path,
+      method: req.method ?? "UNKNOWN",
+      error: message,
+    });
     return res.status(500).json({ error: message });
   }
 }

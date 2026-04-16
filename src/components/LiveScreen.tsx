@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getPlayerById, mockLiveEvents } from "@/data/mockData";
 import { Zap, Trophy, Gift, Clock, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { fetchLiveEvents, type ApiLiveEvent } from "@/lib/apiService";
 
 const eventConfig: Record<string, {
   icon: typeof Zap;
@@ -63,6 +64,33 @@ const eventTypeStyles: Record<string, { bg: string; border: string; icon: string
 
 const LiveScreen = () => {
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [events, setEvents] = useState<ApiLiveEvent[]>(mockLiveEvents);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await fetchLiveEvents();
+        if (!cancelled && result.data.length > 0) {
+          setEvents(result.data);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed to load live events");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen safe-page-bottom with-sidebar-pad pt-6 pr-4">
@@ -70,6 +98,8 @@ const LiveScreen = () => {
       <div className="mb-5">
         <h1 className="text-2xl font-black text-foreground">Live</h1>
         <p className="text-xs text-muted-foreground mt-1">Real-time match impact</p>
+        {loading && <p className="text-[10px] text-muted-foreground mt-1">Loading live events...</p>}
+        {error && <p className="text-[10px] text-destructive mt-1">Live events API unavailable, using fallback</p>}
       </div>
 
       {/* Live Match Banner */}
@@ -146,7 +176,7 @@ const LiveScreen = () => {
       {/* Feed */}
       <h2 className="text-xs font-black text-foreground uppercase tracking-wider mb-3">Recent Updates</h2>
       <div className="space-y-2.5">
-        {mockLiveEvents.map((event, i) => {
+        {events.map((event, i) => {
           const config = eventConfig[event.type];
           const Icon = config.icon;
           return (

@@ -4,10 +4,38 @@ Vite + React app with PWA support (installable on iPhone and other browsers that
 
 ## Run locally
 
+### Frontend only (Vite)
+
 ```bash
 npm install
 npm run dev
 ```
+
+Vite-only mode is useful for UI work, but it does not execute Vercel serverless functions under `api/`.
+
+### Full-stack local (frontend + `/api/*`)
+
+Use Vercel dev to run the app and serverless routes together:
+
+```bash
+npx vercel link
+npx vercel env pull .env.local
+npx vercel dev
+```
+
+When `vercel dev` starts, open the shown local URL (typically `http://localhost:3000`).
+
+### Recommended local workflow (full-stack)
+
+1. Install deps: `npm install`
+2. Link envs:
+   - `npx vercel link`
+   - `npx vercel env pull .env.local`
+3. Start app + API: `npx vercel dev`
+4. Seed core data: `npm run seed:core`
+5. Verify backend:
+   - `http://localhost:3000/api/health`
+   - `http://localhost:3000/api/health/counts`
 
 ## Build
 
@@ -53,16 +81,79 @@ Required environment variables:
 - `MONGODB_URI`
 - `MONGODB_DB` (optional if DB is already encoded in URI)
 
+### Backend verification (local)
+
+With `npx vercel dev` running:
+
+1. Health + Mongo ping + collection counts:
+   - `GET /api/health`
+2. Counts only:
+   - `GET /api/health/counts`
+
+Example:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Optional debug-safe logs (development only):
+
+- `DB_DEBUG_LOGS=1` for Mongo connection success/failure logs
+- `API_DEBUG_LOGS=1` for API route error/empty-collection logs
+- `HEALTH_DEBUG_ENABLED=1` to keep health routes available when `NODE_ENV=production`
+
 ### Seed players locally
 
 1. Start local dev server:
-   - `npm run dev`
+   - `npx vercel dev`
 2. In another terminal, run:
    - `npm run seed:players`
 
+### Seed full gameplay core data
+
+This seeds players plus missing core collections:
+
+- `players`
+- `zones`
+- `leaderboard_entries`
+- optional demo `user_players`
+
+Run:
+
+```bash
+npm run seed:core
+```
+
+Optional (skip demo user players):
+
+```bash
+SEED_USER_PLAYERS=0 npm run seed:core
+```
+
+After seeding, verify counts:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Expected:
+
+- `collections.players` > 0
+- `collections.zones` > 0
+- `collections.leaderboard` > 0
+
+### End-to-end verification URLs
+
+- Health and DB ping: `http://localhost:3000/api/health`
+- Counts only: `http://localhost:3000/api/health/counts`
+- Players feed: `http://localhost:3000/api/players`
+- Zones feed: `http://localhost:3000/api/zones`
+- Leaderboard feed: `http://localhost:3000/api/leaderboard?scope=global`
+- Demo owned players: `http://localhost:3000/api/user-players?userId=demo-user`
+
 Optional custom base URL:
 
-- `SEED_BASE_URL=http://localhost:8080 npm run seed:players`
+- `SEED_BASE_URL=http://localhost:3000 npm run seed:players`
 
 ## Install on iPhone (Safari)
 
@@ -248,4 +339,20 @@ curl -s -X POST http://127.0.0.1:8000/chat \
 
 ## Track 3 note
 
-When the **Track 3** backend exists, you can **keep** this service as a dedicated AI microservice or **merge** its routes into the main app. Until then, treat **`backend-ai`** as the single source for **`/chat`** and **`/health`** for AI features.
+The app now exposes lightweight serverless contracts in `api/` for:
+
+- `POST /api/chat`
+- `POST /api/cultivation/apply`
+- `GET /api/health`
+
+The `backend-ai` service can still be used as an advanced AI backend, but local gameplay loop integration now works directly through the Vercel serverless routes above.
+
+## Data ownership boundaries
+
+- **DB-backed source of truth**
+  - `players`, `zones`, `leaderboard_entries`, `user_players`
+  - API flows: recruit, train, challenge result, camera reward, chat + cultivation apply
+- **Mock-backed API (intentional for demo)**
+  - `GET /api/live-events`
+- **Frontend flavor/local-only**
+  - map nearby activity strings, rival personalities, non-persistent UI effects

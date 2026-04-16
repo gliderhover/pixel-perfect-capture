@@ -18,6 +18,7 @@ const SquadScreen = () => {
     activePlayer,
     setActivePlayerId,
     playersById,
+    ownedPlayersById,
     tryEvolutionUpgrade,
     playersLoading,
     playersError,
@@ -26,7 +27,10 @@ const SquadScreen = () => {
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [filter, setFilter] = useState<string>("all");
 
-  const roster = mockPlayers.map((m) => playersById[m.id] ?? m);
+  const ownedIds = Object.keys(ownedPlayersById);
+  const roster = ownedIds
+    .map((id) => playersById[id] ?? mockPlayers.find((m) => m.id === id))
+    .filter((player): player is Player => Boolean(player));
 
   const filters = ["all", "legendary", "epic", "rare"];
   const filtered = filter === "all" ? roster : roster.filter((p) => p.rarity === filter);
@@ -41,6 +45,11 @@ const SquadScreen = () => {
         <p className="text-xs text-muted-foreground mt-1">{roster.length} players collected</p>
         {playersLoading && <p className="text-[10px] text-muted-foreground mt-1">Loading players...</p>}
         {playersError && <p className="text-[10px] text-destructive mt-1">Player API unavailable, using fallback</p>}
+        {!playersLoading && !playersError && roster.length === 0 && (
+          <p className="text-[10px] text-muted-foreground mt-1">
+            No recruits yet. Explore and win penalty duels to add players.
+          </p>
+        )}
         {!playersLoading && !playersError && !usingMockPlayers && (
           <p className="text-[10px] text-primary mt-1">Live player feed</p>
         )}

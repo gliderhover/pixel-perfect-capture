@@ -3,6 +3,7 @@ import { Send, Heart, Flame, Shield, Sparkles } from "lucide-react";
 import { useGameProgress } from "@/context/GameProgressContext";
 import AnimatedPortrait from "./AnimatedPortrait";
 import { cn } from "@/lib/utils";
+import { applyCultivation, sendPlayerChat, trainUserPlayer } from "@/lib/apiService";
 
 type Chip = { label: string; val: string; positive?: boolean };
 
@@ -49,14 +50,13 @@ function moodLabel(
 
 const TrainScreen = () => {
   const {
+    userId,
     activePlayer: player,
     explorationZoneType,
     matchPhase,
     livePulse,
     competitiveStreak,
-    addXp,
-    addBond,
-    applyAttributeDelta,
+    refreshOwnedPlayers,
   } = useGameProgress();
 
   const chatRef = useRef<HTMLDivElement>(null);
@@ -105,149 +105,124 @@ const TrainScreen = () => {
     ]);
   };
 
+  const trainViaApi = async (
+    mode: "balanced" | "confidence" | "form" | "morale" | "bond",
+    userText: string,
+    playerText: string
+  ) => {
+    try {
+      const result = await trainUserPlayer(userId, player.id, mode);
+      await refreshOwnedPlayers();
+      const chips: Chip[] = [{ label: "XP", val: `+${result.xpGained}`, positive: true }];
+      if (result.delta.confidence) chips.push({ label: "Confidence", val: `+${result.delta.confidence}`, positive: true });
+      if (result.delta.form) chips.push({ label: "Form", val: `+${result.delta.form}`, positive: true });
+      if (result.delta.morale) chips.push({ label: "Morale", val: `+${result.delta.morale}`, positive: true });
+      if (result.delta.fanBond) chips.push({ label: "Fan bond", val: `+${result.delta.fanBond}`, positive: true });
+      appendChat(userText, playerText, chips);
+    } catch (error) {
+      appendChat(userText, "Can't lock in the training update right now. Try again in a second.", [
+        {
+          label: "Error",
+          val: error instanceof Error ? error.message : "training failed",
+          positive: false,
+        },
+      ]);
+    }
+  };
+
   const sendTrainingChoice = (kind: "motivate" | "challenge" | "comfort" | "tactics" | "recovery") => {
     const z = explorationZoneType;
     if (kind === "motivate") {
-      applyAttributeDelta(player.id, { morale: 2, confidence: 1 });
-      addBond(player.id, 2);
-      addXp(player.id, 8);
-      appendChat(
+      void trainViaApi(
+        "balanced",
         "Motivate me for the next step.",
         z === "rival"
           ? "I'm hunting that win — give me the next duel."
-          : "You believing in me flips a switch. Let's go.",
-        [
-          { label: "Morale", val: "+2", positive: true },
-          { label: "Confidence", val: "+1", positive: true },
-          { label: "Bond", val: "+2", positive: true },
-          { label: "XP", val: "+8", positive: true },
-        ]
+          : "You believing in me flips a switch. Let's go."
       );
       return;
     }
     if (kind === "challenge") {
-      applyAttributeDelta(player.id, { confidence: 2, form: 1 });
-      addBond(player.id, 1);
-      addXp(player.id, 10);
-      appendChat(
+      void trainViaApi(
+        "confidence",
         "Challenge me — be honest.",
-        "Alright coach, hit me with the hard truth. I'll answer with work.",
-        [
-          { label: "Confidence", val: "+2", positive: true },
-          { label: "Form", val: "+1", positive: true },
-          { label: "Bond", val: "+1", positive: true },
-          { label: "XP", val: "+10", positive: true },
-        ]
+        "Alright coach, hit me with the hard truth. I'll answer with work."
       );
       return;
     }
     if (kind === "comfort") {
-      applyAttributeDelta(player.id, { morale: 3, fanBond: 1 });
-      addBond(player.id, 3);
-      addXp(player.id, 6);
-      appendChat(
+      void trainViaApi(
+        "morale",
         "I need calm today.",
         matchPhase === "postloss"
           ? "That one stung. Stay with me — we'll turn it into fuel."
-          : "I've got you. Breathe, reset, next play.",
-        [
-          { label: "Morale", val: "+3", positive: true },
-          { label: "Fan bond", val: "+1", positive: true },
-          { label: "Bond", val: "+3", positive: true },
-          { label: "XP", val: "+6", positive: true },
-        ]
+          : "I've got you. Breathe, reset, next play."
       );
       return;
     }
     if (kind === "tactics") {
-      applyAttributeDelta(player.id, { form: 2, confidence: 1 });
-      addXp(player.id, 9);
-      addBond(player.id, 1);
-      appendChat(
+      void trainViaApi(
+        "form",
         "Talk tactics — what should I fix?",
         z === "training"
           ? "Patterns and presses — sharpen the first touch under pressure."
-          : "Shape, timing, runs — keep the plan clean.",
-        [
-          { label: "Form", val: "+2", positive: true },
-          { label: "Confidence", val: "+1", positive: true },
-          { label: "XP", val: "+9", positive: true },
-        ]
+          : "Shape, timing, runs — keep the plan clean."
       );
       return;
     }
-    applyAttributeDelta(player.id, { morale: 2, form: 1 });
-    addXp(player.id, 7);
-    addBond(player.id, 2);
-    appendChat(
+    void trainViaApi(
+      "bond",
       "Recovery first.",
       z === "recovery"
         ? "Body's talking — rest, hydrate, mindset follows."
-        : "Smart. We reload so the next sprint hits harder.",
-      [
-        { label: "Morale", val: "+2", positive: true },
-        { label: "Form", val: "+1", positive: true },
-        { label: "XP", val: "+7", positive: true },
-        { label: "Bond", val: "+2", positive: true },
-      ]
+        : "Smart. We reload so the next sprint hits harder."
     );
   };
 
   const sendMessage = (text: string) => {
     if (!text.trim()) return;
-    const uid = Date.now();
-    const lower = text.toLowerCase();
-    let reply = "Copy — I'm taking that into the next session.";
-    let chips: Chip[] = [
-      { label: "Morale", val: "+1", positive: true },
-      { label: "XP", val: "+5", positive: true },
-      { label: "Bond", val: "+1", positive: true },
-    ];
+    const run = async () => {
+      try {
+        const history = messages
+          .slice(-6)
+          .map((m) => ({
+            role: m.from === "user" ? "user" : "assistant",
+            content: m.text,
+          })) as { role: "user" | "assistant"; content: string }[];
 
-    if (lower.includes("conf")) {
-      reply = "Confidence is a dial — we turn it slowly, then snap it forward.";
-      applyAttributeDelta(player.id, { confidence: 2 });
-      addXp(player.id, 6);
-      addBond(player.id, 1);
-      chips = [
-        { label: "Confidence", val: "+2", positive: true },
-        { label: "XP", val: "+6", positive: true },
-        { label: "Bond", val: "+1", positive: true },
-      ];
-    } else if (lower.includes("fan") || lower.includes("bond")) {
-      reply =
-        player.bondTrust > 40
-          ? "You know me better now — I'll open up more in big moments."
-          : "Every message builds trust. Keep showing up.";
-      applyAttributeDelta(player.id, { fanBond: 2 });
-      addXp(player.id, 5);
-      addBond(player.id, 2);
-      chips = [
-        { label: "Fan bond", val: "+2", positive: true },
-        { label: "Bond", val: "+2", positive: true },
-        { label: "XP", val: "+5", positive: true },
-      ];
-    } else if (lower.includes("morale")) {
-      applyAttributeDelta(player.id, { morale: 2 });
-      addXp(player.id, 5);
-      addBond(player.id, 1);
-      reply = "That lands. Morale up — I feel lighter.";
-      chips = [
-        { label: "Morale", val: "+2", positive: true },
-        { label: "XP", val: "+5", positive: true },
-        { label: "Bond", val: "+1", positive: true },
-      ];
-    } else {
-      applyAttributeDelta(player.id, { morale: 1 });
-      addXp(player.id, 5);
-      addBond(player.id, 1);
-    }
+        const chat = await sendPlayerChat({
+          playerId: player.id,
+          message: text,
+          state: {
+            confidence: player.attributes.confidence,
+            form: player.attributes.form,
+            morale: player.attributes.morale,
+            fanBond: player.attributes.fanBond,
+          },
+          history,
+        });
+        await applyCultivation({
+          userId,
+          playerId: player.id,
+          attributeDeltas: chat.attributeDeltas,
+          xpGain: 6,
+        });
+        await refreshOwnedPlayers();
 
-    setMessages((prev) => [
-      ...prev,
-      { id: uid, from: "user", text },
-      { id: uid + 1, from: "player", text: reply, chips },
-    ]);
+        appendChat(text, chat.reply, [
+          { label: "XP", val: "+6", positive: true },
+          { label: "Confidence", val: `${chat.attributeDeltas.confidence >= 0 ? "+" : ""}${chat.attributeDeltas.confidence}`, positive: chat.attributeDeltas.confidence >= 0 },
+          { label: "Form", val: `${chat.attributeDeltas.form >= 0 ? "+" : ""}${chat.attributeDeltas.form}`, positive: chat.attributeDeltas.form >= 0 },
+          { label: "Morale", val: `${chat.attributeDeltas.morale >= 0 ? "+" : ""}${chat.attributeDeltas.morale}`, positive: chat.attributeDeltas.morale >= 0 },
+          { label: "Fan bond", val: `${chat.attributeDeltas.fanBond >= 0 ? "+" : ""}${chat.attributeDeltas.fanBond}`, positive: chat.attributeDeltas.fanBond >= 0 },
+        ]);
+      } catch (error) {
+        appendChat(text, "Connection dropped. I couldn't process that message yet.", [
+          { label: "Error", val: error instanceof Error ? error.message : "chat failed", positive: false },
+        ]);
+      }
+    };
+    void run();
     setInput("");
   };
 
