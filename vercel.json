@@ -1,5 +1,18 @@
 {
   "rewrites": [
+    { "source": "/api/health", "destination": "/api/game/health" },
+    { "source": "/api/health/counts", "destination": "/api/game/health-counts" },
+    { "source": "/api/players", "destination": "/api/players/list" },
+    { "source": "/api/leaderboard", "destination": "/api/game/leaderboard" },
+    { "source": "/api/leaderboard/recalculate", "destination": "/api/game/leaderboard-recalculate" },
+    { "source": "/api/zones", "destination": "/api/game/zones" },
+    { "source": "/api/live-events", "destination": "/api/game/live-events" },
+    { "source": "/api/user-players", "destination": "/api/user/user-players" },
+    { "source": "/api/user-players/recruit", "destination": "/api/user/user-players-recruit" },
+    { "source": "/api/user-players/train", "destination": "/api/user/user-players-train" },
+    { "source": "/api/challenges/result", "destination": "/api/user/challenges-result" },
+    { "source": "/api/camera-scans/reward", "destination": "/api/user/camera-scans-reward" },
+    { "source": "/api/cultivation/apply", "destination": "/api/user/cultivation-apply" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
