@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   mockLeaderboardGlobal,
   mockLeaderboardRegion,
@@ -6,20 +6,78 @@ import {
   type LeaderboardPeriod,
   type LeaderboardScope,
 } from "@/data/leaderboardData";
-import { useActivePlayer } from "@/context/GameProgressContext";
+import { useGameProgress } from "@/context/GameProgressContext";
 import { cn } from "@/lib/utils";
 import { Flame, Globe, MapPinned } from "lucide-react";
+import { fetchLeaderboard, type ApiLeaderboardEntry } from "@/lib/apiService";
 
 function computeDisplayPower(overall: number, level: number, evo: number): number {
   return Math.round(overall * 64 + level * 18 + evo * 220);
 }
 
 const LeaderboardScreen = () => {
-  const { activePlayer } = useActivePlayer();
+  const { activePlayer, playersById } = useGameProgress();
   const [scope, setScope] = useState<LeaderboardScope>("global");
   const [period, setPeriod] = useState<LeaderboardPeriod>("weekly");
+  const [list, setList] = useState<
+    {
+      rank: number;
+      userName: string;
+      playerId: string;
+      teamPower: number;
+      region: string;
+      streak: number;
+      coachLevel: number;
+      isYou?: boolean;
+    }[]
+  >(mockLeaderboardGlobal);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [usingMock, setUsingMock] = useState(true);
 
-  const list = scope === "global" ? mockLeaderboardGlobal : mockLeaderboardRegion;
+  useEffect(() => {
+    let cancelled = false;
+    const mapApi = (rows: ApiLeaderboardEntry[]) =>
+      rows.map((row, i) => ({
+        rank: i + 1,
+        userName: row.username,
+        playerId: row.activePlayerId,
+        teamPower: row.score,
+        region: row.region,
+        streak: row.streak,
+        coachLevel: Math.max(1, Math.round(row.score / 200)),
+        isYou: row.username.toLowerCase() === "you",
+      }));
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const region = scope === "region" ? "CONCACAF · NA" : undefined;
+        const result = await fetchLeaderboard(scope, region);
+        if (!cancelled) {
+          if (result.data.length > 0) {
+            setList(mapApi(result.data));
+            setUsingMock(false);
+          } else {
+            setList([]);
+            setUsingMock(false);
+          }
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed to load leaderboard");
+          setList(scope === "global" ? mockLeaderboardGlobal : mockLeaderboardRegion);
+          setUsingMock(true);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, period]);
 
   const yourPower = useMemo(
     () => computeDisplayPower(activePlayer.stats.overall, activePlayer.level, activePlayer.evolutionStage),
@@ -33,6 +91,14 @@ const LeaderboardScreen = () => {
       <div className="mb-4">
         <h1 className="text-2xl font-black text-foreground">Leaderboard</h1>
         <p className="text-xs text-muted-foreground mt-0.5">Climb the ranks — stay sharp</p>
+        {loading && <p className="text-[10px] text-muted-foreground mt-1">Loading leaderboard...</p>}
+        {error && <p className="text-[10px] text-destructive mt-1">Leaderboard unavailable, using fallback</p>}
+        {!loading && !error && list.length === 0 && (
+          <p className="text-[10px] text-muted-foreground mt-1">No entries yet</p>
+        )}
+        {!loading && !error && !usingMock && list.length > 0 && (
+          <p className="text-[10px] text-primary mt-1">Live leaderboard feed</p>
+        )}
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -104,7 +170,7 @@ const LeaderboardScreen = () => {
       <div className="space-y-2">
         {list.map((e) => {
           const top = e.rank <= 3;
-          const portrait = portraitForEntry(e.playerId);
+          const portrait = playersById[e.playerId]?.portrait ?? portraitForEntry(e.playerId);
           return (
             <div
               key={`${e.rank}-${e.userName}`}

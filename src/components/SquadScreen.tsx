@@ -14,7 +14,15 @@ const rarityBorder: Record<string, string> = {
 const evoLabel = ["Rookie", "Developing", "Rising", "Elite"] as const;
 
 const SquadScreen = () => {
-  const { activePlayer, setActivePlayerId, playersById, tryEvolutionUpgrade } = useGameProgress();
+  const {
+    activePlayer,
+    setActivePlayerId,
+    playersById,
+    tryEvolutionUpgrade,
+    playersLoading,
+    playersError,
+    usingMockPlayers,
+  } = useGameProgress();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [filter, setFilter] = useState<string>("all");
 
@@ -31,6 +39,11 @@ const SquadScreen = () => {
       <div className="mb-5">
         <h1 className="text-2xl font-black text-foreground">My Squad</h1>
         <p className="text-xs text-muted-foreground mt-1">{roster.length} players collected</p>
+        {playersLoading && <p className="text-[10px] text-muted-foreground mt-1">Loading players...</p>}
+        {playersError && <p className="text-[10px] text-destructive mt-1">Player API unavailable, using fallback</p>}
+        {!playersLoading && !playersError && !usingMockPlayers && (
+          <p className="text-[10px] text-primary mt-1">Live player feed</p>
+        )}
       </div>
 
       {/* Active Player Hero */}

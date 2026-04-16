@@ -40,6 +40,30 @@ Placeholder icons use a simple 3×3 pixel grid on `#0b1020`, defined in `public/
 
 Connect the repo to Vercel and use the default settings for a Vite project (build command `npm run build`, output directory `dist`). The included `vercel.json` rewrites client-side routes to `index.html` while static files such as `sw.js`, `manifest.webmanifest`, and `icons/` are served from the build output.
 
+## MongoDB connection layer
+
+Serverless API routes live under `api/` for Vercel.
+
+- Connection utility: `api/lib/mongodb.ts`
+- Health probe: `GET /api/health`
+- Player seed route: `POST /api/seed/players`
+
+Required environment variables:
+
+- `MONGODB_URI`
+- `MONGODB_DB` (optional if DB is already encoded in URI)
+
+### Seed players locally
+
+1. Start local dev server:
+   - `npm run dev`
+2. In another terminal, run:
+   - `npm run seed:players`
+
+Optional custom base URL:
+
+- `SEED_BASE_URL=http://localhost:8080 npm run seed:players`
+
 ## Install on iPhone (Safari)
 
 1. Open the deployed site in **Safari** (not another browser) over **HTTPS** (e.g. your Vercel URL).

@@ -5,6 +5,7 @@ import { Scan, ChevronRight, ZoomIn, ZoomOut, Crosshair } from "lucide-react";
 import { mockZones, mockMission, mockPlayerMarkers, mockNearbyActivity, zoneIcons, getPlayerById } from "@/data/mockData";
 import type { MapZone, Player } from "@/data/mockData";
 import { useGameProgress } from "@/context/GameProgressContext";
+import { fetchZones, type ApiZone } from "@/lib/apiService";
 import PlayerEncounter from "./PlayerEncounter";
 import CameraMission from "./CameraMission";
 import AnimatedPortrait from "./AnimatedPortrait";
@@ -90,6 +91,10 @@ const MapControls = () => {
 
 const ExploreScreen = () => {
   const { activePlayer, playersById, setExplorationZoneType } = useGameProgress();
+  const [zones, setZones] = useState<MapZone[]>(mockZones);
+  const [zonesLoading, setZonesLoading] = useState(false);
+  const [zonesError, setZonesError] = useState<string | null>(null);
+  const [usingMockZones, setUsingMockZones] = useState(true);
   const [selectedZone, setSelectedZone] = useState<MapZone | null>(null);
   const [encounterPlayer, setEncounterPlayer] = useState<Player | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -105,6 +110,47 @@ const ExploreScreen = () => {
   useEffect(() => {
     setExplorationZoneType(selectedZone?.type ?? null);
   }, [selectedZone, setExplorationZoneType]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const mapZoneFromApi = (z: ApiZone, i: number): MapZone => ({
+      id: `api-zone-${i}-${z.zoneType}-${z.name}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-"),
+      type: z.zoneType,
+      name: z.name,
+      lat: z.latitude,
+      lng: z.longitude,
+      benefit: z.rewardType,
+    });
+    const loadZones = async () => {
+      setZonesLoading(true);
+      setZonesError(null);
+      try {
+        const result = await fetchZones();
+        if (!cancelled) {
+          if (result.data.length > 0) {
+            setZones(result.data.map(mapZoneFromApi));
+            setUsingMockZones(false);
+          } else {
+            setZones([]);
+            setUsingMockZones(false);
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const msg = error instanceof Error ? error.message : "Failed to load zones";
+          setZonesError(msg);
+          setZones(mockZones);
+          setUsingMockZones(true);
+        }
+      } finally {
+        if (!cancelled) setZonesLoading(false);
+      }
+    };
+    loadZones();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="relative w-full min-h-[100dvh] h-[100dvh] overflow-hidden">
@@ -128,7 +174,7 @@ const ExploreScreen = () => {
         <MapControls />
 
         {/* Zone markers */}
-        {mockZones.map((zone) => (
+        {zones.map((zone) => (
           <Marker
             key={zone.id}
             position={[zone.lat, zone.lng]}
@@ -178,6 +224,18 @@ const ExploreScreen = () => {
               </div>
               <span className="text-[9px] text-primary font-black">{mockMission.progress}/{mockMission.total}</span>
             </div>
+            {zonesLoading && (
+              <p className="text-[9px] text-muted-foreground mt-1">Loading zones...</p>
+            )}
+            {zonesError && (
+              <p className="text-[9px] text-destructive mt-1">Zones unavailable, using fallback</p>
+            )}
+            {!zonesLoading && !zonesError && zones.length === 0 && (
+              <p className="text-[9px] text-muted-foreground mt-1">No active zones</p>
+            )}
+            {!zonesLoading && !zonesError && !usingMockZones && zones.length > 0 && (
+              <p className="text-[9px] text-primary/80 mt-1">Live zone feed</p>
+            )}
           </div>
         </div>
       </div>

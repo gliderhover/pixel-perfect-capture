@@ -15,6 +15,7 @@ import {
   type Player,
   type PlayerStats,
 } from "@/data/mockData";
+import { fetchPlayers } from "@/lib/apiService";
 
 const STORAGE_KEY = "ppc-game-progress-v2";
 
@@ -61,6 +62,9 @@ type GameProgressContextValue = {
   applyAttributeDelta: (playerId: string, delta: Partial<Player["attributes"]>) => void;
   tryEvolutionUpgrade: (playerId: string) => boolean;
   bumpStats: (playerId: string, bump: Partial<PlayerStats>) => void;
+  playersLoading: boolean;
+  playersError: string | null;
+  usingMockPlayers: boolean;
 };
 
 const GameProgressContext = createContext<GameProgressContextValue | null>(null);
@@ -77,10 +81,70 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   const [matchPhase, setMatchPhase] = useState<MatchPhase>("prematch");
   const [livePulse, setLivePulse] = useState<LivePulse>("neutral");
   const [competitiveStreak] = useState(3);
+  const [playersLoading, setPlayersLoading] = useState(false);
+  const [playersError, setPlayersError] = useState<string | null>(null);
+  const [usingMockPlayers, setUsingMockPlayers] = useState(true);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(playersById));
   }, [playersById]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const hydratePlayers = async () => {
+      setPlayersLoading(true);
+      setPlayersError(null);
+      try {
+        const result = await fetchPlayers();
+        const byId = Object.fromEntries(mockPlayers.map((p) => [p.id, p]));
+        const merged = cloneInitialRoster();
+        for (const apiPlayer of result.data) {
+          const seed = byId[apiPlayer.externalId];
+          if (!seed) continue;
+          const level = apiPlayer.level ?? seed.level;
+          const xpToNext = 80 + level * 40;
+          merged[seed.id] = normalizePlayer({
+            ...seed,
+            name: apiPlayer.name,
+            portrait: apiPlayer.portrait,
+            age: apiPlayer.age,
+            position: apiPlayer.position,
+            clubTeam: apiPlayer.clubTeam,
+            nationalTeam: apiPlayer.nationalTeam,
+            representedCountry: apiPlayer.representedCountry,
+            rarity: apiPlayer.rarity,
+            traits: apiPlayer.traits,
+            level,
+            currentXp: Math.max(0, Math.min(apiPlayer.xp ?? seed.currentXp, xpToNext)),
+            xpToNext,
+            evolutionStage: (Math.max(0, Math.min(apiPlayer.evolutionStage ?? 0, 3)) as 0 | 1 | 2 | 3),
+            attributes: {
+              confidence: apiPlayer.stats.confidence,
+              form: apiPlayer.stats.form,
+              morale: apiPlayer.stats.morale,
+              fanBond: apiPlayer.stats.fanBond,
+            },
+          });
+        }
+        if (!cancelled) {
+          setPlayersById(merged);
+          setUsingMockPlayers(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const msg = error instanceof Error ? error.message : "Failed to load players";
+          setPlayersError(msg);
+          setUsingMockPlayers(true);
+        }
+      } finally {
+        if (!cancelled) setPlayersLoading(false);
+      }
+    };
+    hydratePlayers();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const activePlayer = useMemo(() => {
     const p = playersById[activePlayerId] ?? playersById[mockPlayers[0].id];
@@ -205,6 +269,9 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       applyAttributeDelta,
       tryEvolutionUpgrade,
       bumpStats,
+      playersLoading,
+      playersError,
+      usingMockPlayers,
     }),
     [
       activePlayer,
@@ -221,6 +288,9 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       applyAttributeDelta,
       tryEvolutionUpgrade,
       bumpStats,
+      playersLoading,
+      playersError,
+      usingMockPlayers,
     ]
   );
 
