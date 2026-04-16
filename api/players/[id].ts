@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getMongoDb } from "../lib/mongodb";
-import { getPlayerCollection } from "../models/player";
+import { getMongoDb } from "../../lib/mongodb";
+import { getPlayerCollection } from "../../lib/server/dbCollections";
 
 function cleanDoc<T extends Record<string, unknown>>(doc: T) {
   const { _id, ...rest } = doc as T & { _id?: unknown };

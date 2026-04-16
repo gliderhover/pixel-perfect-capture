@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getMongoDb } from "./lib/mongodb";
-import { getLeaderboardCollection } from "./models/leaderboardEntry";
+import { getMongoDb } from "../lib/mongodb";
+import { getLeaderboardCollection } from "../lib/server/dbCollections";
 
 const leaderboardQuerySchema = z.object({
   scope: z.enum(["global", "region"]).optional(),

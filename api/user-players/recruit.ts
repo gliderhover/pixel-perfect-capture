@@ -1,8 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getMongoDb } from "../lib/mongodb";
-import { getPlayerCollection } from "../models/player";
-import { buildUserPlayerInsert, getUserPlayerCollection } from "../models/userPlayer";
+import { getMongoDb } from "../../lib/mongodb";
+import { getPlayerCollection, getUserPlayerCollection } from "../../lib/server/dbCollections";
 
 const bodySchema = z.object({
   userId: z.string().min(1).default("demo-user"),
@@ -12,6 +11,25 @@ const bodySchema = z.object({
 function cleanDoc<T extends Record<string, unknown>>(doc: T) {
   const { _id, ...rest } = doc as T & { _id?: unknown };
   return rest;
+}
+
+function buildUserPlayerInsert(input: {
+  userId: string;
+  playerId: string;
+  level: number;
+  xp: number;
+  evolutionStage: number;
+  stats: { confidence: number; form: number; morale: number; fanBond: number };
+  shards: number;
+  recruitedAt: Date;
+  lastTrainedAt: Date | null;
+}) {
+  const now = new Date();
+  return {
+    ...input,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 /**

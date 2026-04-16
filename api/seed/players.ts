@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getMongoDb } from "../lib/mongodb";
-import { getPlayerCollection, type PlayerDoc } from "../models/player";
+import { getMongoDb } from "../../lib/mongodb";
+import { getPlayerCollection, type PlayerDoc } from "../../lib/server/dbCollections";
 import { mockPlayers } from "../../src/data/mockData";
 
 function toSlug(id: string, name: string) {

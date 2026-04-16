@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getMongoDb } from "./lib/mongodb";
-import { getUserPlayerCollection } from "./models/userPlayer";
+import { getMongoDb } from "../lib/mongodb";
+import { getUserPlayerCollection } from "../lib/server/dbCollections";
 
 const querySchema = z.object({
   userId: z.string().min(1),

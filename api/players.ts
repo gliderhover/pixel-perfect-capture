@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getMongoDb } from "./lib/mongodb";
-import { getPlayerCollection, playerRaritySchema } from "./models/player";
+import { getMongoDb } from "../lib/mongodb";
+import { getPlayerCollection } from "../lib/server/dbCollections";
 
 const playersQuerySchema = z.object({
-  rarity: playerRaritySchema.optional(),
+  rarity: z.enum(["common", "rare", "epic", "legendary"]).optional(),
   position: z.string().min(1).optional(),
   representedCountry: z.string().min(1).optional(),
 });

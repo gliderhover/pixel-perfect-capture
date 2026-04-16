@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getMongoDb } from "./lib/mongodb";
-import { getZoneCollection } from "./models/zone";
+import { getMongoDb } from "../lib/mongodb";
+import { getZoneCollection } from "../lib/server/dbCollections";
 
 const zonesQuerySchema = z.object({
   region: z.string().min(1).optional(),
