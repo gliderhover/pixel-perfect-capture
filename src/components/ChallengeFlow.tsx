@@ -59,6 +59,7 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
   useEffect(() => {
     if (step === "battle" && battleProgress >= 100) {
       const t = setTimeout(() => {
+        const persistResult = async () => {
         const yourScore = computeMatchScore(activePlayer);
         const theirScore = computeMatchScore(rivalPlayer);
         const diff = yourScore - theirScore;
@@ -83,6 +84,8 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
         }
 
         setStep("result");
+        };
+        void persistResult();
       }, 500);
       return () => clearTimeout(t);
     }
