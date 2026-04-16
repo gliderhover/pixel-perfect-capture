@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getMongoDb } from "../../lib/mongodb";
-import { getLeaderboardCollection, getPlayerCollection, getUserPlayerCollection, getZoneCollection } from "../../lib/server/dbCollections";
+import { getSupabaseAdminClient } from "../../lib/supabase";
+import { DB_TABLES } from "../../lib/server/dbCollections";
 import { mockLiveEvents } from "../../src/data/mockData";
 
 const leaderboardQuerySchema = z.object({
@@ -61,22 +61,21 @@ function toArrayValue(value: string | string[] | undefined): string | undefined 
   return Array.isArray(value) ? value[0] : value;
 }
 
-function cleanDoc<T extends Record<string, unknown>>(doc: T) {
-  const { _id, ...rest } = doc as T & { _id?: unknown };
-  return rest;
-}
-
 async function loadCounts() {
-  const db = await getMongoDb();
-  const players = await getPlayerCollection(db);
-  const leaderboard = await getLeaderboardCollection(db);
-  const zones = await getZoneCollection(db);
-  const [playerCount, leaderboardCount, zoneCount] = await Promise.all([
-    players.countDocuments({}),
-    leaderboard.countDocuments({}),
-    zones.countDocuments({}),
+  const supabase = getSupabaseAdminClient();
+  const [playersRes, leaderboardRes, zonesRes] = await Promise.all([
+    supabase.from(DB_TABLES.players).select("externalId", { count: "exact", head: true }),
+    supabase.from(DB_TABLES.leaderboard).select("username", { count: "exact", head: true }),
+    supabase.from(DB_TABLES.zones).select("name", { count: "exact", head: true }),
   ]);
-  return { db, playerCount, leaderboardCount, zoneCount };
+  if (playersRes.error) throw playersRes.error;
+  if (leaderboardRes.error) throw leaderboardRes.error;
+  if (zonesRes.error) throw zonesRes.error;
+  return {
+    playerCount: playersRes.count ?? 0,
+    leaderboardCount: leaderboardRes.count ?? 0,
+    zoneCount: zonesRes.count ?? 0,
+  };
 }
 
 async function handleHealth(req: VercelRequest, res: VercelResponse) {
@@ -89,8 +88,7 @@ async function handleHealth(req: VercelRequest, res: VercelResponse) {
   }
 
   const started = Date.now();
-  const { db, playerCount, leaderboardCount, zoneCount } = await loadCounts();
-  await db.command({ ping: 1 });
+  const { playerCount, leaderboardCount, zoneCount } = await loadCounts();
   if (playerCount === 0 || leaderboardCount === 0 || zoneCount === 0) {
     debugLog("Health check found empty collection(s)", {
       players: playerCount,
@@ -101,7 +99,7 @@ async function handleHealth(req: VercelRequest, res: VercelResponse) {
   const elapsedMs = Date.now() - started;
   return res.status(200).json({
     ok: true,
-    db: db.databaseName,
+    db: "supabase",
     latencyMs: elapsedMs,
     environment: process.env.NODE_ENV ?? "development",
     collections: {
@@ -159,15 +157,20 @@ async function handleLeaderboardList(req: VercelRequest, res: VercelResponse) {
     filter.region = region;
   }
 
-  const db = await getMongoDb();
-  const leaderboard = await getLeaderboardCollection(db);
-  const docs = await leaderboard
-    .find(filter)
-    .sort({ score: -1, streak: -1, updatedAt: -1 })
-    .toArray();
+  const supabase = getSupabaseAdminClient();
+  let query = supabase
+    .from(DB_TABLES.leaderboard)
+    .select("*")
+    .order("score", { ascending: false })
+    .order("streak", { ascending: false })
+    .order("updatedAt", { ascending: false });
+  if (filter.region) query = query.eq("region", String(filter.region));
+  const { data, error } = await query;
+  if (error) throw error;
+  const docs = data ?? [];
 
   return res.status(200).json({
-    data: docs.map(cleanDoc),
+    data: docs,
     count: docs.length,
     scope: scope ?? "global",
     region: region ?? null,
@@ -189,13 +192,12 @@ async function handleLeaderboardRecalculate(req: VercelRequest, res: VercelRespo
   }
 
   const { userId, scope, region } = parsed.data;
-  const db = await getMongoDb();
-  const userPlayers = await getUserPlayerCollection(db);
-  const leaderboard = await getLeaderboardCollection(db);
-
-  const playerFilter: Record<string, unknown> = {};
-  if (userId) playerFilter.userId = userId;
-  const docs = await userPlayers.find(playerFilter).toArray();
+  const supabase = getSupabaseAdminClient();
+  let usersQuery = supabase.from(DB_TABLES.userPlayers).select("*");
+  if (userId) usersQuery = usersQuery.eq("userId", userId);
+  const usersRes = await usersQuery;
+  if (usersRes.error) throw usersRes.error;
+  const docs = usersRes.data ?? [];
   if (docs.length === 0) {
     return res.status(200).json({ ok: true, updated: 0, message: "No user players to recalculate" });
   }
@@ -208,7 +210,7 @@ async function handleLeaderboardRecalculate(req: VercelRequest, res: VercelRespo
   }
 
   let updatedCount = 0;
-  const now = new Date();
+  const nowIso = new Date().toISOString();
   for (const [uid, rows] of grouped) {
     const active = [...rows].sort((a, b) => {
       const aScore = computeScore(a.level, a.xp, a.evolutionStage, a.stats);
@@ -222,24 +224,19 @@ async function handleLeaderboardRecalculate(req: VercelRequest, res: VercelRespo
     );
 
     const entryRegion = scope === "region" ? region ?? "CONCACAF · NA" : "GLOBAL";
-    await leaderboard.updateOne(
-      { username: uid, region: entryRegion },
+    const upsertRes = await supabase.from(DB_TABLES.leaderboard).upsert(
       {
-        $set: {
-          activePlayerId: active.playerId,
-          score,
-          streak: Math.max(1, Math.floor(active.level / 3)),
-          updatedAt: now,
-        },
-        $setOnInsert: {
-          username: uid,
-          region: entryRegion,
-          createdAt: now,
-          rankBadge: undefined,
-        },
+        username: uid,
+        region: entryRegion,
+        activePlayerId: active.playerId,
+        score,
+        streak: Math.max(1, Math.floor(active.level / 3)),
+        updatedAt: nowIso,
+        createdAt: nowIso,
       },
-      { upsert: true }
+      { onConflict: "username,region" }
     );
+    if (upsertRes.error) throw upsertRes.error;
     updatedCount += 1;
   }
 
@@ -270,11 +267,18 @@ async function handleZones(req: VercelRequest, res: VercelResponse) {
   const filter: Record<string, unknown> = { active: true };
   if (parsed.data.region) filter.region = parsed.data.region;
 
-  const db = await getMongoDb();
-  const zones = await getZoneCollection(db);
-  const docs = await zones.find(filter).sort({ updatedAt: -1 }).toArray();
+  const supabase = getSupabaseAdminClient();
+  let query = supabase
+    .from(DB_TABLES.zones)
+    .select("*")
+    .eq("active", true)
+    .order("updatedAt", { ascending: false });
+  if (filter.region) query = query.eq("region", String(filter.region));
+  const { data, error } = await query;
+  if (error) throw error;
+  const docs = data ?? [];
   return res.status(200).json({
-    data: docs.map(cleanDoc),
+    data: docs,
     count: docs.length,
     activeOnly: true,
   });
@@ -318,7 +322,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(404).json({ error: "Not found" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown game router error";
+    const message = error instanceof Error ? error.message : JSON.stringify(error);
     return res.status(500).json({ error: message });
   }
 }

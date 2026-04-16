@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getMongoDb } from "../../lib/mongodb";
-import { getCameraScanRewardCollection, getChallengeResultCollection, getPlayerCollection, getUserPlayerCollection } from "../../lib/server/dbCollections";
+import { getSupabaseAdminClient } from "../../lib/supabase";
+import { DB_TABLES } from "../../lib/server/dbCollections";
 import { clampStat, nextXpThreshold } from "../../lib/server/progression";
 
 const userPlayersQuerySchema = z.object({
@@ -84,11 +84,6 @@ function toArrayValue(value: string | string[] | undefined): string | undefined 
   return Array.isArray(value) ? value[0] : value;
 }
 
-function cleanDoc<T extends Record<string, unknown>>(doc: T) {
-  const { _id, ...rest } = doc as T & { _id?: unknown };
-  return rest;
-}
-
 async function handleListUserPlayers(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -103,15 +98,17 @@ async function handleListUserPlayers(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const db = await getMongoDb();
-  const userPlayers = await getUserPlayerCollection(db);
-  const docs = await userPlayers
-    .find({ userId: parsed.data.userId })
-    .sort({ updatedAt: -1 })
-    .toArray();
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from(DB_TABLES.userPlayers)
+    .select("*")
+    .eq("userId", parsed.data.userId)
+    .order("updatedAt", { ascending: false });
+  if (error) throw error;
+  const docs = data ?? [];
 
   return res.status(200).json({
-    data: docs.map(cleanDoc),
+    data: docs,
     count: docs.length,
     userId: parsed.data.userId,
   });
@@ -125,10 +122,10 @@ function buildUserPlayerInsert(input: {
   evolutionStage: number;
   stats: { confidence: number; form: number; morale: number; fanBond: number };
   shards: number;
-  recruitedAt: Date;
-  lastTrainedAt: Date | null;
+  recruitedAt: string;
+  lastTrainedAt: string | null;
 }) {
-  const now = new Date();
+  const now = new Date().toISOString();
   return {
     ...input,
     createdAt: now,
@@ -151,25 +148,44 @@ async function handleRecruit(req: VercelRequest, res: VercelResponse) {
   }
 
   const { userId, playerId } = parsed.data;
-  const db = await getMongoDb();
-  const players = await getPlayerCollection(db);
-  const userPlayers = await getUserPlayerCollection(db);
-
-  const basePlayer =
-    (await players.findOne({ externalId: playerId })) ??
-    (await players.findOne({ slug: playerId }));
+  const supabase = getSupabaseAdminClient();
+  const playerByExternal = await supabase
+    .from(DB_TABLES.players)
+    .select("*")
+    .eq("externalId", playerId)
+    .maybeSingle();
+  if (playerByExternal.error) throw playerByExternal.error;
+  const basePlayer = playerByExternal.data
+    ?? (
+      await (async () => {
+        const bySlug = await supabase
+          .from(DB_TABLES.players)
+          .select("*")
+          .eq("slug", playerId)
+          .maybeSingle();
+        if (bySlug.error) throw bySlug.error;
+        return bySlug.data;
+      })()
+    );
 
   if (!basePlayer) {
     return res.status(404).json({ error: "Base player not found" });
   }
 
-  const existing = await userPlayers.findOne({ userId, playerId: basePlayer.externalId });
+  const existingRes = await supabase
+    .from(DB_TABLES.userPlayers)
+    .select("*")
+    .eq("userId", userId)
+    .eq("playerId", basePlayer.externalId)
+    .maybeSingle();
+  if (existingRes.error) throw existingRes.error;
+  const existing = existingRes.data;
   if (existing) {
     return res.status(200).json({
       ok: true,
       recruited: false,
       message: "Player already recruited",
-      data: cleanDoc(existing),
+      data: existing,
     });
   }
 
@@ -188,15 +204,16 @@ async function handleRecruit(req: VercelRequest, res: VercelResponse) {
     evolutionStage: 0,
     stats: weakStats,
     shards: 0,
-    recruitedAt: new Date(),
+    recruitedAt: new Date().toISOString(),
     lastTrainedAt: null,
   });
 
-  await userPlayers.insertOne(insert);
+  const insertRes = await supabase.from(DB_TABLES.userPlayers).insert(insert);
+  if (insertRes.error) throw insertRes.error;
   return res.status(201).json({
     ok: true,
     recruited: true,
-    data: cleanDoc(insert),
+    data: insert,
   });
 }
 
@@ -215,9 +232,15 @@ async function handleTrain(req: VercelRequest, res: VercelResponse) {
   }
 
   const { userId, playerId, mode } = parsed.data;
-  const db = await getMongoDb();
-  const userPlayers = await getUserPlayerCollection(db);
-  const doc = await userPlayers.findOne({ userId, playerId });
+  const supabase = getSupabaseAdminClient();
+  const docRes = await supabase
+    .from(DB_TABLES.userPlayers)
+    .select("*")
+    .eq("userId", userId)
+    .eq("playerId", playerId)
+    .maybeSingle();
+  if (docRes.error) throw docRes.error;
+  const doc = docRes.data;
 
   if (!doc) {
     return res.status(404).json({ error: "User player not found. Recruit first." });
@@ -238,29 +261,30 @@ async function handleTrain(req: VercelRequest, res: VercelResponse) {
     fanBond: clampStat(doc.stats.fanBond + (plan.delta.fanBond ?? 0)),
   };
 
-  const now = new Date();
+  const now = new Date().toISOString();
   const evolutionStage = Math.min(3, Math.floor(level / 5));
-  await userPlayers.updateOne(
-    { userId, playerId },
-    {
-      $set: {
-        level,
-        xp,
-        evolutionStage,
-        stats,
-        lastTrainedAt: now,
-        updatedAt: now,
-      },
-    }
-  );
-
-  const updated = await userPlayers.findOne({ userId, playerId });
+  const updateRes = await supabase
+    .from(DB_TABLES.userPlayers)
+    .update({
+      level,
+      xp,
+      evolutionStage,
+      stats,
+      lastTrainedAt: now,
+      updatedAt: now,
+    })
+    .eq("userId", userId)
+    .eq("playerId", playerId)
+    .select("*")
+    .maybeSingle();
+  if (updateRes.error) throw updateRes.error;
+  const updated = updateRes.data;
   return res.status(200).json({
     ok: true,
     mode,
     delta: plan.delta,
     xpGained: plan.xp,
-    data: updated ? cleanDoc(updated) : null,
+    data: updated ?? null,
   });
 }
 
@@ -279,11 +303,15 @@ async function handleChallengeResult(req: VercelRequest, res: VercelResponse) {
   }
 
   const { userId, playerId, result, opponentPower, region, opponentUserId } = parsed.data;
-  const db = await getMongoDb();
-  const userPlayers = await getUserPlayerCollection(db);
-  const challengeResults = await getChallengeResultCollection(db);
-
-  const userPlayer = await userPlayers.findOne({ userId, playerId });
+  const supabase = getSupabaseAdminClient();
+  const userPlayerRes = await supabase
+    .from(DB_TABLES.userPlayers)
+    .select("*")
+    .eq("userId", userId)
+    .eq("playerId", playerId)
+    .maybeSingle();
+  if (userPlayerRes.error) throw userPlayerRes.error;
+  const userPlayer = userPlayerRes.data;
   if (!userPlayer) {
     return res.status(404).json({ error: "User player not found. Recruit first." });
   }
@@ -303,25 +331,27 @@ async function handleChallengeResult(req: VercelRequest, res: VercelResponse) {
   }
   const evolutionStage = Math.min(3, Math.floor(level / 5));
 
-  const now = new Date();
-  await userPlayers.updateOne(
-    { userId, playerId },
-    {
-      $set: {
-        level,
-        xp,
-        evolutionStage,
-        shards: userPlayer.shards + reward.shards,
-        stats: {
-          confidence: clampStat(userPlayer.stats.confidence + reward.confidenceDelta),
-          form: clampStat(userPlayer.stats.form + (result === "win" ? 1 : 0)),
-          morale: clampStat(userPlayer.stats.morale + reward.moraleDelta),
-          fanBond: clampStat(userPlayer.stats.fanBond + (result === "win" ? 1 : 0)),
-        },
-        updatedAt: now,
+  const now = new Date().toISOString();
+  const updatedUserPlayerRes = await supabase
+    .from(DB_TABLES.userPlayers)
+    .update({
+      level,
+      xp,
+      evolutionStage,
+      shards: userPlayer.shards + reward.shards,
+      stats: {
+        confidence: clampStat(userPlayer.stats.confidence + reward.confidenceDelta),
+        form: clampStat(userPlayer.stats.form + (result === "win" ? 1 : 0)),
+        morale: clampStat(userPlayer.stats.morale + reward.moraleDelta),
+        fanBond: clampStat(userPlayer.stats.fanBond + (result === "win" ? 1 : 0)),
       },
-    }
-  );
+      updatedAt: now,
+    })
+    .eq("userId", userId)
+    .eq("playerId", playerId)
+    .select("*")
+    .maybeSingle();
+  if (updatedUserPlayerRes.error) throw updatedUserPlayerRes.error;
 
   const challengeDoc = {
     userId,
@@ -338,13 +368,13 @@ async function handleChallengeResult(req: VercelRequest, res: VercelResponse) {
     createdAt: now,
     updatedAt: now,
   };
-  await challengeResults.insertOne(challengeDoc);
-
-  const updated = await userPlayers.findOne({ userId, playerId });
+  const challengeInsertRes = await supabase.from(DB_TABLES.challengeResults).insert(challengeDoc);
+  if (challengeInsertRes.error) throw challengeInsertRes.error;
+  const updated = updatedUserPlayerRes.data;
   return res.status(200).json({
     ok: true,
-    challenge: cleanDoc(challengeDoc),
-    userPlayer: updated ? cleanDoc(updated) : null,
+    challenge: challengeDoc,
+    userPlayer: updated ?? null,
   });
 }
 
@@ -363,10 +393,15 @@ async function handleCameraReward(req: VercelRequest, res: VercelResponse) {
   }
 
   const { userId, playerId, zoneType, missionId } = parsed.data;
-  const db = await getMongoDb();
-  const userPlayers = await getUserPlayerCollection(db);
-  const rewards = await getCameraScanRewardCollection(db);
-  const doc = await userPlayers.findOne({ userId, playerId });
+  const supabase = getSupabaseAdminClient();
+  const docRes = await supabase
+    .from(DB_TABLES.userPlayers)
+    .select("*")
+    .eq("userId", userId)
+    .eq("playerId", playerId)
+    .maybeSingle();
+  if (docRes.error) throw docRes.error;
+  const doc = docRes.data;
   if (!doc) {
     return res.status(404).json({ error: "User player not found. Recruit first." });
   }
@@ -394,21 +429,23 @@ async function handleCameraReward(req: VercelRequest, res: VercelResponse) {
     fanBond: clampStat(doc.stats.fanBond + statBoost.fanBond),
   };
 
-  const now = new Date();
+  const now = new Date().toISOString();
   const evolutionStage = Math.min(3, Math.floor(level / 5));
-  await userPlayers.updateOne(
-    { userId, playerId },
-    {
-      $set: {
-        level,
-        xp,
-        evolutionStage,
-        stats: updatedStats,
-        shards: doc.shards + shardGain,
-        updatedAt: now,
-      },
-    }
-  );
+  const updateRes = await supabase
+    .from(DB_TABLES.userPlayers)
+    .update({
+      level,
+      xp,
+      evolutionStage,
+      stats: updatedStats,
+      shards: doc.shards + shardGain,
+      updatedAt: now,
+    })
+    .eq("userId", userId)
+    .eq("playerId", playerId)
+    .select("*")
+    .maybeSingle();
+  if (updateRes.error) throw updateRes.error;
 
   const rewardDoc = {
     userId,
@@ -424,13 +461,13 @@ async function handleCameraReward(req: VercelRequest, res: VercelResponse) {
     createdAt: now,
     updatedAt: now,
   };
-  await rewards.insertOne(rewardDoc);
-
-  const updated = await userPlayers.findOne({ userId, playerId });
+  const rewardInsertRes = await supabase.from(DB_TABLES.cameraScanRewards).insert(rewardDoc);
+  if (rewardInsertRes.error) throw rewardInsertRes.error;
+  const updated = updateRes.data;
   return res.status(200).json({
     ok: true,
-    reward: cleanDoc(rewardDoc),
-    userPlayer: updated ? cleanDoc(updated) : null,
+    reward: rewardDoc,
+    userPlayer: updated ?? null,
   });
 }
 
@@ -457,9 +494,15 @@ async function handleCultivationApply(req: VercelRequest, res: VercelResponse) {
   }
 
   const { userId, playerId, attributeDeltas, xpGain } = parsed.data;
-  const db = await getMongoDb();
-  const userPlayers = await getUserPlayerCollection(db);
-  const current = await userPlayers.findOne({ userId, playerId });
+  const supabase = getSupabaseAdminClient();
+  const currentRes = await supabase
+    .from(DB_TABLES.userPlayers)
+    .select("*")
+    .eq("userId", userId)
+    .eq("playerId", playerId)
+    .maybeSingle();
+  if (currentRes.error) throw currentRes.error;
+  const current = currentRes.data;
   if (!current) {
     return res.status(404).json({ error: "User player not found. Recruit first." });
   }
@@ -478,26 +521,27 @@ async function handleCultivationApply(req: VercelRequest, res: VercelResponse) {
     fanBond: clampLocalStat(current.stats.fanBond + attributeDeltas.fanBond),
   };
 
-  const now = new Date();
-  await userPlayers.updateOne(
-    { userId, playerId },
-    {
-      $set: {
-        level,
-        xp,
-        evolutionStage,
-        stats,
-        updatedAt: now,
-      },
-    }
-  );
-
-  const updated = await userPlayers.findOne({ userId, playerId });
+  const now = new Date().toISOString();
+  const updateRes = await supabase
+    .from(DB_TABLES.userPlayers)
+    .update({
+      level,
+      xp,
+      evolutionStage,
+      stats,
+      updatedAt: now,
+    })
+    .eq("userId", userId)
+    .eq("playerId", playerId)
+    .select("*")
+    .maybeSingle();
+  if (updateRes.error) throw updateRes.error;
+  const updated = updateRes.data;
   return res.status(200).json({
     ok: true,
     xpGained: xpGain,
     attributeDeltas,
-    data: updated ? cleanDoc(updated) : null,
+    data: updated ?? null,
   });
 }
 
@@ -535,7 +579,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(404).json({ error: "Not found" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown user router error";
+    const message = error instanceof Error ? error.message : JSON.stringify(error);
     return res.status(500).json({ error: message });
   }
 }

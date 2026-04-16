@@ -68,24 +68,33 @@ Placeholder icons use a simple 3×3 pixel grid on `#0b1020`, defined in `public/
 
 Connect the repo to Vercel and use the default settings for a Vite project (build command `npm run build`, output directory `dist`). The included `vercel.json` rewrites client-side routes to `index.html` while static files such as `sw.js`, `manifest.webmanifest`, and `icons/` are served from the build output.
 
-## MongoDB connection layer
+## Supabase connection layer
 
 Serverless API routes live under `api/` for Vercel.
 
-- Connection utility: `api/lib/mongodb.ts`
+- Connection utility: `lib/supabase.ts`
 - Health probe: `GET /api/health`
 - Player seed route: `POST /api/seed/players`
 
 Required environment variables:
 
-- `MONGODB_URI`
-- `MONGODB_DB` (optional if DB is already encoded in URI)
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- optional table name overrides:
+  - `SUPABASE_TABLE_PLAYERS`
+  - `SUPABASE_TABLE_LEADERBOARD`
+  - `SUPABASE_TABLE_ZONES`
+  - `SUPABASE_TABLE_USER_PLAYERS`
+  - `SUPABASE_TABLE_CAMERA_SCAN_REWARDS`
+  - `SUPABASE_TABLE_CHALLENGE_RESULTS`
+
+Before running the app, apply `supabase/schema.sql` in the Supabase SQL Editor to create the expected tables and indexes.
 
 ### Backend verification (local)
 
 With `npx vercel dev` running:
 
-1. Health + Mongo ping + collection counts:
+1. Health + Supabase connectivity + table counts:
    - `GET /api/health`
 2. Counts only:
    - `GET /api/health/counts`
@@ -98,7 +107,7 @@ curl http://localhost:3000/api/health
 
 Optional debug-safe logs (development only):
 
-- `DB_DEBUG_LOGS=1` for Mongo connection success/failure logs
+- `DB_DEBUG_LOGS=1` for Supabase client init logs
 - `API_DEBUG_LOGS=1` for API route error/empty-collection logs
 - `HEALTH_DEBUG_ENABLED=1` to keep health routes available when `NODE_ENV=production`
 

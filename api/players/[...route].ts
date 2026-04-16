@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getMongoDb } from "../../lib/mongodb";
-import { getPlayerCollection } from "../../lib/server/dbCollections";
+import { getSupabaseAdminClient } from "../../lib/supabase";
+import { DB_TABLES } from "../../lib/server/dbCollections";
 
 const playersQuerySchema = z.object({
   rarity: z.enum(["common", "rare", "epic", "legendary"]).optional(),
@@ -29,11 +29,6 @@ function toArrayValue(value: string | string[] | undefined): string | undefined 
   return Array.isArray(value) ? value[0] : value;
 }
 
-function cleanDoc<T extends Record<string, unknown>>(doc: T) {
-  const { _id, ...rest } = doc as T & { _id?: unknown };
-  return rest;
-}
-
 async function handleListPlayers(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -54,16 +49,16 @@ async function handleListPlayers(req: VercelRequest, res: VercelResponse) {
   }
 
   const { rarity, position, representedCountry } = parsed.data;
-  const filter: Record<string, unknown> = {};
-  if (rarity) filter.rarity = rarity;
-  if (position) filter.position = position;
-  if (representedCountry) filter.representedCountry = representedCountry;
-
-  const db = await getMongoDb();
-  const players = await getPlayerCollection(db);
-  const docs = await players.find(filter).sort({ updatedAt: -1 }).toArray();
+  const supabase = getSupabaseAdminClient();
+  let query = supabase.from(DB_TABLES.players).select("*").order("updatedAt", { ascending: false });
+  if (rarity) query = query.eq("rarity", rarity);
+  if (position) query = query.eq("position", position);
+  if (representedCountry) query = query.eq("representedCountry", representedCountry);
+  const { data, error } = await query;
+  if (error) throw error;
+  const docs = data ?? [];
   return res.status(200).json({
-    data: docs.map(cleanDoc),
+    data: docs,
     count: docs.length,
     filters: parsed.data,
   });
@@ -75,17 +70,29 @@ async function handleGetPlayerById(req: VercelRequest, res: VercelResponse, id: 
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const db = await getMongoDb();
-  const players = await getPlayerCollection(db);
-  const doc =
-    (await players.findOne({ externalId: id })) ??
-    (await players.findOne({ slug: id }));
+  const supabase = getSupabaseAdminClient();
+  let { data: doc, error } = await supabase
+    .from(DB_TABLES.players)
+    .select("*")
+    .eq("externalId", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!doc) {
+    const slugLookup = await supabase
+      .from(DB_TABLES.players)
+      .select("*")
+      .eq("slug", id)
+      .maybeSingle();
+    if (slugLookup.error) throw slugLookup.error;
+    doc = slugLookup.data;
+  }
 
   if (!doc) {
     return res.status(404).json({ error: "Player not found" });
   }
 
-  return res.status(200).json({ data: cleanDoc(doc) });
+  return res.status(200).json({ data: doc });
 }
 
 /**
@@ -103,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (parts.length === 1) return await handleGetPlayerById(req, res, parts[0]);
     return res.status(404).json({ error: "Not found" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown players router error";
+    const message = error instanceof Error ? error.message : JSON.stringify(error);
     return res.status(500).json({ error: message });
   }
 }

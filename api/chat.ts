@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getMongoDb } from "../lib/mongodb";
-import { getPlayerCollection } from "../lib/server/dbCollections";
+import { getSupabaseAdminClient } from "../lib/supabase";
+import { DB_TABLES } from "../lib/server/dbCollections";
 
 const chatSchema = z.object({
   playerId: z.string().min(1),
@@ -93,10 +93,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const { playerId, message } = parsed.data;
-    const db = await getMongoDb();
-    const players = await getPlayerCollection(db);
-    const player =
-      (await players.findOne({ externalId: playerId })) ?? (await players.findOne({ slug: playerId }));
+    const supabase = getSupabaseAdminClient();
+    const byExternal = await supabase
+      .from(DB_TABLES.players)
+      .select("*")
+      .eq("externalId", playerId)
+      .maybeSingle();
+    if (byExternal.error) throw byExternal.error;
+    const player = byExternal.data
+      ?? (
+        await (async () => {
+          const bySlug = await supabase
+            .from(DB_TABLES.players)
+            .select("*")
+            .eq("slug", playerId)
+            .maybeSingle();
+          if (bySlug.error) throw bySlug.error;
+          return bySlug.data;
+        })()
+      );
 
     if (!player) {
       return res.status(404).json({ error: "Player not found" });
@@ -112,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown chat error";
+    const message = error instanceof Error ? error.message : JSON.stringify(error);
     return res.status(500).json({ error: message });
   }
 }
