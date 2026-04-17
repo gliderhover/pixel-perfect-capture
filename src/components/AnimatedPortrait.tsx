@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { Player } from "@/data/mockData";
 
 interface AnimatedPortraitProps {
@@ -81,7 +81,13 @@ function initials(name: string) {
 
 const AnimatedPortrait = ({ player, size = "md", showMood = false, className = "" }: AnimatedPortraitProps) => {
   const [imgFailed, setImgFailed] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const mood = useMemo(() => moodEmoji(player.attributes), [player.attributes]);
+
+  useEffect(() => {
+    setImgFailed(false);
+    setImgLoaded(false);
+  }, [player.portrait]);
   const avgMorale = (player.attributes.confidence + player.attributes.morale) / 2;
   const ovr = player.stats.overall;
 
@@ -101,15 +107,21 @@ const AnimatedPortrait = ({ player, size = "md", showMood = false, className = "
           className={`relative ${sizeClasses[size]} overflow-hidden bg-muted ${imgRounded[size]} shadow-inner`}
         >
           {!imgFailed ? (
-            <img
-              src={player.portrait}
-              alt=""
-              className={`absolute inset-0 h-full w-full object-cover scale-[1.08] portrait-parallax-img ${imgRounded[size]}`}
-              loading="lazy"
-              decoding="async"
-              referrerPolicy="no-referrer"
-              onError={() => setImgFailed(true)}
-            />
+            <>
+              {!imgLoaded && (
+                <div className={`absolute inset-0 bg-gradient-to-br from-muted/80 to-muted/40 animate-pulse ${imgRounded[size]}`} />
+              )}
+              <img
+                src={player.portrait}
+                alt=""
+                className={`absolute inset-0 h-full w-full object-cover scale-[1.08] portrait-parallax-img ${imgRounded[size]} transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
+                loading="eager"
+                decoding="async"
+                referrerPolicy="no-referrer"
+                onLoad={() => setImgLoaded(true)}
+                onError={() => setImgFailed(true)}
+              />
+            </>
           ) : (
             <div
               className={`absolute inset-0 flex items-center justify-center bg-gradient-to-br ${rarityGradients[player.rarity]} font-black text-background/90 ${size === "xs" ? "text-xs" : size === "sm" ? "text-sm" : "text-lg"}`}

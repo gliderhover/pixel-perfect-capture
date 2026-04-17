@@ -108,7 +108,7 @@ const SquadScreen = () => {
       {/* Player Detail Sheet */}
       {detail && (
         <div className="fixed inset-0 z-[1350] bg-background/60 backdrop-blur-md" onClick={() => setSelectedPlayer(null)}>
-          <div className="bottom-sheet p-6 pb-8 animate-slide-up max-h-[75vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="bottom-sheet p-6 pb-8 animate-slide-up max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-5" />
 
             <div className="flex flex-col items-center mb-4 animate-encounter-reveal">
