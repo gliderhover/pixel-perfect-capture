@@ -237,8 +237,14 @@ type LocalTalentRuntime = ApiLocalTalentEncounter & {
   isExpiring: boolean;
 };
 
+const MapReadyWatcher = ({ onReady }: { onReady: () => void }) => {
+  useMapEvents({ load: onReady });
+  return null;
+};
+
 const ExploreScreen = () => {
   const { activePlayer, playersById, setExplorationZoneType } = useGameProgress();
+  const [mapReady, setMapReady] = useState(false);
   const [zones, setZones] = useState<MapZone[]>(mockZones);
   const [zonesLoading, setZonesLoading] = useState(false);
   const [zonesError, setZonesError] = useState<string | null>(null);
@@ -264,6 +270,8 @@ const ExploreScreen = () => {
   const lastCoordsRefreshRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastDiscoveryFetchRef = useRef(0);
   const [activeLocalEncounterId, setActiveLocalEncounterId] = useState<string | null>(null);
+
+  const handleMapReady = useCallback(() => setMapReady(true), []);
 
   const handleScan = () => {
     setScanning(true);
@@ -566,6 +574,7 @@ const ExploreScreen = () => {
           activePlayer={activePlayer}
         />
         <MapViewWatcher onViewChanged={handleMapViewChanged} />
+        <MapReadyWatcher onReady={handleMapReady} />
 
         {/* Real current-location marker */}
         {userCoords && (
@@ -669,6 +678,18 @@ const ExploreScreen = () => {
           />
         ))}
       </MapContainer>
+
+      {!mapReady && (
+        <div className="absolute inset-0 z-[1300] bg-background flex flex-col items-center justify-center gap-4 pointer-events-none">
+          <div className="text-5xl" style={{ animation: "bounce 1s infinite" }}>⚽</div>
+          <p className="text-sm text-primary font-black tracking-widest uppercase" style={{ animation: "pulse 2s infinite" }}>
+            Scouting the pitch…
+          </p>
+          <div className="h-1 w-32 rounded-full bg-muted overflow-hidden">
+            <div className="h-full bg-primary rounded-full" style={{ width: "60%", animation: "pulse 1.5s ease-in-out infinite" }} />
+          </div>
+        </div>
+      )}
 
       {/* Floating Mission Pill */}
       <div

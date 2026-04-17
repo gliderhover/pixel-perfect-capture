@@ -424,15 +424,29 @@ const PenaltyDuel = ({
               <p className="text-sm font-bold text-primary animate-fade-in">Diving {diveDir}…</p>
             )}
             {phase === "save" && (
-              <div className="animate-duel-result-slam">
+              <div className="animate-duel-result-slam text-center">
                 <p className="text-5xl font-black text-primary mb-2 tracking-tighter">SAVE!</p>
+                {diveDir && shotDir && (
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="text-[10px] px-2.5 py-1 rounded-full font-black bg-primary/20 text-primary">
+                      Dived {diveDir} · Ball {shotDir} ✓
+                    </span>
+                  </div>
+                )}
                 <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postSaveLine}"</p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
               </div>
             )}
             {phase === "goal" && (
-              <div className="animate-duel-result-slam">
+              <div className="animate-duel-result-slam text-center">
                 <p className="text-5xl font-black text-destructive mb-2 tracking-tighter">GOAL</p>
+                {diveDir && shotDir && diveDir !== shotDir && (
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="text-[10px] px-2.5 py-1 rounded-full font-black bg-destructive/20 text-destructive">
+                      Dived {diveDir} · Ball {shotDir}
+                    </span>
+                  </div>
+                )}
                 <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postGoalLine}"</p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
               </div>
