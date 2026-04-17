@@ -291,10 +291,21 @@ export async function sendPlayerChat(input: {
     livePulse?: string;
     competitiveStreak?: number;
     liveEventTitle?: string;
+    trainingPhase?: string;
+    trustBond?: number;
+    level?: number;
+    evolutionStage?: number;
+    recentDuelResult?: "save" | "goal" | "loss" | "win" | "none";
+    recentTrainingOutcome?: "strong" | "average" | "weak" | "none";
+    injuryState?: "none" | "minor" | "recovering";
+    justRecruited?: boolean;
   };
 }) {
   return postJson<{
     reply: string;
+    toneTag?: string;
+    moodTag?: string;
+    relationshipDelta?: number;
     attributeDeltas: {
       confidence: number;
       form: number;
@@ -302,6 +313,7 @@ export async function sendPlayerChat(input: {
       fanBond: number;
     };
     tags?: string[];
+    suggestedReplies?: string[];
     meta: { model: string };
   }>("/api/chat", input);
 }

@@ -63,6 +63,8 @@ const TrainScreen = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [zoneFlavorText, setZoneFlavorText] = useState<string | null>(null);
+  const [aiMoodLabel, setAiMoodLabel] = useState<string | null>(null);
+  const [contextualSuggested, setContextualSuggested] = useState<string[]>([]);
 
   const zoneName = explorationZoneType ? zoneFlavor[explorationZoneType] : null;
   const mood = useMemo(
@@ -112,6 +114,8 @@ const TrainScreen = () => {
         chips: [{ label: "Tip", val: "use quick actions", positive: true }],
       },
     ]);
+    setAiMoodLabel(null);
+    setContextualSuggested([]);
   }, [player.id, player.name, matchPhase, explorationZoneType, zoneName, competitiveStreak, zoneFlavorText]);
 
   useEffect(() => {
@@ -227,6 +231,15 @@ const TrainScreen = () => {
             matchPhase,
             livePulse,
             competitiveStreak,
+            liveEventTitle: zoneFlavorText ?? undefined,
+            trainingPhase: explorationZoneType === "training" ? "skill-drill" : "dialogue",
+            trustBond: player.bondTrust,
+            level: player.level,
+            evolutionStage: player.evolutionStage,
+            recentDuelResult: livePulse === "goal" ? "goal" : "none",
+            recentTrainingOutcome: explorationZoneType === "training" ? "average" : "none",
+            injuryState: explorationZoneType === "recovery" ? "recovering" : "none",
+            justRecruited: false,
           },
         });
         await applyCultivation({
@@ -237,7 +250,18 @@ const TrainScreen = () => {
         });
         await refreshOwnedPlayers();
 
+        setAiMoodLabel(chat.moodTag ?? null);
+        if (chat.suggestedReplies?.length) {
+          setContextualSuggested(chat.suggestedReplies.slice(0, 3));
+        }
+
         appendChat(text, chat.reply, [
+          ...(chat.toneTag
+            ? [{ label: "Tone", val: chat.toneTag, positive: true } as Chip]
+            : []),
+          ...(chat.moodTag
+            ? [{ label: "Mood", val: chat.moodTag, positive: true } as Chip]
+            : []),
           { label: "XP", val: "+6", positive: true },
           { label: "Confidence", val: `${chat.attributeDeltas.confidence >= 0 ? "+" : ""}${chat.attributeDeltas.confidence}`, positive: chat.attributeDeltas.confidence >= 0 },
           { label: "Form", val: `${chat.attributeDeltas.form >= 0 ? "+" : ""}${chat.attributeDeltas.form}`, positive: chat.attributeDeltas.form >= 0 },
@@ -266,6 +290,7 @@ const TrainScreen = () => {
     if (matchPhase === "postloss") return ["Bounce-back plan", "What went wrong?", ...base];
     return base;
   }, [explorationZoneType, matchPhase]);
+  const visibleSuggested = contextualSuggested.length > 0 ? contextualSuggested : suggested;
 
   const bondPct = Math.min(100, player.bondTrust);
   const xpPct = Math.min(100, (player.currentXp / player.xpToNext) * 100);
@@ -285,6 +310,11 @@ const TrainScreen = () => {
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[9px] font-bold text-muted-foreground">
                   {mood}
                 </span>
+                {aiMoodLabel && (
+                  <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[9px] font-bold text-primary">
+                    AI: {aiMoodLabel}
+                  </span>
+                )}
               </div>
               <p className="truncate text-[10px] text-muted-foreground">
                 {player.position} · {player.representedCountry} · {player.clubTeam}
@@ -385,7 +415,7 @@ const TrainScreen = () => {
 
       <div className="py-2">
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {suggested.map((prompt, i) => (
+          {visibleSuggested.map((prompt, i) => (
             <button
               key={i}
               type="button"
