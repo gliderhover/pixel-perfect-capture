@@ -10,7 +10,7 @@ interface CameraMissionProps {
   onChallenge?: (player: Player) => void;
 }
 
-type Phase = "scanning" | "found" | "empty";
+type Phase = "scanning" | "locking" | "found" | "empty";
 
 const RARITY_COLOR: Record<string, string> = {
   legendary: "#f59e0b",
@@ -62,7 +62,7 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
     if (phase !== "scanning") return;
     const interval = setInterval(() => {
       setScanPct((prev) => {
-        const next = Math.min(prev + 2.5, 100);
+        const next = Math.min(prev + 0.8, 100);
         if (next >= 100) clearInterval(interval);
         return next;
       });
@@ -73,7 +73,7 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
   // Transition after scan completes
   useEffect(() => {
     if (scanPct < 100) return;
-    const t = setTimeout(() => setPhase(nearestPlayer ? "found" : "empty"), 400);
+    const t = setTimeout(() => setPhase(nearestPlayer ? "locking" : "empty"), 400);
     return () => clearTimeout(t);
   }, [scanPct, nearestPlayer]);
 
@@ -219,7 +219,47 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
                 ? `${nearestPlayer.name} · ${nearestPlayer.representedCountry}`
                 : "Exploring nearby territory…"}
             </p>
+            <p className="text-white/25 text-[10px] mt-3 text-center px-8">
+              {nearestPlayer ? `${nearestPlayer.name} detected nearby` : "Walk around to discover nearby players"}
+            </p>
           </div>
+        </div>
+      )}
+
+      {/* LOCKING PHASE */}
+      {phase === "locking" && nearestPlayer && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {/* Targeting crosshair */}
+          <div className="relative mb-6" style={{ width: 120, height: 120 }}>
+            <div className="absolute inset-0 rounded-full animate-ping" style={{ background: `${rarityColor}20`, animationDuration: "1.2s" }} />
+            <div className="absolute inset-2 rounded-full" style={{ border: `2px solid ${rarityColor}`, boxShadow: `0 0 20px ${rarityColor}60` }} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <AnimatedPortrait player={nearestPlayer} size="md" />
+            </div>
+            {/* Corner brackets */}
+            {(["tl","tr","bl","br"] as const).map((pos) => (
+              <div key={pos} className="absolute w-5 h-5" style={{
+                top: pos[0]==="t" ? 0 : undefined, bottom: pos[0]==="b" ? 0 : undefined,
+                left: pos[1]==="l" ? 0 : undefined, right: pos[1]==="r" ? 0 : undefined,
+                borderTop: pos[0]==="t" ? `2px solid ${rarityColor}` : undefined,
+                borderBottom: pos[0]==="b" ? `2px solid ${rarityColor}` : undefined,
+                borderLeft: pos[1]==="l" ? `2px solid ${rarityColor}` : undefined,
+                borderRight: pos[1]==="r" ? `2px solid ${rarityColor}` : undefined,
+              }} />
+            ))}
+          </div>
+          <p className="text-white font-black text-sm tracking-widest uppercase mb-1" style={{ textShadow: `0 0 16px ${rarityColor}80` }}>
+            {nearestPlayer.name}
+          </p>
+          <p className="text-white/50 text-xs mb-6">{nearestPlayer.rarity} · {nearestPlayer.position}</p>
+          <button
+            type="button"
+            onClick={() => setPhase("found")}
+            className="px-8 py-3 rounded-2xl font-black text-sm active:scale-95 transition-transform"
+            style={{ background: `${rarityColor}25`, border: `1px solid ${rarityColor}60`, color: rarityColor, boxShadow: `0 0 20px ${rarityColor}30` }}
+          >
+            ⚡ Lock On
+          </button>
         </div>
       )}
 
@@ -313,7 +353,7 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
           >
             <p className="text-4xl mb-3">🔍</p>
             <p className="text-white font-black text-base mb-1">No players in range</p>
-            <p className="text-white/40 text-sm mb-4">Explore the map and tap a player marker to challenge them directly.</p>
+            <p className="text-white/40 text-sm mb-4">No players nearby right now. Move to a new spot — players appear as you explore different areas.</p>
             <button
               type="button"
               onClick={doClose}

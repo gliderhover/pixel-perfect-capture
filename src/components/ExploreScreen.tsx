@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Scan, ChevronRight, ZoomIn, ZoomOut, Crosshair } from "lucide-react";
-import { mockZones, mockMission, mockPlayerMarkers, mockNearbyActivity, zoneIcons, getPlayerById } from "@/data/mockData";
+import { mockZones, mockPlayerMarkers, zoneIcons, getPlayerById } from "@/data/mockData";
 import type { MapZone, Player } from "@/data/mockData";
 import { useGameProgress } from "@/context/GameProgressContext";
 import {
@@ -17,7 +17,6 @@ import {
 import PlayerEncounter from "./PlayerEncounter";
 import CameraMission from "./CameraMission";
 import ZoneExperience from "./ZoneExperience";
-import AnimatedPortrait from "./AnimatedPortrait";
 import "leaflet/dist/leaflet.css";
 
 // Fix default marker icon issue in webpack/vite
@@ -137,13 +136,11 @@ const MapControls = ({
   onLocationDenied,
   onLocationUnavailable,
   onLocatingChange,
-  activePlayer,
 }: {
   onLocationResolved: (lat: number, lng: number) => void;
   onLocationDenied: () => void;
   onLocationUnavailable: (message: string) => void;
   onLocatingChange: (locating: boolean) => void;
-  activePlayer: Player;
 }) => {
   const map = useMap();
   return (
@@ -196,13 +193,6 @@ const MapControls = ({
         <Crosshair className="w-4 h-4 text-foreground" />
         <span className="text-[10px] font-bold text-foreground">My location</span>
       </button>
-      <div className="glass-card-strong rounded-xl px-2 py-2 flex items-center gap-1.5 max-w-[7rem] mt-0.5">
-        <AnimatedPortrait player={activePlayer} size="xs" />
-        <div className="min-w-0">
-          <p className="text-[9px] font-black text-foreground truncate leading-tight">{activePlayer.name.split(" ").pop()}</p>
-          <p className="text-[8px] text-primary font-bold">OVR {activePlayer.stats.overall}</p>
-        </div>
-      </div>
     </div>
   );
 };
@@ -250,7 +240,7 @@ const MapReadyWatcher = ({ onReady }: { onReady: () => void }) => {
 };
 
 const ExploreScreen = () => {
-  const { activePlayer, playersById, setExplorationZoneType } = useGameProgress();
+  const { playersById, setExplorationZoneType } = useGameProgress();
   const [mapReady, setMapReady] = useState(false);
   const [zones, setZones] = useState<MapZone[]>(mockZones);
   const [zonesLoading, setZonesLoading] = useState(false);
@@ -584,7 +574,6 @@ const ExploreScreen = () => {
             setLocationNotice(message);
           }}
           onLocatingChange={setLocating}
-          activePlayer={activePlayer}
         />
         <MapViewWatcher onViewChanged={handleMapViewChanged} />
         <MapReadyWatcher onReady={handleMapReady} />
@@ -692,6 +681,18 @@ const ExploreScreen = () => {
         ))}
       </MapContainer>
 
+      {locating && (
+        <div className="absolute top-[max(16px,env(safe-area-inset-top,16px))] left-1/2 -translate-x-1/2 z-[1250] pointer-events-none">
+          <div className="flex items-center gap-2 glass-card-strong px-4 py-2 rounded-full">
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-[10px] font-bold text-foreground whitespace-nowrap">Finding your location…</span>
+          </div>
+          <div className="mt-1 h-0.5 w-full rounded-full overflow-hidden bg-muted">
+            <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "70%" }} />
+          </div>
+        </div>
+      )}
+
       {!mapReady && (
         <div className="absolute inset-0 z-[1300] bg-background flex flex-col items-center justify-center gap-4 pointer-events-none">
           <div className="text-5xl" style={{ animation: "bounce 1s infinite" }}>⚽</div>
@@ -703,38 +704,6 @@ const ExploreScreen = () => {
           </div>
         </div>
       )}
-
-      {/* Floating Mission Pill */}
-      <div
-        className="absolute z-[1210] mt-3 max-w-[min(13rem,calc(100vw-5rem))]"
-        style={{
-          top: "max(12px, env(safe-area-inset-top, 0px))",
-          left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)",
-        }}
-      >
-        <div className="glass-card-strong px-3 py-2.5 flex items-center gap-2.5 rounded-2xl">
-          <span className="text-base">🎯</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold text-foreground truncate">{mockMission.title}</p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <div className="w-14 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full"
-                  style={{ width: `${(mockMission.progress / mockMission.total) * 100}%` }}
-                />
-              </div>
-              <span className="text-[9px] text-primary font-black">{mockMission.progress}/{mockMission.total}</span>
-            </div>
-            {(() => {
-              if (locating) return <p className="text-[9px] text-primary mt-1">Locating…</p>;
-              if (zonesLoading) return <p className="text-[9px] text-muted-foreground mt-1">Loading…</p>;
-              if (locationNotice) return <p className="text-[9px] text-muted-foreground/80 mt-1 leading-tight">{locationNotice}</p>;
-              if (visibleLocalTalents.length > 0) return <p className="text-[9px] text-primary mt-1">{visibleLocalTalents.length} players nearby</p>;
-              return null;
-            })()}
-          </div>
-        </div>
-      </div>
 
       {/* Scan — above nav + activity strip; z above bottom nav */}
       <button
@@ -754,25 +723,6 @@ const ExploreScreen = () => {
           <Scan className={`w-7 h-7 text-primary-foreground ${scanning ? "animate-spin" : ""}`} />
         </div>
       </button>
-
-      {/* Nearby activity — dedicated strip above bottom nav */}
-      <div
-        className="absolute left-2 right-2 z-[1220] pointer-events-auto"
-        style={{ bottom: "var(--explore-activity-bottom)" }}
-      >
-        <div className="flex gap-1.5 overflow-x-auto py-0.5 scrollbar-hide min-h-[2.5rem] items-center">
-          {[
-            ...visibleLocalTalents.slice(0, 2).map((t) => `⚡ ${t.displayName}`),
-            ...nearbyPlaces.slice(0, 1).map((p) => `📍 ${p.name}`),
-            ...mockNearbyActivity.slice(0, 2),
-          ].slice(0, 4).map((activity, i) => (
-            <div key={i} className="glass-card px-2.5 py-1.5 shrink-0 flex items-center gap-1.5 rounded-xl">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
-              <span className="text-[9px] font-semibold text-foreground/80 whitespace-nowrap">{activity}</span>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Zone Bottom Sheet */}
       {selectedZone && !activeZone && (

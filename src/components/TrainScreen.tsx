@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Send, Heart, Flame, Shield, Sparkles } from "lucide-react";
+import { Send, Heart } from "lucide-react";
 import { useGameProgress } from "@/context/GameProgressContext";
 import AnimatedPortrait from "./AnimatedPortrait";
 import { cn } from "@/lib/utils";
@@ -78,8 +78,6 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
   const [zoneFlavorText, setZoneFlavorText] = useState<string | null>(null);
   const [aiMoodLabelByPlayerId, setAiMoodLabelByPlayerId] = useState<TextByPlayerState>({});
   const [contextualSuggestedByPlayerId, setContextualSuggestedByPlayerId] = useState<SuggestionsByPlayerState>({});
-  const [compactSwitcher, setCompactSwitcher] = useState(false);
-
   const zoneName = explorationZoneType ? zoneFlavor[explorationZoneType] : null;
   const ownedIds = useMemo(() => Object.keys(ownedPlayersById), [ownedPlayersById]);
   const chatCandidates = useMemo(
@@ -211,11 +209,17 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
         bannerTimerRef.current = setTimeout(() => setTrainingBanner(null), 4000);
       }
       onTrainingComplete?.();
+      const trainDeltas = {
+        Confidence: result.delta.confidence ?? 0,
+        Form: result.delta.form ?? 0,
+        Morale: result.delta.morale ?? 0,
+        "Fan bond": result.delta.fanBond ?? 0,
+      };
+      const topTrainAttr = Object.entries(trainDeltas)
+        .filter(([, v]) => v !== 0)
+        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
       const chips: Chip[] = [{ label: "XP", val: `+${result.xpGained}`, positive: true }];
-      if (result.delta.confidence) chips.push({ label: "Confidence", val: `+${result.delta.confidence}`, positive: true });
-      if (result.delta.form) chips.push({ label: "Form", val: `+${result.delta.form}`, positive: true });
-      if (result.delta.morale) chips.push({ label: "Morale", val: `+${result.delta.morale}`, positive: true });
-      if (result.delta.fanBond) chips.push({ label: "Fan bond", val: `+${result.delta.fanBond}`, positive: true });
+      if (topTrainAttr) chips.push({ label: topTrainAttr[0], val: `${topTrainAttr[1] >= 0 ? "+" : ""}${topTrainAttr[1]}`, positive: topTrainAttr[1] >= 0 });
       appendChat(userText, playerText, chips);
     } catch (error) {
       appendChat(userText, "Can't lock in the training update right now. Try again in a second.", [
@@ -228,7 +232,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
     }
   };
 
-  const sendTrainingChoice = (kind: "motivate" | "challenge" | "comfort" | "tactics" | "recovery") => {
+  const sendTrainingChoice = (kind: "motivate" | "tactics" | "recovery") => {
     const z = explorationZoneType;
     if (kind === "motivate") {
       void trainViaApi(
@@ -237,24 +241,6 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
         z === "rival"
           ? "I'm hunting that win — give me the next duel."
           : "You believing in me flips a switch. Let's go."
-      );
-      return;
-    }
-    if (kind === "challenge") {
-      void trainViaApi(
-        "confidence",
-        "Challenge me — be honest.",
-        "Alright coach, hit me with the hard truth. I'll answer with work."
-      );
-      return;
-    }
-    if (kind === "comfort") {
-      void trainViaApi(
-        "morale",
-        "I need calm today.",
-        matchPhase === "postloss"
-          ? "That one stung. Stay with me — we'll turn it into fuel."
-          : "I've got you. Breathe, reset, next play."
       );
       return;
     }
@@ -330,13 +316,14 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
           }));
         }
 
+        const attrDeltas = chat.attributeDeltas;
+        const topAttr = Object.entries({
+          Confidence: attrDeltas.confidence,
+          Form: attrDeltas.form,
+          Morale: attrDeltas.morale,
+          "Fan bond": attrDeltas.fanBond,
+        }).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
         appendChat(text, chat.reply, [
-          ...(chat.toneTag
-            ? [{ label: "Tone", val: chat.toneTag, positive: true } as Chip]
-            : []),
-          ...(chat.moodTag
-            ? [{ label: "Mood", val: chat.moodTag, positive: true } as Chip]
-            : []),
           { label: "XP", val: "+6", positive: true },
           { label: "Confidence", val: `${chat.attributeDeltas.confidence >= 0 ? "+" : ""}${chat.attributeDeltas.confidence}`, positive: chat.attributeDeltas.confidence >= 0 },
           { label: "Form", val: `${chat.attributeDeltas.form >= 0 ? "+" : ""}${chat.attributeDeltas.form}`, positive: chat.attributeDeltas.form >= 0 },
@@ -366,134 +353,52 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
   const xpPct = Math.min(100, (activeChatPlayer.currentXp / activeChatPlayer.xpToNext) * 100);
   const hasNoHiredPlayers = chatCandidates.length === 0;
 
-  useEffect(() => {
-    const evaluateCompact = () => {
-      const narrow = window.innerWidth <= 420;
-      const manyPlayers = chatCandidates.length >= 5;
-      setCompactSwitcher(narrow || manyPlayers);
-    };
-    evaluateCompact();
-    window.addEventListener("resize", evaluateCompact);
-    return () => window.removeEventListener("resize", evaluateCompact);
-  }, [chatCandidates.length]);
-
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] flex-col safe-page-bottom with-sidebar-pad pt-3 pr-4">
-      <div className="mb-2 space-y-2 px-0">
-        <div className="glass-card-strong rounded-2xl p-3">
-          <div className="flex items-start gap-3">
+      <div className="mb-2 px-0">
+        <div className="glass-card-strong rounded-2xl p-3 mb-2">
+          <div className="flex items-center gap-3">
             <AnimatedPortrait player={activeChatPlayer} size="md" showMood />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-sm font-black text-foreground">{activeChatPlayer.name}</p>
-                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[9px] font-black text-primary">
-                  Lv {activeChatPlayer.level}
-                </span>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[9px] font-bold text-muted-foreground">
-                  {mood}
-                </span>
-                {aiMoodLabel && (
-                  <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[9px] font-bold text-primary">
-                    AI: {aiMoodLabel}
-                  </span>
-                )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-sm font-black text-foreground truncate">{activeChatPlayer.name}</p>
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[9px] font-black text-primary shrink-0">Lv {activeChatPlayer.level}</span>
               </div>
-              <p className="truncate text-[10px] text-muted-foreground">
-                {activeChatPlayer.position} · {activeChatPlayer.representedCountry} · {activeChatPlayer.clubTeam}
-              </p>
+              <p className="text-[10px] text-muted-foreground truncate">{activeChatPlayer.position}</p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400"
-                  style={{ width: `${xpPct}%` }}
-                />
+                <div className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400" style={{ width: `${xpPct}%` }} />
               </div>
-              <p className="mt-1 text-[9px] text-muted-foreground">
-                XP {activeChatPlayer.currentXp}/{activeChatPlayer.xpToNext} · Evolution {activeChatPlayer.evolutionStage + 1}/4
-              </p>
-              {streakCount > 0 && (
-                <p className="mt-0.5 text-[9px] text-accent font-bold">🔥 {streakCount}-day streak</p>
-              )}
-              <div className="mt-2 flex items-center gap-2">
-                <Heart className="h-3.5 w-3.5 shrink-0 text-accent" />
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-accent/80 to-accent"
-                    style={{ width: `${bondPct}%` }}
-                  />
+              <div className="mt-1.5 flex items-center gap-2">
+                <Heart className="h-3 w-3 shrink-0 text-accent" />
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-gradient-to-r from-accent/80 to-accent" style={{ width: `${bondPct}%` }} />
                 </div>
-                <span className="text-[9px] font-black text-accent">Trust {bondPct}</span>
-              </div>
-              {chatCandidates.length > 1 && compactSwitcher && (
-                <div className="mt-2">
-                  <label className="text-[9px] font-bold text-muted-foreground">Chat with</label>
-                  <select
-                    value={currentPlayerId}
-                    onChange={(e) => setActiveChatPlayerId(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-border/35 bg-card/40 px-2 py-1.5 text-[11px] font-semibold text-foreground outline-none"
-                  >
-                    {chatCandidates.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} · Lv {p.level}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {chatCandidates.length > 1 && !compactSwitcher && (
-                <div className="mt-2 flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
-                  {chatCandidates.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setActiveChatPlayerId(p.id)}
-                      className={`shrink-0 rounded-xl border px-2 py-1 flex items-center gap-1.5 transition-colors ${
-                        p.id === currentPlayerId
-                          ? "border-primary/45 bg-primary/12"
-                          : "border-border/35 bg-card/35 hover:border-primary/30"
-                      }`}
-                    >
-                      <img src={p.portrait} alt="" className="w-5 h-5 rounded-full object-cover" />
-                      <span className="text-[9px] font-bold text-foreground whitespace-nowrap">{p.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {zoneName && (
-                  <span className="rounded-lg border border-primary/25 bg-primary/10 px-2 py-0.5 text-[9px] font-bold text-primary">
-                    Zone: {zoneName}
-                  </span>
-                )}
-                <span className="rounded-lg border border-border/40 bg-muted/40 px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
-                  {matchCopy[matchPhase] ?? matchCopy.idle}
-                </span>
-                {competitiveStreak >= 2 && (
-                  <span className="rounded-lg border border-accent/30 bg-accent/10 px-2 py-0.5 text-[9px] font-bold text-accent">
-                    Streak {competitiveStreak}
-                  </span>
-                )}
+                {streakCount > 0 && <span className="text-[9px] text-accent font-bold shrink-0">🔥 {streakCount}d</span>}
               </div>
             </div>
           </div>
+          {/* Player switcher - only if >1 player */}
+          {chatCandidates.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide mt-2.5 pt-2.5 border-t border-border/20">
+              {chatCandidates.map((p) => (
+                <button key={p.id} type="button" onClick={() => setActiveChatPlayerId(p.id)}
+                  className={`shrink-0 flex items-center gap-1.5 rounded-xl px-2 py-1 transition-colors ${p.id === currentPlayerId ? "bg-primary/15 border border-primary/30" : "bg-muted/30 border border-transparent"}`}>
+                  <img src={p.portrait} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
+                  <span className="text-[9px] font-bold text-foreground whitespace-nowrap">{p.name.split(" ").pop()}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {(
-            [
-              ["motivate", "Motivate", Sparkles],
-              ["challenge", "Challenge", Flame],
-              ["comfort", "Comfort", Heart],
-              ["tactics", "Tactics", Shield],
-              ["recovery", "Recovery", Heart],
-            ] as const
-          ).map(([key, label, Icon]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => sendTrainingChoice(key)}
-              className="flex items-center gap-1 rounded-xl border border-border/40 bg-card/50 px-2.5 py-1.5 text-[10px] font-bold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10"
-            >
-              <Icon className="h-3 w-3" />
+        {/* Action buttons - 3 only */}
+        <div className="flex gap-2">
+          {([
+            ["motivate", "⚡ Motivate"],
+            ["tactics", "📋 Tactics"],
+            ["recovery", "🔋 Recovery"],
+          ] as const).map(([key, label]) => (
+            <button key={key} type="button" onClick={() => sendTrainingChoice(key)}
+              className="flex-1 py-3 rounded-xl border border-border/40 bg-card/50 text-[10px] font-bold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10">
               {label}
             </button>
           ))}
