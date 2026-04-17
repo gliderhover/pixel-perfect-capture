@@ -10,7 +10,7 @@ interface CameraMissionProps {
   onChallenge?: (player: Player) => void;
 }
 
-type Phase = "scanning" | "locking" | "found" | "empty";
+type Phase = "scanning" | "locking" | "found" | "missed" | "empty";
 
 const RARITY_COLOR: Record<string, string> = {
   legendary: "#f59e0b",
@@ -23,6 +23,9 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
   const [phase, setPhase] = useState<Phase>("scanning");
   const [cameraError, setCameraError] = useState(false);
   const [scanPct, setScanPct] = useState(0);
+  // Capture the player at lock-on time so prop changes can't wipe it mid-flow
+  const [lockedPlayer, setLockedPlayer] = useState<Player | null>(null);
+  const [lockCountdown, setLockCountdown] = useState(8);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const { addFocusPoints } = useGameProgress();
@@ -70,18 +73,37 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
     return () => clearInterval(interval);
   }, [phase]);
 
-  // Transition after scan completes
+  // Transition after scan completes — capture player into local state immediately
   useEffect(() => {
     if (scanPct < 100) return;
-    const t = setTimeout(() => setPhase(nearestPlayer ? "locking" : "empty"), 400);
+    const t = setTimeout(() => {
+      if (nearestPlayer) {
+        setLockedPlayer(nearestPlayer);
+        setLockCountdown(8);
+        setPhase("locking");
+      } else {
+        setPhase("empty");
+      }
+    }, 400);
     return () => clearTimeout(t);
   }, [scanPct, nearestPlayer]);
 
+  // Countdown during locking phase — expire to "missed"
+  useEffect(() => {
+    if (phase !== "locking") return;
+    if (lockCountdown <= 0) {
+      setPhase("missed");
+      return;
+    }
+    const t = setTimeout(() => setLockCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, lockCountdown]);
+
   const doChallenge = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
-    if (nearestPlayer) {
+    if (lockedPlayer) {
       addFocusPoints(1);
-      onChallenge?.(nearestPlayer);
+      onChallenge?.(lockedPlayer);
     }
     onClose();
   };
@@ -91,7 +113,7 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
     onClose();
   };
 
-  const rarityColor = nearestPlayer ? (RARITY_COLOR[nearestPlayer.rarity] ?? RARITY_COLOR.common) : "#22c55e";
+  const rarityColor = lockedPlayer ? (RARITY_COLOR[lockedPlayer.rarity] ?? RARITY_COLOR.common) : "#22c55e";
   const scanY = `${25 + scanPct * 0.5}%`;
 
   return (
@@ -227,31 +249,53 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
       )}
 
       {/* LOCKING PHASE */}
-      {phase === "locking" && nearestPlayer && (
+      {phase === "locking" && lockedPlayer && (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {/* Targeting crosshair */}
-          <div className="relative mb-6" style={{ width: 120, height: 120 }}>
-            <div className="absolute inset-0 rounded-full animate-ping" style={{ background: `${rarityColor}20`, animationDuration: "1.2s" }} />
-            <div className="absolute inset-2 rounded-full" style={{ border: `2px solid ${rarityColor}`, boxShadow: `0 0 20px ${rarityColor}60` }} />
+          {/* Countdown ring */}
+          <div className="relative mb-2" style={{ width: 140, height: 140 }}>
+            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 140 140">
+              <circle cx="70" cy="70" r="64" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
+              <circle
+                cx="70" cy="70" r="64" fill="none"
+                stroke={lockCountdown <= 3 ? "#ef4444" : rarityColor}
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 64}`}
+                strokeDashoffset={`${2 * Math.PI * 64 * (1 - lockCountdown / 8)}`}
+                style={{ transition: "stroke-dashoffset 0.9s linear, stroke 0.3s" }}
+              />
+            </svg>
+            <div className="absolute inset-0 rounded-full animate-ping" style={{ background: `${rarityColor}15`, animationDuration: "1.2s" }} />
+            <div className="absolute inset-3 rounded-full" style={{ border: `2px solid ${rarityColor}`, boxShadow: `0 0 20px ${rarityColor}60` }} />
             <div className="absolute inset-0 flex items-center justify-center">
-              <AnimatedPortrait player={nearestPlayer} size="md" />
+              <AnimatedPortrait player={lockedPlayer} size="md" />
             </div>
             {/* Corner brackets */}
             {(["tl","tr","bl","br"] as const).map((pos) => (
               <div key={pos} className="absolute w-5 h-5" style={{
-                top: pos[0]==="t" ? 0 : undefined, bottom: pos[0]==="b" ? 0 : undefined,
-                left: pos[1]==="l" ? 0 : undefined, right: pos[1]==="r" ? 0 : undefined,
+                top: pos[0]==="t" ? 8 : undefined, bottom: pos[0]==="b" ? 8 : undefined,
+                left: pos[1]==="l" ? 8 : undefined, right: pos[1]==="r" ? 8 : undefined,
                 borderTop: pos[0]==="t" ? `2px solid ${rarityColor}` : undefined,
                 borderBottom: pos[0]==="b" ? `2px solid ${rarityColor}` : undefined,
                 borderLeft: pos[1]==="l" ? `2px solid ${rarityColor}` : undefined,
                 borderRight: pos[1]==="r" ? `2px solid ${rarityColor}` : undefined,
               }} />
             ))}
+            {/* Countdown number */}
+            <div
+              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center font-black text-sm"
+              style={{ background: lockCountdown <= 3 ? "#ef4444" : rarityColor, color: "#000", boxShadow: `0 0 10px ${lockCountdown <= 3 ? "#ef444460" : rarityColor + "60"}` }}
+            >
+              {lockCountdown}
+            </div>
           </div>
-          <p className="text-white font-black text-sm tracking-widest uppercase mb-1" style={{ textShadow: `0 0 16px ${rarityColor}80` }}>
-            {nearestPlayer.name}
+          <p className="text-white font-black text-sm tracking-widest uppercase mb-0.5 mt-4" style={{ textShadow: `0 0 16px ${rarityColor}80` }}>
+            {lockedPlayer.name}
           </p>
-          <p className="text-white/50 text-xs mb-6">{nearestPlayer.rarity} · {nearestPlayer.position}</p>
+          <p className="text-white/50 text-xs mb-1">{lockedPlayer.rarity} · {lockedPlayer.position}</p>
+          <p className="text-white/30 text-[10px] mb-6">
+            {lockCountdown <= 3 ? "⚠️ Escaping fast — tap now!" : "Tap fast before they slip away"}
+          </p>
           <button
             type="button"
             onClick={() => setPhase("found")}
@@ -263,8 +307,50 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
         </div>
       )}
 
+      {/* MISSED PHASE */}
+      {phase === "missed" && (
+        <div
+          className="absolute inset-x-0 bottom-0 px-4 animate-slide-up"
+          style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}
+        >
+          <div
+            className="rounded-3xl p-5 text-center"
+            style={{ background: "rgba(0,0,0,0.85)", border: "1px solid rgba(239,68,68,0.3)", backdropFilter: "blur(20px)" }}
+          >
+            <p className="text-4xl mb-3">💨</p>
+            <p className="text-white font-black text-base mb-1">
+              {lockedPlayer ? `${lockedPlayer.name.split(" ")[0]} got away!` : "Player escaped!"}
+            </p>
+            <p className="text-white/50 text-sm mb-1">
+              You were too slow to lock on. Players only stay in range for a few seconds.
+            </p>
+            <p className="text-white/30 text-xs mb-5">
+              Next time tap ⚡ Lock On as soon as the target appears.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setScanPct(0); setLockCountdown(8); setLockedPlayer(null); setPhase("scanning"); }}
+                className="flex-1 py-3 rounded-2xl font-bold text-sm"
+                style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}
+              >
+                Try Again
+              </button>
+              <button
+                type="button"
+                onClick={doClose}
+                className="flex-1 py-3 rounded-2xl font-bold text-sm"
+                style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.12)" }}
+              >
+                Back to Map
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FOUND PHASE */}
-      {phase === "found" && nearestPlayer && (
+      {phase === "found" && lockedPlayer && (
         <div
           className="absolute inset-x-0 bottom-0 px-4 animate-slide-up"
           style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}
@@ -279,7 +365,7 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
                 textShadow: `0 0 10px ${rarityColor}60`,
               }}
             >
-              ⚡ {nearestPlayer.rarity.toUpperCase()} PLAYER FOUND
+              ⚡ {lockedPlayer.rarity.toUpperCase()} PLAYER FOUND
             </div>
           </div>
 
@@ -292,36 +378,36 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
             }}
           >
             <div className="flex items-center gap-4 mb-4">
-              <AnimatedPortrait player={nearestPlayer} size="lg" />
+              <AnimatedPortrait player={lockedPlayer} size="lg" />
               <div className="flex-1 min-w-0">
                 <p
                   className="text-[10px] font-black uppercase tracking-widest mb-0.5"
                   style={{ color: rarityColor }}
                 >
-                  {nearestPlayer.rarity}
+                  {lockedPlayer.rarity}
                 </p>
-                <h2 className="text-xl font-black text-white leading-tight truncate">{nearestPlayer.name}</h2>
+                <h2 className="text-xl font-black text-white leading-tight truncate">{lockedPlayer.name}</h2>
                 <p className="text-sm mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.55)" }}>
-                  {nearestPlayer.position} · {nearestPlayer.representedCountry}
+                  {lockedPlayer.position} · {lockedPlayer.representedCountry}
                 </p>
                 <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.35)" }}>
-                  {nearestPlayer.clubTeam}
+                  {lockedPlayer.clubTeam}
                 </p>
               </div>
               <div className="text-center shrink-0">
-                <p className="text-2xl font-black text-white">{nearestPlayer.stats.overall}</p>
+                <p className="text-2xl font-black text-white">{lockedPlayer.stats.overall}</p>
                 <p className="text-[9px] font-bold" style={{ color: "rgba(255,255,255,0.4)" }}>
                   OVR
                 </p>
               </div>
             </div>
 
-            {(nearestPlayer as Player & { catchphrases?: string[] }).catchphrases?.[0] && (
+            {(lockedPlayer as Player & { catchphrases?: string[] }).catchphrases?.[0] && (
               <p
                 className="text-xs italic text-center mb-4 px-2 leading-relaxed"
                 style={{ color: "rgba(255,255,255,0.45)" }}
               >
-                "{(nearestPlayer as Player & { catchphrases?: string[] }).catchphrases![0]}"
+                "{(lockedPlayer as Player & { catchphrases?: string[] }).catchphrases![0]}"
               </p>
             )}
 
