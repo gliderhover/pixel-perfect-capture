@@ -30,12 +30,13 @@ interface FoldableSidebarProps {
   active: AppTab;
   onNavigate: (tab: AppTab) => void;
   onOpenRules: () => void;
+  badgeTabs?: ReadonlySet<string>;
 }
 
 const COLLAPSED = 52;
 const EXPANDED = 200;
 
-const FoldableSidebar = ({ active, onNavigate, onOpenRules }: FoldableSidebarProps) => {
+const FoldableSidebar = ({ active, onNavigate, onOpenRules, badgeTabs }: FoldableSidebarProps) => {
   const [expanded, setExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -115,7 +116,12 @@ const FoldableSidebar = ({ active, onNavigate, onOpenRules }: FoldableSidebarPro
                     : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 )}
               >
-                <Icon className={cn("h-[18px] w-[18px] shrink-0", isActive && "drop-shadow-[0_0_8px_hsl(var(--primary)/0.45)]")} />
+                <div className="relative">
+                  <Icon className={cn("h-[18px] w-[18px] shrink-0", isActive && "drop-shadow-[0_0_8px_hsl(var(--primary)/0.45)]")} />
+                  {!isRules && badgeTabs?.has(id) && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent border border-background" />
+                  )}
+                </div>
                 {expanded && <span className="truncate text-xs font-bold">{label}</span>}
               </button>
             );

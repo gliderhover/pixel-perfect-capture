@@ -51,7 +51,12 @@ function moodLabel(
   return "Finding rhythm";
 }
 
-const TrainScreen = () => {
+interface TrainScreenProps {
+  onTrainingComplete?: () => void;
+  streakCount?: number;
+}
+
+const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) => {
   const {
     userId,
     activePlayer: player,
@@ -65,6 +70,8 @@ const TrainScreen = () => {
   } = useGameProgress();
 
   const chatRef = useRef<HTMLDivElement>(null);
+  const [trainingBanner, setTrainingBanner] = useState<{ xpGained: number; deltas: Record<string, number> } | null>(null);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [activeChatPlayerId, setActiveChatPlayerId] = useState<string | null>(null);
   const [messagesByPlayerId, setMessagesByPlayerId] = useState<ChatThreadState>({});
   const [input, setInput] = useState("");
@@ -93,6 +100,10 @@ const TrainScreen = () => {
     () => moodLabel(activeChatPlayer.attributes, livePulse, matchPhase),
     [activeChatPlayer.attributes, livePulse, matchPhase]
   );
+
+  useEffect(() => {
+    return () => { if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current); };
+  }, []);
 
   useEffect(() => {
     if (chatCandidates.length === 0) {
@@ -189,6 +200,17 @@ const TrainScreen = () => {
     try {
       const result = await trainUserPlayer(userId, activeChatPlayer.id, mode);
       await refreshOwnedPlayers();
+      const deltas: Record<string, number> = {};
+      if (result.delta.confidence) deltas["Confidence"] = result.delta.confidence;
+      if (result.delta.form) deltas["Form"] = result.delta.form;
+      if (result.delta.morale) deltas["Morale"] = result.delta.morale;
+      if (result.delta.fanBond) deltas["Fan Bond"] = result.delta.fanBond;
+      if (Object.keys(deltas).length > 0 || result.xpGained) {
+        setTrainingBanner({ xpGained: result.xpGained, deltas });
+        if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+        bannerTimerRef.current = setTimeout(() => setTrainingBanner(null), 4000);
+      }
+      onTrainingComplete?.();
       const chips: Chip[] = [{ label: "XP", val: `+${result.xpGained}`, positive: true }];
       if (result.delta.confidence) chips.push({ label: "Confidence", val: `+${result.delta.confidence}`, positive: true });
       if (result.delta.form) chips.push({ label: "Form", val: `+${result.delta.form}`, positive: true });
@@ -388,6 +410,9 @@ const TrainScreen = () => {
               <p className="mt-1 text-[9px] text-muted-foreground">
                 XP {activeChatPlayer.currentXp}/{activeChatPlayer.xpToNext} · Evolution {activeChatPlayer.evolutionStage + 1}/4
               </p>
+              {streakCount > 0 && (
+                <p className="mt-0.5 text-[9px] text-accent font-bold">🔥 {streakCount}-day streak</p>
+              )}
               <div className="mt-2 flex items-center gap-2">
                 <Heart className="h-3.5 w-3.5 shrink-0 text-accent" />
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -475,12 +500,33 @@ const TrainScreen = () => {
         </div>
       </div>
 
+      {trainingBanner && (
+        <div className="glass-card-strong rounded-2xl p-3 mb-2 border border-primary/30 animate-fade-in-up">
+          <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-2">
+            ✓ Training session complete · +{trainingBanner.xpGained} XP
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(trainingBanner.deltas).map(([attr, delta]) => (
+              <span
+                key={attr}
+                className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                  delta > 0 ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"
+                }`}
+              >
+                {attr} {delta > 0 ? "+" : ""}{delta}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {hasNoHiredPlayers ? (
         <div className="flex-1 flex items-center justify-center px-2">
-          <div className="glass-card-strong rounded-2xl p-4 text-center max-w-sm">
-            <p className="text-sm font-black text-foreground">No recruited players yet</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Recruit a player from Explore to unlock companion chat.
+          <div className="glass-card-strong rounded-2xl p-6 text-center max-w-sm">
+            <div className="text-4xl mb-3">🏆</div>
+            <p className="text-sm font-black text-foreground mb-1">No players recruited yet</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed mb-4">
+              Head to the Explore map, save a penalty duel, and your first player will appear here ready to chat.
             </p>
           </div>
         </div>
