@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getPlayerById, mockLiveEvents } from "@/data/mockData";
 import { Zap, Trophy, Gift, Clock, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
-import { fetchLiveEvents, type ApiLiveEvent } from "@/lib/apiService";
+import { fetchLiveDialogue, fetchLiveEvents, type ApiLiveEvent } from "@/lib/apiService";
 
 const eventConfig: Record<string, {
   icon: typeof Zap;
@@ -67,6 +67,7 @@ const LiveScreen = () => {
   const [events, setEvents] = useState<ApiLiveEvent[]>(mockLiveEvents);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveDialogue, setLiveDialogue] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +93,27 @@ const LiveScreen = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadDialogue = async () => {
+      const top = events[0];
+      if (!top) return;
+      try {
+        const result = await fetchLiveDialogue({
+          title: top.title,
+          description: top.description,
+        });
+        if (!cancelled) setLiveDialogue(result.line);
+      } catch {
+        if (!cancelled) setLiveDialogue(null);
+      }
+    };
+    void loadDialogue();
+    return () => {
+      cancelled = true;
+    };
+  }, [events]);
+
   return (
     <div className="min-h-screen safe-page-bottom with-sidebar-pad pt-6 pr-4">
       {/* Header */}
@@ -100,6 +122,9 @@ const LiveScreen = () => {
         <p className="text-xs text-muted-foreground mt-1">Real-time match impact</p>
         {loading && <p className="text-[10px] text-muted-foreground mt-1">Loading live events...</p>}
         {error && <p className="text-[10px] text-destructive mt-1">Live events API unavailable, using fallback</p>}
+        {liveDialogue && (
+          <p className="text-[11px] text-primary mt-1 italic">{liveDialogue}</p>
+        )}
       </div>
 
       {/* Live Match Banner */}

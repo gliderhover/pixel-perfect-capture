@@ -2,6 +2,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
 import { getSupabaseAdminClient } from "../lib/supabase.js";
 import { DB_TABLES } from "../lib/server/dbCollections.js";
+import { GeminiServiceError, requestGeminiJson } from "../lib/gemini.js";
+import { buildChatPrompt } from "../lib/server/promptTemplates.js";
 
 const chatSchema = z.object({
   playerId: z.string().min(1),
@@ -22,6 +24,26 @@ const chatSchema = z.object({
       })
     )
     .optional(),
+  context: z
+    .object({
+      zoneType: z.string().optional(),
+      matchPhase: z.string().optional(),
+      livePulse: z.string().optional(),
+      competitiveStreak: z.number().int().optional(),
+      liveEventTitle: z.string().optional(),
+    })
+    .optional(),
+});
+
+const geminiChatResponseSchema = z.object({
+  reply: z.string().min(1),
+  attributeDeltas: z.object({
+    confidence: z.number().int().min(-3).max(3),
+    form: z.number().int().min(-3).max(3),
+    morale: z.number().int().min(-3).max(3),
+    fanBond: z.number().int().min(-3).max(3),
+  }),
+  tags: z.array(z.string().min(1)).max(3).optional(),
 });
 
 type Delta = {
@@ -92,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { playerId, message } = parsed.data;
+    const { playerId, message, history, state, context } = parsed.data;
     const supabase = getSupabaseAdminClient();
     const byExternal = await supabase
       .from(DB_TABLES.players)
@@ -117,13 +139,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: "Player not found" });
     }
 
-    const attributeDeltas = computeDeltas(message);
-    const reply = makeReply(player.name, message, attributeDeltas);
+    const fallbackDeltas = computeDeltas(message);
+    let attributeDeltas = fallbackDeltas;
+    let reply = makeReply(player.name, message, fallbackDeltas);
+    let tags: string[] = [];
+    let model = "deterministic-rules-v1";
+
+    const prompt = buildChatPrompt({
+      context: {
+        playerName: player.name,
+        playerPosition: player.position,
+        playerCountry: player.representedCountry,
+        rarity: player.rarity,
+        personality: "confident football pro with respect for coach direction",
+        matchPhase: context?.matchPhase,
+        zoneType: context?.zoneType ?? null,
+        livePulse: context?.livePulse,
+        liveEventTitle: context?.liveEventTitle ?? null,
+        playerState: state,
+      },
+      history: history ?? [],
+      userMessage: message,
+    });
+
+    try {
+      const aiResponse = await requestGeminiJson<z.infer<typeof geminiChatResponseSchema>>(
+        [
+          { role: "system", content: prompt.system },
+          { role: "user", content: prompt.user },
+        ],
+        { temperature: 0.8, maxOutputTokens: 180 }
+      );
+      const validated = geminiChatResponseSchema.safeParse(aiResponse);
+      if (validated.success) {
+        reply = validated.data.reply;
+        attributeDeltas = validated.data.attributeDeltas;
+        tags = validated.data.tags ?? [];
+        model = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+      }
+    } catch (error) {
+      if (!(error instanceof GeminiServiceError)) {
+        // ignore unknown AI failures, fallback to deterministic response
+      }
+    }
+
     return res.status(200).json({
       reply,
       attributeDeltas,
+      tags,
       meta: {
-        model: "deterministic-rules-v1",
+        model,
       },
     });
   } catch (error) {

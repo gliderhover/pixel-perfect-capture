@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { Player } from "@/data/mockData";
 import { rarityDifficulty } from "@/data/keeperItems";
 import AnimatedPortrait from "./AnimatedPortrait";
+import { fetchDuelLine } from "@/lib/apiService";
 
 type Direction = "left" | "center" | "right";
 type Phase = "intro" | "ready" | "runup" | "shoot" | "dive" | "save" | "goal";
@@ -49,7 +50,9 @@ const PenaltyDuel = ({
   const [shotDir, setShotDir] = useState<Direction | null>(null);
   const [diveDir, setDiveDir] = useState<Direction | null>(null);
   const [hint, setHint] = useState<Direction | null>(null);
-  const [preLine] = useState(() => getPreDuelLine(player));
+  const [preLine, setPreLine] = useState(() => getPreDuelLine(player));
+  const [postSaveLine, setPostSaveLine] = useState(() => getPostSaveLine(player));
+  const [postGoalLine, setPostGoalLine] = useState(() => getPostGoalLine(player));
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const chosenRef = useRef<Direction>("center");
   const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
@@ -67,6 +70,50 @@ const PenaltyDuel = ({
       return () => clearTimeout(t);
     }
   }, [phase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPreLine = async () => {
+      try {
+        const ai = await fetchDuelLine({
+          playerName: player.name,
+          playerPosition: player.position,
+          rarity: player.rarity,
+        });
+        if (!cancelled && ai.line) setPreLine(ai.line);
+      } catch {
+        // keep deterministic fallback
+      }
+    };
+    void loadPreLine();
+    return () => {
+      cancelled = true;
+    };
+  }, [player.name, player.position, player.rarity]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPostLine = async (result: "save" | "goal") => {
+      try {
+        const ai = await fetchDuelLine({
+          playerName: player.name,
+          playerPosition: player.position,
+          rarity: player.rarity,
+          result,
+        });
+        if (cancelled || !ai.line) return;
+        if (result === "save") setPostSaveLine(ai.line);
+        else setPostGoalLine(ai.line);
+      } catch {
+        // keep deterministic fallback
+      }
+    };
+    if (phase === "save") void loadPostLine("save");
+    if (phase === "goal") void loadPostLine("goal");
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, player.name, player.position, player.rarity]);
 
   const pickDirection = useCallback((): Direction => {
     const dirs: Direction[] = ["left", "center", "right"];
@@ -379,14 +426,14 @@ const PenaltyDuel = ({
             {phase === "save" && (
               <div className="animate-duel-result-slam">
                 <p className="text-5xl font-black text-primary mb-2 tracking-tighter">SAVE!</p>
-                <p className="text-sm text-foreground/80 italic max-w-[250px]">"{getPostSaveLine(player)}"</p>
+                <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postSaveLine}"</p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
               </div>
             )}
             {phase === "goal" && (
               <div className="animate-duel-result-slam">
                 <p className="text-5xl font-black text-destructive mb-2 tracking-tighter">GOAL</p>
-                <p className="text-sm text-foreground/80 italic max-w-[250px]">"{getPostGoalLine(player)}"</p>
+                <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postGoalLine}"</p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
               </div>
             )}

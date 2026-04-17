@@ -80,6 +80,9 @@ Required environment variables:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `GEMINI_API_KEY` (server-only, used by `/api/chat` and AI flavor endpoints)
+- optional: `GEMINI_MODEL` (default: `gemini-2.5-flash`)
+- optional: `PLACES_PROVIDER` (currently `mock` fallback provider)
 - optional table name overrides:
   - `SUPABASE_TABLE_PLAYERS`
   - `SUPABASE_TABLE_LEADERBOARD`
@@ -159,6 +162,21 @@ Expected:
 - Zones feed: `http://localhost:3000/api/zones`
 - Leaderboard feed: `http://localhost:3000/api/leaderboard?scope=global`
 - Demo owned players: `http://localhost:3000/api/user-players?userId=demo-user`
+
+### AI + discovery verification URLs
+
+- Chat route (Gemini-backed with fallback): `POST http://localhost:3000/api/chat`
+- Duel line flavor: `POST http://localhost:3000/api/duel-line`
+- Zone flavor text: `GET http://localhost:3000/api/zone-flavor?zoneType=training&zoneName=Hudson%20Elite%20Ground`
+- Live dialogue line: `GET http://localhost:3000/api/live-dialogue?title=Derby&description=Late%20winner`
+- Nearby hidden prospects: `GET http://localhost:3000/api/discovery/players-nearby?lat=40.75&lng=-73.98&radiusKm=5`
+- Nearby football places: `GET http://localhost:3000/api/discovery/places-nearby?lat=40.75&lng=-73.98&radiusKm=5`
+
+### Notes on nearby data sources
+
+- **Hidden prospects** are MVP generated local-talent encounters (not real-world verified local player data).
+- **Nearby football places** currently use a server-side mock provider abstraction (`PLACES_PROVIDER=mock`).
+- If you later add a real places API, keep the key server-side and implement it behind the places provider helper.
 
 Optional custom base URL:
 

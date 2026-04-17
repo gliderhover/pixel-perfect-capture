@@ -3,7 +3,7 @@ import { Send, Heart, Flame, Shield, Sparkles } from "lucide-react";
 import { useGameProgress } from "@/context/GameProgressContext";
 import AnimatedPortrait from "./AnimatedPortrait";
 import { cn } from "@/lib/utils";
-import { applyCultivation, sendPlayerChat, trainUserPlayer } from "@/lib/apiService";
+import { applyCultivation, fetchZoneFlavor, sendPlayerChat, trainUserPlayer } from "@/lib/apiService";
 
 type Chip = { label: string; val: string; positive?: boolean };
 
@@ -62,12 +62,33 @@ const TrainScreen = () => {
   const chatRef = useRef<HTMLDivElement>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [zoneFlavorText, setZoneFlavorText] = useState<string | null>(null);
 
   const zoneName = explorationZoneType ? zoneFlavor[explorationZoneType] : null;
   const mood = useMemo(
     () => moodLabel(player.attributes, livePulse, matchPhase),
     [player.attributes, livePulse, matchPhase]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadFlavor = async () => {
+      if (!explorationZoneType || !zoneName) {
+        setZoneFlavorText(null);
+        return;
+      }
+      try {
+        const response = await fetchZoneFlavor(explorationZoneType, zoneName);
+        if (!cancelled) setZoneFlavorText(response.flavor);
+      } catch {
+        if (!cancelled) setZoneFlavorText(null);
+      }
+    };
+    void loadFlavor();
+    return () => {
+      cancelled = true;
+    };
+  }, [explorationZoneType, zoneName]);
 
   useEffect(() => {
     const zoneHint = zoneName
@@ -82,15 +103,16 @@ const TrainScreen = () => {
         }`
       : "";
     const streakHint = competitiveStreak >= 3 ? " Love the run we're on." : "";
+    const aiHint = zoneFlavorText ? ` ${zoneFlavorText}` : "";
     setMessages([
       {
         id: 1,
         from: "player",
-        text: `Coach — ${player.name} here. ${matchCopy[matchPhase] ?? matchCopy.idle}.${zoneHint}${streakHint}`,
+        text: `Coach — ${player.name} here. ${matchCopy[matchPhase] ?? matchCopy.idle}.${zoneHint}${streakHint}${aiHint}`,
         chips: [{ label: "Tip", val: "use quick actions", positive: true }],
       },
     ]);
-  }, [player.id, player.name, matchPhase, explorationZoneType, zoneName, competitiveStreak]);
+  }, [player.id, player.name, matchPhase, explorationZoneType, zoneName, competitiveStreak, zoneFlavorText]);
 
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
@@ -200,6 +222,12 @@ const TrainScreen = () => {
             fanBond: player.attributes.fanBond,
           },
           history,
+          context: {
+            zoneType: explorationZoneType ?? undefined,
+            matchPhase,
+            livePulse,
+            competitiveStreak,
+          },
         });
         await applyCultivation({
           userId,
@@ -215,6 +243,11 @@ const TrainScreen = () => {
           { label: "Form", val: `${chat.attributeDeltas.form >= 0 ? "+" : ""}${chat.attributeDeltas.form}`, positive: chat.attributeDeltas.form >= 0 },
           { label: "Morale", val: `${chat.attributeDeltas.morale >= 0 ? "+" : ""}${chat.attributeDeltas.morale}`, positive: chat.attributeDeltas.morale >= 0 },
           { label: "Fan bond", val: `${chat.attributeDeltas.fanBond >= 0 ? "+" : ""}${chat.attributeDeltas.fanBond}`, positive: chat.attributeDeltas.fanBond >= 0 },
+          ...(chat.tags ?? []).slice(0, 2).map((tag) => ({
+            label: "AI",
+            val: tag,
+            positive: true,
+          })),
         ]);
       } catch (error) {
         appendChat(text, "Connection dropped. I couldn't process that message yet.", [

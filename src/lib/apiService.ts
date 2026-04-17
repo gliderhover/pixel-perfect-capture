@@ -63,6 +63,41 @@ export type ApiLiveEvent = {
   timeAgo: string;
 };
 
+export type ApiLocalTalentEncounter = {
+  id: string;
+  basePlayerId: string;
+  displayName: string;
+  portrait: string;
+  age: number;
+  position: string;
+  hometown: string;
+  skillStyle: string;
+  rarity: "common" | "rare" | "epic";
+  scoutingDescription: string;
+  lat: number;
+  lng: number;
+  source: "local-talent";
+  tags: string[];
+};
+
+export type ApiNearbyPlace = {
+  id: string;
+  name: string;
+  type: "soccer-field" | "gym" | "soccer-club" | "sports-bar";
+  lat: number;
+  lng: number;
+  distanceKm: number;
+  mappedZoneType:
+    | "training"
+    | "recovery"
+    | "fan-arena"
+    | "rival"
+    | "pressure"
+    | "stadium"
+    | "mission";
+  mappedZoneLabel: string;
+};
+
 export type ApiUserPlayer = {
   userId: string;
   playerId: string;
@@ -233,6 +268,13 @@ export async function sendPlayerChat(input: {
     fanBond: number;
   };
   history?: { role: "user" | "assistant"; content: string }[];
+  context?: {
+    zoneType?: string;
+    matchPhase?: string;
+    livePulse?: string;
+    competitiveStreak?: number;
+    liveEventTitle?: string;
+  };
 }) {
   return postJson<{
     reply: string;
@@ -242,8 +284,57 @@ export async function sendPlayerChat(input: {
       morale: number;
       fanBond: number;
     };
+    tags?: string[];
     meta: { model: string };
   }>("/api/chat", input);
+}
+
+export async function fetchDuelLine(input: {
+  playerName: string;
+  playerPosition: string;
+  rarity?: "common" | "rare" | "epic" | "legendary";
+  result?: "save" | "goal";
+}) {
+  return postJson<{ line: string; tags?: string[]; source: string }>("/api/duel-line", input);
+}
+
+export async function fetchZoneFlavor(zoneType: string, zoneName: string, liveEventTitle?: string) {
+  const search = new URLSearchParams({ zoneType, zoneName });
+  if (liveEventTitle) search.set("liveEventTitle", liveEventTitle);
+  return fetchJson<{ flavor: string; tags?: string[]; source: string }>(`/api/zone-flavor?${search.toString()}`);
+}
+
+export async function fetchLiveDialogue(params?: { title?: string; description?: string; playerName?: string }) {
+  const search = new URLSearchParams();
+  if (params?.title) search.set("title", params.title);
+  if (params?.description) search.set("description", params.description);
+  if (params?.playerName) search.set("playerName", params.playerName);
+  const qs = search.toString();
+  return fetchJson<{ line: string; tags?: string[]; source: string }>(
+    qs ? `/api/live-dialogue?${qs}` : "/api/live-dialogue"
+  );
+}
+
+export async function fetchNearbyLocalTalents(lat: number, lng: number, radiusKm = 5) {
+  const search = new URLSearchParams({
+    lat: String(lat),
+    lng: String(lng),
+    radiusKm: String(radiusKm),
+  });
+  return fetchJson<ApiListResponse<ApiLocalTalentEncounter> & { source: string; note?: string }>(
+    `/api/discovery/players-nearby?${search.toString()}`
+  );
+}
+
+export async function fetchNearbyFootballPlaces(lat: number, lng: number, radiusKm = 5) {
+  const search = new URLSearchParams({
+    lat: String(lat),
+    lng: String(lng),
+    radiusKm: String(radiusKm),
+  });
+  return fetchJson<ApiListResponse<ApiNearbyPlace> & { source: string }>(
+    `/api/discovery/places-nearby?${search.toString()}`
+  );
 }
 
 export async function applyCultivation(input: {

@@ -3,6 +3,15 @@ import { z } from "zod";
 import { getSupabaseAdminClient } from "../../lib/supabase.js";
 import { DB_TABLES } from "../../lib/server/dbCollections.js";
 import { mockLiveEvents } from "../../src/data/mockData.js";
+import { GeminiServiceError, requestGeminiJson } from "../../lib/gemini.js";
+import {
+  buildDuelPrompt,
+  buildLiveEventDialoguePrompt,
+  buildLocalTalentPrompt,
+  buildZoneFlavorPrompt,
+} from "../../lib/server/promptTemplates.js";
+import { buildLocalTalentEncounters } from "../../lib/server/localTalentDiscovery.js";
+import { getNearbyFootballPlaces } from "../../lib/server/placesProvider.js";
 
 const leaderboardQuerySchema = z.object({
   scope: z.enum(["global", "region"]).optional(),
@@ -17,6 +26,31 @@ const leaderboardRecalcBodySchema = z.object({
 
 const zonesQuerySchema = z.object({
   region: z.string().min(1).optional(),
+});
+
+const duelLineBodySchema = z.object({
+  playerName: z.string().min(1),
+  playerPosition: z.string().min(1),
+  rarity: z.enum(["common", "rare", "epic", "legendary"]).optional(),
+  result: z.enum(["save", "goal"]).optional(),
+});
+
+const zoneFlavorQuerySchema = z.object({
+  zoneType: z.string().min(1),
+  zoneName: z.string().min(1),
+  liveEventTitle: z.string().optional(),
+});
+
+const liveDialogueQuerySchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  playerName: z.string().optional(),
+});
+
+const geoQuerySchema = z.object({
+  lat: z.coerce.number().min(-85).max(85),
+  lng: z.coerce.number().min(-180).max(180),
+  radiusKm: z.coerce.number().min(0.5).max(25).optional(),
 });
 
 const DEV_HEALTH_ALLOW =
@@ -59,6 +93,33 @@ function getRouteParts(req: VercelRequest) {
 function toArrayValue(value: string | string[] | undefined): string | undefined {
   if (!value) return undefined;
   return Array.isArray(value) ? value[0] : value;
+}
+
+function toArrayNumber(value: string | string[] | undefined): number | undefined {
+  const single = toArrayValue(value);
+  if (!single) return undefined;
+  const n = Number(single);
+  if (Number.isNaN(n)) return undefined;
+  return n;
+}
+
+function fallbackZoneFlavor(zoneType: string, zoneName: string) {
+  const byType: Record<string, string> = {
+    training: `${zoneName} sharpens first touch and tempo.`,
+    recovery: `${zoneName} helps legs reset and minds stay calm.`,
+    "fan-arena": `${zoneName} is buzzing with crowd energy.`,
+    rival: `${zoneName} brings out hard duels and pride.`,
+    pressure: `${zoneName} forces composure under stress.`,
+    stadium: `${zoneName} feels like matchday under lights.`,
+    mission: `${zoneName} hides quick opportunities for smart scouts.`,
+  };
+  return byType[zoneType] ?? `${zoneName} offers a focused football vibe.`;
+}
+
+function fallbackDuelLine(playerName: string, result?: "save" | "goal") {
+  if (result === "save") return `${playerName}: Fair play, that was elite keeping.`;
+  if (result === "goal") return `${playerName}: Net ripples. Next duel is yours to win.`;
+  return `${playerName}: Penalty spot. Nerves on. Let's see your hands.`;
 }
 
 async function loadCounts() {
@@ -296,6 +357,219 @@ async function handleLiveEvents(req: VercelRequest, res: VercelResponse) {
   });
 }
 
+async function handleDuelLine(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+  const parsed = duelLineBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid request body", details: parsed.error.flatten() });
+  }
+
+  const { playerName, playerPosition, rarity, result } = parsed.data;
+  let line = fallbackDuelLine(playerName, result);
+  let tags: string[] = ["fallback"];
+  let source = "fallback";
+
+  try {
+    const prompt = buildDuelPrompt({
+      context: { playerName, playerPosition, rarity, result },
+    });
+    const ai = await requestGeminiJson<{ line: string; tags?: string[] }>(
+      [
+        { role: "system", content: prompt.system },
+        { role: "user", content: prompt.user },
+      ],
+      { temperature: 0.9, maxOutputTokens: 90 }
+    );
+    if (typeof ai.line === "string" && ai.line.trim()) {
+      line = ai.line.trim();
+      tags = Array.isArray(ai.tags) ? ai.tags.slice(0, 3) : [];
+      source = "gemini";
+    }
+  } catch (error) {
+    if (!(error instanceof GeminiServiceError)) throw error;
+  }
+
+  return res.status(200).json({ line, tags, source });
+}
+
+async function handleZoneFlavor(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+  const parsed = zoneFlavorQuerySchema.safeParse({
+    zoneType: toArrayValue(req.query.zoneType),
+    zoneName: toArrayValue(req.query.zoneName),
+    liveEventTitle: toArrayValue(req.query.liveEventTitle),
+  });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid query parameters", details: parsed.error.flatten() });
+  }
+  const { zoneType, zoneName, liveEventTitle } = parsed.data;
+  let flavor = fallbackZoneFlavor(zoneType, zoneName);
+  let tags: string[] = ["fallback"];
+  let source = "fallback";
+
+  try {
+    const prompt = buildZoneFlavorPrompt({ zoneType, zoneName, liveEventTitle });
+    const ai = await requestGeminiJson<{ flavor: string; tags?: string[] }>(
+      [
+        { role: "system", content: prompt.system },
+        { role: "user", content: prompt.user },
+      ],
+      { temperature: 0.8, maxOutputTokens: 80 }
+    );
+    if (typeof ai.flavor === "string" && ai.flavor.trim()) {
+      flavor = ai.flavor.trim();
+      tags = Array.isArray(ai.tags) ? ai.tags.slice(0, 3) : [];
+      source = "gemini";
+    }
+  } catch (error) {
+    if (!(error instanceof GeminiServiceError)) throw error;
+  }
+
+  return res.status(200).json({ flavor, tags, source });
+}
+
+async function handleLiveDialogue(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+  const parsed = liveDialogueQuerySchema.safeParse({
+    title: toArrayValue(req.query.title),
+    description: toArrayValue(req.query.description),
+    playerName: toArrayValue(req.query.playerName),
+  });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid query parameters", details: parsed.error.flatten() });
+  }
+  const seedEvent = mockLiveEvents[0];
+  const title = parsed.data.title ?? seedEvent?.title ?? "Live football update";
+  const description = parsed.data.description ?? seedEvent?.description ?? "Momentum swings fast.";
+  const playerName = parsed.data.playerName;
+  let line = playerName
+    ? `${playerName} tracks this moment closely.`
+    : "Crowd noise rises as momentum shifts.";
+  let tags: string[] = ["fallback"];
+  let source = "fallback";
+
+  try {
+    const prompt = buildLiveEventDialoguePrompt({
+      liveEventTitle: title,
+      liveEventDescription: description,
+      playerName,
+    });
+    const ai = await requestGeminiJson<{ line: string; tags?: string[] }>(
+      [
+        { role: "system", content: prompt.system },
+        { role: "user", content: prompt.user },
+      ],
+      { temperature: 0.85, maxOutputTokens: 80 }
+    );
+    if (typeof ai.line === "string" && ai.line.trim()) {
+      line = ai.line.trim();
+      tags = Array.isArray(ai.tags) ? ai.tags.slice(0, 3) : [];
+      source = "gemini";
+    }
+  } catch (error) {
+    if (!(error instanceof GeminiServiceError)) throw error;
+  }
+
+  return res.status(200).json({ line, tags, source });
+}
+
+async function handleNearbyLocalTalents(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const parsed = geoQuerySchema.safeParse({
+    lat: toArrayNumber(req.query.lat),
+    lng: toArrayNumber(req.query.lng),
+    radiusKm: toArrayNumber(req.query.radiusKm),
+  });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid query parameters", details: parsed.error.flatten() });
+  }
+
+  const { lat, lng, radiusKm } = parsed.data;
+  const supabase = getSupabaseAdminClient();
+  const playersRes = await supabase
+    .from(DB_TABLES.players)
+    .select("externalId,name,portrait,age,position,representedCountry,rarity")
+    .order("updatedAt", { ascending: false })
+    .limit(60);
+  if (playersRes.error) throw playersRes.error;
+  const players = playersRes.data ?? [];
+
+  const rows = buildLocalTalentEncounters({
+    lat,
+    lng,
+    radiusKm,
+    players,
+    limit: 4,
+  });
+
+  // Optional AI polish: keep fallback content if generation fails.
+  for (let i = 0; i < rows.length; i += 1) {
+    try {
+      const row = rows[i]!;
+      const prompt = buildLocalTalentPrompt({
+        hometown: row.hometown,
+        position: row.position,
+        skillStyle: row.skillStyle,
+        age: row.age,
+      });
+      const ai = await requestGeminiJson<{ scoutingDescription: string; tags?: string[] }>(
+        [
+          { role: "system", content: prompt.system },
+          { role: "user", content: prompt.user },
+        ],
+        { temperature: 0.85, maxOutputTokens: 100 }
+      );
+      if (typeof ai.scoutingDescription === "string" && ai.scoutingDescription.trim()) {
+        row.scoutingDescription = ai.scoutingDescription.trim();
+      }
+      if (Array.isArray(ai.tags)) row.tags = ai.tags.slice(0, 4);
+    } catch (error) {
+      if (!(error instanceof GeminiServiceError)) throw error;
+    }
+  }
+
+  return res.status(200).json({
+    data: rows,
+    count: rows.length,
+    source: "local-talent-mvp",
+    note: "Generated under-the-radar prospects, not real-world verified local player data.",
+  });
+}
+
+async function handleNearbyPlaces(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+  const parsed = geoQuerySchema.safeParse({
+    lat: toArrayNumber(req.query.lat),
+    lng: toArrayNumber(req.query.lng),
+    radiusKm: toArrayNumber(req.query.radiusKm),
+  });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid query parameters", details: parsed.error.flatten() });
+  }
+  const places = await getNearbyFootballPlaces(parsed.data);
+  return res.status(200).json({
+    data: places,
+    count: places.length,
+    source: "mock-provider",
+  });
+}
+
 /**
  * Grouped game router.
  * Supports:
@@ -319,6 +593,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (path === "zones") return await handleZones(req, res);
     if (path === "live-events") return await handleLiveEvents(req, res);
+    if (path === "duel-line") return await handleDuelLine(req, res);
+    if (path === "zone-flavor") return await handleZoneFlavor(req, res);
+    if (path === "live-dialogue") return await handleLiveDialogue(req, res);
+    if (path === "discovery/players-nearby" || path === "discovery-players-nearby") {
+      return await handleNearbyLocalTalents(req, res);
+    }
+    if (path === "discovery/places-nearby" || path === "discovery-places-nearby") {
+      return await handleNearbyPlaces(req, res);
+    }
 
     return res.status(404).json({ error: "Not found" });
   } catch (error) {

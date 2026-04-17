@@ -5,7 +5,15 @@ import { Scan, ChevronRight, ZoomIn, ZoomOut, Crosshair } from "lucide-react";
 import { mockZones, mockMission, mockPlayerMarkers, mockNearbyActivity, zoneIcons, getPlayerById } from "@/data/mockData";
 import type { MapZone, Player } from "@/data/mockData";
 import { useGameProgress } from "@/context/GameProgressContext";
-import { fetchZones, type ApiZone } from "@/lib/apiService";
+import {
+  fetchNearbyFootballPlaces,
+  fetchNearbyLocalTalents,
+  fetchZoneFlavor,
+  fetchZones,
+  type ApiLocalTalentEncounter,
+  type ApiNearbyPlace,
+  type ApiZone,
+} from "@/lib/apiService";
 import PlayerEncounter from "./PlayerEncounter";
 import CameraMission from "./CameraMission";
 import ZoneExperience from "./ZoneExperience";
@@ -50,7 +58,7 @@ const mapControlLeft = {
   left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)",
 } as const;
 
-const MapControls = () => {
+const MapControls = ({ onLocationResolved }: { onLocationResolved: (lat: number, lng: number) => void }) => {
   const map = useMap();
   return (
     <div className="absolute top-28 z-[1210] flex flex-col gap-1.5" style={mapControlLeft}>
@@ -74,6 +82,7 @@ const MapControls = () => {
           navigator.geolocation?.getCurrentPosition(
             (pos) => {
               const { latitude: lat, longitude: lng } = pos.coords;
+              onLocationResolved(lat, lng);
               const [[s, w], [n, e]] = NA_MAX_BOUNDS;
               const inside = lat >= s && lat <= n && lng >= w && lng <= e;
               if (inside) map.flyTo([lat, lng], 14, { duration: 1.5 });
@@ -90,6 +99,8 @@ const MapControls = () => {
   );
 };
 
+type SelectedPlace = ApiNearbyPlace | null;
+
 const ExploreScreen = () => {
   const { activePlayer, playersById, setExplorationZoneType } = useGameProgress();
   const [zones, setZones] = useState<MapZone[]>(mockZones);
@@ -101,6 +112,13 @@ const ExploreScreen = () => {
   const [scanning, setScanning] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [activeZone, setActiveZone] = useState<MapZone | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<SelectedPlace>(null);
+  const [zoneFlavorText, setZoneFlavorText] = useState<string | null>(null);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [localTalents, setLocalTalents] = useState<ApiLocalTalentEncounter[]>([]);
+  const [nearbyPlaces, setNearbyPlaces] = useState<ApiNearbyPlace[]>([]);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+
   const handleScan = () => {
     setScanning(true);
     setTimeout(() => {
@@ -112,6 +130,53 @@ const ExploreScreen = () => {
   useEffect(() => {
     setExplorationZoneType(selectedZone?.type ?? null);
   }, [selectedZone, setExplorationZoneType]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadFlavor = async () => {
+      if (!selectedZone) {
+        setZoneFlavorText(null);
+        return;
+      }
+      try {
+        const result = await fetchZoneFlavor(selectedZone.type, selectedZone.name);
+        if (!cancelled) setZoneFlavorText(result.flavor);
+      } catch {
+        if (!cancelled) setZoneFlavorText(null);
+      }
+    };
+    void loadFlavor();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedZone]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadNearbyDiscovery = async () => {
+      if (!userCoords) return;
+      setDiscoveryError(null);
+      try {
+        const [talentResult, placesResult] = await Promise.all([
+          fetchNearbyLocalTalents(userCoords.lat, userCoords.lng, 5),
+          fetchNearbyFootballPlaces(userCoords.lat, userCoords.lng, 5),
+        ]);
+        if (cancelled) return;
+        setLocalTalents(talentResult.data);
+        setNearbyPlaces(placesResult.data);
+      } catch (error) {
+        if (!cancelled) {
+          setDiscoveryError(error instanceof Error ? error.message : "Nearby discovery unavailable");
+          setLocalTalents([]);
+          setNearbyPlaces([]);
+        }
+      }
+    };
+    void loadNearbyDiscovery();
+    return () => {
+      cancelled = true;
+    };
+  }, [userCoords]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +238,7 @@ const ExploreScreen = () => {
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution=""
         />
-        <MapControls />
+        <MapControls onLocationResolved={(lat, lng) => setUserCoords({ lat, lng })} />
 
         {/* Zone markers */}
         {zones.map((zone) => (
@@ -206,6 +271,45 @@ const ExploreScreen = () => {
             />
           );
         })}
+
+        {/* Nearby hidden prospects */}
+        {localTalents.map((talent) => (
+          <Marker
+            key={talent.id}
+            position={[talent.lat, talent.lng]}
+            icon={createPlayerMarkerIcon(talent.portrait)}
+            eventHandlers={{
+              click: () => {
+                const base = playersById[talent.basePlayerId] ?? getPlayerById(talent.basePlayerId);
+                if (!base) return;
+                setEncounterPlayer({
+                  ...base,
+                  name: talent.displayName,
+                  representedCountry: talent.hometown,
+                  traits: [...base.traits.slice(0, 2), "Under-the-radar Prospect"],
+                });
+                setSelectedZone(null);
+                setSelectedPlace(null);
+              },
+            }}
+          />
+        ))}
+
+        {/* Nearby football places */}
+        {nearbyPlaces.map((place) => (
+          <Marker
+            key={place.id}
+            position={[place.lat, place.lng]}
+            icon={createZoneIcon(place.mappedZoneType)}
+            eventHandlers={{
+              click: () => {
+                setSelectedPlace(place);
+                setSelectedZone(null);
+                setEncounterPlayer(null);
+              },
+            }}
+          />
+        ))}
       </MapContainer>
 
       {/* Floating Mission Pill */}
@@ -237,6 +341,9 @@ const ExploreScreen = () => {
             )}
             {!zonesLoading && !zonesError && !usingMockZones && zones.length > 0 && (
               <p className="text-[9px] text-primary/80 mt-1">Live zone feed</p>
+            )}
+            {discoveryError && (
+              <p className="text-[9px] text-destructive mt-1">Nearby discovery unavailable, using defaults</p>
             )}
           </div>
         </div>
@@ -281,7 +388,10 @@ const ExploreScreen = () => {
         style={{ bottom: "var(--explore-activity-bottom)" }}
       >
         <div className="flex gap-1.5 overflow-x-auto py-0.5 scrollbar-hide min-h-[2.5rem] items-center">
-          {mockNearbyActivity.map((activity, i) => (
+          {[...mockNearbyActivity,
+            ...localTalents.slice(0, 2).map((t) => `Hidden prospect nearby: ${t.displayName}`),
+            ...nearbyPlaces.slice(0, 2).map((p) => `${p.name} → ${p.mappedZoneLabel}`),
+          ].map((activity, i) => (
             <div key={i} className="glass-card px-2.5 py-1.5 shrink-0 flex items-center gap-1.5 rounded-xl">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
               <span className="text-[9px] font-semibold text-foreground/80 whitespace-nowrap">{activity}</span>
@@ -306,6 +416,9 @@ const ExploreScreen = () => {
               <div>
                 <h3 className="text-lg font-black text-foreground">{selectedZone.name}</h3>
                 <p className="text-sm text-primary font-semibold">{selectedZone.benefit}</p>
+                {zoneFlavorText && (
+                  <p className="text-xs text-muted-foreground mt-1 max-w-[14rem]">{zoneFlavorText}</p>
+                )}
               </div>
             </div>
             <button
@@ -320,6 +433,32 @@ const ExploreScreen = () => {
       {/* Zone Experience */}
       {activeZone && (
         <ZoneExperience zone={activeZone} onClose={() => { setActiveZone(null); setSelectedZone(null); }} />
+      )}
+
+      {/* Nearby Place Bottom Sheet */}
+      {selectedPlace && (
+        <div className="fixed inset-0 z-[1300] bg-background/40 backdrop-blur-sm" onClick={() => setSelectedPlace(null)}>
+          <div
+            className="absolute bottom-0 left-0 right-0 p-5 rounded-t-3xl bg-background/95 backdrop-blur-xl border-t border-border/20 animate-slide-up"
+            style={{ paddingBottom: "max(1.75rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem))" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-2xl">
+                {zoneIcons[selectedPlace.mappedZoneType]}
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-foreground">{selectedPlace.name}</h3>
+                <p className="text-sm text-primary font-semibold">{selectedPlace.mappedZoneLabel}</p>
+                <p className="text-xs text-muted-foreground mt-1">{selectedPlace.distanceKm.toFixed(1)} km away</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Nearby {selectedPlace.type.replace("-", " ")} converted into a {selectedPlace.mappedZoneLabel.toLowerCase()}.
+            </p>
+          </div>
+        </div>
       )}
 
       {/* Player Encounter */}
