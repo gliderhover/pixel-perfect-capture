@@ -325,7 +325,10 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
         }).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
         appendChat(text, chat.reply, [
           { label: "XP", val: "+6", positive: true },
-          ...(topAttr ? [{ label: topAttr[0], val: `${topAttr[1] >= 0 ? "+" : ""}${topAttr[1]}`, positive: topAttr[1] >= 0 }] : []),
+          { label: "Confidence", val: `${chat.attributeDeltas.confidence >= 0 ? "+" : ""}${chat.attributeDeltas.confidence}`, positive: chat.attributeDeltas.confidence >= 0 },
+          { label: "Form", val: `${chat.attributeDeltas.form >= 0 ? "+" : ""}${chat.attributeDeltas.form}`, positive: chat.attributeDeltas.form >= 0 },
+          { label: "Morale", val: `${chat.attributeDeltas.morale >= 0 ? "+" : ""}${chat.attributeDeltas.morale}`, positive: chat.attributeDeltas.morale >= 0 },
+          { label: "Fan bond", val: `${chat.attributeDeltas.fanBond >= 0 ? "+" : ""}${chat.attributeDeltas.fanBond}`, positive: chat.attributeDeltas.fanBond >= 0 },
         ]);
       } catch (error) {
         appendChat(text, "Connection dropped. I couldn't process that message yet.", [

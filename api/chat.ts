@@ -103,11 +103,65 @@ function computeDeltas(message: string): Delta {
 function makeReply(name: string, message: string, deltas: Delta): string {
   const mood =
     deltas.confidence + deltas.morale >= 3
-      ? "I'm locked in."
+      ? "I'm locked in. The work feels good and the rhythm is there."
       : deltas.morale < 0
-        ? "Tough moment. I reset quick."
-        : "I hear you.";
-  return `${name}: ${mood} Next rep, cleaner execution.`;
+        ? "Tough moment, but I reset quick. That is part of the level."
+        : "I hear you, and I appreciate that support.";
+  return `${mood}\n\nRight now it is about clean details, sharp decisions, and being ready when the match opens up.\n\nNext rep, cleaner execution.`;
+}
+
+function wordCount(text: string) {
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function wantsShortReply(message: string) {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("short answer")
+    || lower.includes("brief")
+    || lower.includes("one line")
+    || lower.includes("quick answer")
+  );
+}
+
+function stripSpeakerPrefix(reply: string, playerName: string) {
+  return reply
+    .trim()
+    .replace(new RegExp(`^${playerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[:\\-—]\\s*`, "i"), "")
+    .trim();
+}
+
+function enrichIfTooShort(reply: string, message: string): string {
+  const trimmed = reply.trim();
+  if (!trimmed || wantsShortReply(message) || wordCount(trimmed) >= 28) return trimmed;
+
+  const lower = message.toLowerCase();
+  const bridge = lower.includes("world cup")
+    ? "The World Cup changes the feeling of every session. Small details become everything."
+    : lower.includes("confidence")
+      ? "Confidence is built in the work, not in talking. You feel it when the touches are clean and the legs are alive."
+      : lower.includes("rival") || lower.includes("opponent")
+        ? "Those matches are emotional, so the key is staying colder than the noise and sharper in the big moments."
+        : lower.includes("improve") || lower.includes("better")
+          ? "There is always another level in the details, and that is where I spend most of my focus."
+          : lower.includes("injur") || lower.includes("body") || lower.includes("recover")
+            ? "At this level, the body tells the truth, so recovery and sharpness matter every day."
+            : "Big games are decided by small actions, and that is what I keep coming back to.";
+  const close = lower.includes("?")
+    ? "If you want, I can go deeper on that."
+    : "That is the level.";
+  return `${trimmed}\n\n${bridge}\n\n${close}`;
+}
+
+function formatIntoShortParagraphs(reply: string) {
+  const trimmed = reply.trim();
+  if (!trimmed || trimmed.includes("\n\n")) return trimmed;
+  const sentences = trimmed.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [trimmed];
+  if (sentences.length < 3) return trimmed;
+  return `${sentences[0]} ${sentences[1]}\n\n${sentences.slice(2).join(" ")}`.trim();
 }
 
 function tokenize(text: string) {
@@ -290,7 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (validated.success) {
         const candidate = validated.data.reply.trim();
         if (candidate && !looksRepetitive(candidate, mergedRecentAssistant)) {
-          reply = candidate;
+          reply = formatIntoShortParagraphs(enrichIfTooShort(stripSpeakerPrefix(candidate, player.name), message));
           attributeDeltas = validated.data.attributeDeltas;
           tags = validated.data.tags ?? [];
           toneTag = validated.data.toneTag ?? toneTag;
@@ -311,7 +365,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           const retry = geminiChatResponseSchema.safeParse(retryResponse);
           if (retry.success && retry.data.reply.trim()) {
-            reply = retry.data.reply.trim();
+            reply = formatIntoShortParagraphs(enrichIfTooShort(stripSpeakerPrefix(retry.data.reply.trim(), player.name), message));
             attributeDeltas = retry.data.attributeDeltas;
             tags = retry.data.tags ?? [];
             toneTag = retry.data.toneTag ?? toneTag;
