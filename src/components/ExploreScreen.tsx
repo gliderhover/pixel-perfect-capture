@@ -48,17 +48,39 @@ const createPlayerMarkerIcon = (portrait: string) => {
   });
 };
 
+const createUserLocationIcon = () =>
+  L.divIcon({
+    className: "custom-player-marker",
+    html: `<div style="position:relative;width:18px;height:18px;">
+      <span style="position:absolute;inset:-9px;border-radius:9999px;background:rgba(22,163,74,0.28);animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></span>
+      <span style="position:absolute;inset:0;border-radius:9999px;background:rgb(34,197,94);border:2px solid rgba(255,255,255,0.95);box-shadow:0 0 0 2px rgba(34,197,94,0.25);"></span>
+    </div>
+    <style>@keyframes ping{75%,100%{transform:scale(1.9);opacity:0}}</style>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+
 const NA_FALLBACK_CENTER: [number, number] = [40, -98];
-const NA_MAX_BOUNDS: [[number, number], [number, number]] = [
-  [8, -175],
-  [72, -48],
+const WORLD_MAX_BOUNDS: [[number, number], [number, number]] = [
+  [-85, -180],
+  [85, 180],
 ];
 
 const mapControlLeft = {
   left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)",
 } as const;
 
-const MapControls = ({ onLocationResolved }: { onLocationResolved: (lat: number, lng: number) => void }) => {
+const MapControls = ({
+  onLocationResolved,
+  onLocationDenied,
+  onLocationUnavailable,
+  onLocatingChange,
+}: {
+  onLocationResolved: (lat: number, lng: number) => void;
+  onLocationDenied: () => void;
+  onLocationUnavailable: (message: string) => void;
+  onLocatingChange: (locating: boolean) => void;
+}) => {
   const map = useMap();
   return (
     <div className="absolute top-28 z-[1210] flex flex-col gap-1.5" style={mapControlLeft}>
@@ -79,21 +101,36 @@ const MapControls = ({ onLocationResolved }: { onLocationResolved: (lat: number,
       <button
         type="button"
         onClick={() => {
+          if (!navigator.geolocation) {
+            onLocationUnavailable("Location services are unavailable on this device.");
+            return;
+          }
+          onLocatingChange(true);
           navigator.geolocation?.getCurrentPosition(
             (pos) => {
+              onLocatingChange(false);
               const { latitude: lat, longitude: lng } = pos.coords;
               onLocationResolved(lat, lng);
-              const [[s, w], [n, e]] = NA_MAX_BOUNDS;
-              const inside = lat >= s && lat <= n && lng >= w && lng <= e;
-              if (inside) map.flyTo([lat, lng], 14, { duration: 1.5 });
-              else map.flyTo(NA_FALLBACK_CENTER, 5, { duration: 1.2 });
+              map.flyTo([lat, lng], 15, { duration: 1.1 });
             },
-            () => map.flyTo(NA_FALLBACK_CENTER, 5, { duration: 1.2 })
+            (error) => {
+              onLocatingChange(false);
+              if (error.code === 1) {
+                onLocationDenied();
+              } else if (error.code === 2) {
+                onLocationUnavailable("Couldn't detect your location right now. Try again in open sky.");
+              } else {
+                onLocationUnavailable("Location request timed out. Try again.");
+              }
+              map.flyTo(NA_FALLBACK_CENTER, 5, { duration: 1.2 });
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 }
           );
         }}
-        className="w-9 h-9 rounded-xl glass-card-strong flex items-center justify-center active:scale-90 transition-transform"
+        className="h-10 min-w-[7rem] rounded-xl glass-card-strong px-2.5 flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
       >
         <Crosshair className="w-4 h-4 text-foreground" />
+        <span className="text-[10px] font-bold text-foreground">My location</span>
       </button>
     </div>
   );
@@ -115,6 +152,8 @@ const ExploreScreen = () => {
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace>(null);
   const [zoneFlavorText, setZoneFlavorText] = useState<string | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [localTalents, setLocalTalents] = useState<ApiLocalTalentEncounter[]>([]);
   const [nearbyPlaces, setNearbyPlaces] = useState<ApiNearbyPlace[]>([]);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
@@ -227,7 +266,7 @@ const ExploreScreen = () => {
         zoom={4}
         minZoom={3}
         maxZoom={18}
-        maxBounds={NA_MAX_BOUNDS}
+        maxBounds={WORLD_MAX_BOUNDS}
         maxBoundsViscosity={0.85}
         className="w-full h-full z-0"
         zoomControl={false}
@@ -238,7 +277,28 @@ const ExploreScreen = () => {
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution=""
         />
-        <MapControls onLocationResolved={(lat, lng) => setUserCoords({ lat, lng })} />
+        <MapControls
+          onLocationResolved={(lat, lng) => {
+            setUserCoords({ lat, lng });
+            setLocationNotice("Centered on your current location.");
+          }}
+          onLocationDenied={() => {
+            setLocationNotice("Location permission denied. You can still explore default zones.");
+          }}
+          onLocationUnavailable={(message) => {
+            setLocationNotice(message);
+          }}
+          onLocatingChange={setLocating}
+        />
+
+        {/* Real current-location marker */}
+        {userCoords && (
+          <Marker
+            position={[userCoords.lat, userCoords.lng]}
+            icon={createUserLocationIcon()}
+            zIndexOffset={900}
+          />
+        )}
 
         {/* Zone markers */}
         {zones.map((zone) => (
@@ -344,6 +404,12 @@ const ExploreScreen = () => {
             )}
             {discoveryError && (
               <p className="text-[9px] text-destructive mt-1">Nearby discovery unavailable, using defaults</p>
+            )}
+            {locating && (
+              <p className="text-[9px] text-primary mt-1">Locating your position…</p>
+            )}
+            {locationNotice && !locating && (
+              <p className="text-[9px] text-muted-foreground mt-1">{locationNotice}</p>
             )}
           </div>
         </div>
