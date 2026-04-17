@@ -1,4 +1,4 @@
-import { dicebearPortrait, getPlayerById } from "@/data/mockData";
+import { dicebearPortrait, getPlayerById } from "./mockData.js";
 
 export type LeaderboardScope = "global" | "region";
 export type LeaderboardPeriod = "weekly" | "all";

@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getSupabaseAdminClient } from "../../lib/supabase";
-import { DB_TABLES } from "../../lib/server/dbCollections";
-import { clampStat, nextXpThreshold } from "../../lib/server/progression";
+import { getSupabaseAdminClient } from "../../lib/supabase.js";
+import { DB_TABLES } from "../../lib/server/dbCollections.js";
+import { clampStat, nextXpThreshold } from "../../lib/server/progression.js";
 
 const userPlayersQuerySchema = z.object({
   userId: z.string().min(1),

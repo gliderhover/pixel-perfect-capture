@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getSupabaseAdminClient } from "../lib/supabase";
-import { DB_TABLES } from "../lib/server/dbCollections";
+import { getSupabaseAdminClient } from "../lib/supabase.js";
+import { DB_TABLES } from "../lib/server/dbCollections.js";
 
 const chatSchema = z.object({
   playerId: z.string().min(1),

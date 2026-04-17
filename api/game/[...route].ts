@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getSupabaseAdminClient } from "../../lib/supabase";
-import { DB_TABLES } from "../../lib/server/dbCollections";
-import { mockLiveEvents } from "../../src/data/mockData";
+import { getSupabaseAdminClient } from "../../lib/supabase.js";
+import { DB_TABLES } from "../../lib/server/dbCollections.js";
+import { mockLiveEvents } from "../../src/data/mockData.js";
 
 const leaderboardQuerySchema = z.object({
   scope: z.enum(["global", "region"]).optional(),

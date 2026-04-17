@@ -1,15 +1,15 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
-import { getSupabaseAdminClient } from "../../lib/supabase";
+import { getSupabaseAdminClient } from "../../lib/supabase.js";
 import {
   DB_TABLES,
   type LeaderboardEntryDoc,
   type PlayerDoc,
   type UserPlayerDoc,
   type ZoneDoc,
-} from "../../lib/server/dbCollections";
-import { mockPlayers, mockZones } from "../../src/data/mockData";
-import { mockLeaderboardGlobal, mockLeaderboardRegion } from "../../src/data/leaderboardData";
+} from "../../lib/server/dbCollections.js";
+import { mockPlayers, mockZones } from "../../src/data/mockData.js";
+import { mockLeaderboardGlobal, mockLeaderboardRegion } from "../../src/data/leaderboardData.js";
 
 const bootstrapBodySchema = z.object({
   seedUserPlayers: z.boolean().default(true),
