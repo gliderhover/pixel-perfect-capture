@@ -320,11 +320,6 @@ const TrainScreen = () => {
           { label: "Form", val: `${chat.attributeDeltas.form >= 0 ? "+" : ""}${chat.attributeDeltas.form}`, positive: chat.attributeDeltas.form >= 0 },
           { label: "Morale", val: `${chat.attributeDeltas.morale >= 0 ? "+" : ""}${chat.attributeDeltas.morale}`, positive: chat.attributeDeltas.morale >= 0 },
           { label: "Fan bond", val: `${chat.attributeDeltas.fanBond >= 0 ? "+" : ""}${chat.attributeDeltas.fanBond}`, positive: chat.attributeDeltas.fanBond >= 0 },
-          ...(chat.tags ?? []).slice(0, 2).map((tag) => ({
-            label: "AI",
-            val: tag,
-            positive: true,
-          })),
         ]);
       } catch (error) {
         appendChat(text, "Connection dropped. I couldn't process that message yet.", [
