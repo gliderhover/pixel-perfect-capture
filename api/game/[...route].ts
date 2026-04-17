@@ -12,6 +12,11 @@ import {
 } from "../../lib/server/promptTemplates.js";
 import { buildLocalTalentEncounters } from "../../lib/server/localTalentDiscovery.js";
 import { getNearbyFootballPlaces } from "../../lib/server/placesProvider.js";
+import {
+  getSoccerTriviaKnowledgeBase,
+  pickTriviaSession,
+  TRAINING_TRIVIA_CONFIG,
+} from "../../lib/server/triviaKnowledgeBase.js";
 
 const leaderboardQuerySchema = z.object({
   scope: z.enum(["global", "region"]).optional(),
@@ -54,6 +59,11 @@ const geoQuerySchema = z.object({
   zoom: z.coerce.number().min(3).max(19).optional(),
   limit: z.coerce.number().min(8).max(48).optional(),
   seedKey: z.string().max(100).optional(),
+});
+
+const triviaSessionQuerySchema = z.object({
+  count: z.coerce.number().min(5).max(20).optional(),
+  seed: z.string().max(120).optional(),
 });
 
 const DEV_HEALTH_ALLOW =
@@ -588,6 +598,34 @@ async function handleNearbyPlaces(req: VercelRequest, res: VercelResponse) {
   });
 }
 
+async function handleTrainingTrivia(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+  const parsed = triviaSessionQuerySchema.safeParse({
+    count: toArrayNumber(req.query.count),
+    seed: toArrayValue(req.query.seed),
+  });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid query parameters", details: parsed.error.flatten() });
+  }
+
+  const bank = await getSoccerTriviaKnowledgeBase();
+  const session = pickTriviaSession(bank, parsed.data);
+  return res.status(200).json({
+    data: session,
+    count: session.length,
+    config: {
+      knowledgeBaseSize: bank.length,
+      randomOrder: true,
+      questionTimeLimitSec: TRAINING_TRIVIA_CONFIG.questionTimeLimitSec,
+      sessionQuestionCount: session.length,
+      passScore: Math.ceil(session.length * TRAINING_TRIVIA_CONFIG.passRate),
+    },
+  });
+}
+
 /**
  * Grouped game router.
  * Supports:
@@ -620,6 +658,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (path === "discovery/places-nearby" || path === "discovery-places-nearby") {
       return await handleNearbyPlaces(req, res);
     }
+    if (path === "training-trivia") return await handleTrainingTrivia(req, res);
 
     return res.status(404).json({ error: "Not found" });
   } catch (error) {

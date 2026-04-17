@@ -6,6 +6,10 @@ import {
 import type { MapZone } from "@/data/mockData";
 import { mockRivals, getPlayerById } from "@/data/mockData";
 import { useGameProgress } from "@/context/GameProgressContext";
+import {
+  fetchTrainingTriviaSession,
+  type ApiTrainingTriviaQuestion,
+} from "@/lib/apiService";
 import AnimatedPortrait from "./AnimatedPortrait";
 import ChallengeFlow from "./ChallengeFlow";
 
@@ -15,6 +19,12 @@ interface ZoneExperienceProps {
 }
 
 type ZoneStep = "intro" | "activity" | "reward";
+type TrainingTriviaMeta = {
+  correctCount: number;
+  streakBonus: number;
+  maxStreak: number;
+  totalQuestions: number;
+};
 
 /* ── Zone identity config ──────────────────────────────────────────────── */
 const zoneConfig: Record<
@@ -36,13 +46,13 @@ const zoneConfig: Record<
 > = {
   training: {
     icon: Dumbbell,
-    emoji: "⚽",
-    purpose: "Improve player form through quick drills",
-    cta: "Start Drill",
+    emoji: "🧠",
+    purpose: "Answer soccer trivia fast to build tactical football knowledge.",
+    cta: "Start Trivia Session",
     rewardLabel: "+Form",
     attribute: "form",
-    xp: 20,
-    attrGain: 3,
+    xp: 26,
+    attrGain: 4,
     fpGain: 1,
     gradient: "from-emerald-500 to-green-600",
     bgAccent: "bg-emerald-500/10",
@@ -134,88 +144,241 @@ const zoneConfig: Record<
   },
 };
 
-/* ── Training Ground: Timing Tap Drill ─────────────────────────────────── */
-function TrainingActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const [round, setRound] = useState(0);
-  const [hits, setHits] = useState(0);
-  const [targetActive, setTargetActive] = useState(false);
-  const [targetPos, setTargetPos] = useState({ x: 50, y: 50 });
-  const [missed, setMissed] = useState(false);
-  const totalRounds = 5;
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+/* ── Training Ground: Soccer Trivia Blitz ─────────────────────────────── */
+function TrainingActivity({
+  onComplete,
+}: {
+  onComplete: (score: number, meta?: TrainingTriviaMeta) => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<ApiTrainingTriviaQuestion[]>([]);
+  const [questionTimeLimit, setQuestionTimeLimit] = useState(5);
+  const [passScore, setPassScore] = useState(6);
+  const [index, setIndex] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(5);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [maxStreak, setMaxStreak] = useState(0);
+  const [streakBonus, setStreakBonus] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [locked, setLocked] = useState(false);
+  const [showTimeout, setShowTimeout] = useState(false);
 
-  const spawnTarget = useCallback(() => {
-    setTargetPos({ x: 15 + Math.random() * 70, y: 15 + Math.random() * 60 });
-    setTargetActive(true);
-    setMissed(false);
-    timerRef.current = setTimeout(() => {
-      setTargetActive(false);
-      setMissed(true);
-      setTimeout(() => setRound((r) => r + 1), 400);
-    }, 1800);
+  const orderedQuestions = useRef<ApiTrainingTriviaQuestion[]>([]);
+  const current = orderedQuestions.current[index] ?? null;
+
+  const normalizeDifficulty = (difficulty: ApiTrainingTriviaQuestion["difficulty"]) => {
+    if (difficulty === "easy") return 0;
+    if (difficulty === "medium") return 1;
+    return 2;
+  };
+
+  const shuffleGroup = (arr: ApiTrainingTriviaQuestion[], salt: number) => {
+    const out = [...arr];
+    for (let i = out.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(((Math.sin((i + 1) * 97.13 + salt) + 1) / 2) * (i + 1));
+      const t = out[i]!;
+      out[i] = out[j]!;
+      out[j] = t;
+    }
+    return out;
+  };
+
+  const advance = useCallback(() => {
+    setTimeout(() => {
+      setSelectedIndex(null);
+      setShowTimeout(false);
+      setLocked(false);
+      setIndex((prev) => {
+        const next = prev + 1;
+        if (next >= orderedQuestions.current.length) {
+          onComplete(correctCount, {
+            correctCount,
+            streakBonus,
+            maxStreak,
+            totalQuestions: orderedQuestions.current.length,
+          });
+          return prev;
+        }
+        return next;
+      });
+    }, 450);
+  }, [correctCount, streakBonus, maxStreak, onComplete]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadSession = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await fetchTrainingTriviaSession(10, `${Date.now()}-${Math.random()}`);
+        if (cancelled) return;
+        if (!result.data.length) {
+          setError("No trivia available right now.");
+          setLoading(false);
+          return;
+        }
+        setQuestions(result.data);
+        const easy = result.data.filter((q) => q.difficulty === "easy");
+        const medium = result.data.filter((q) => q.difficulty === "medium");
+        const hard = result.data.filter((q) => q.difficulty === "hard");
+        orderedQuestions.current = [
+          ...shuffleGroup(easy, 1),
+          ...shuffleGroup(medium, 2),
+          ...shuffleGroup(hard, 3),
+        ];
+        if (!orderedQuestions.current.length) {
+          orderedQuestions.current = [...result.data].sort(
+            (a, b) => normalizeDifficulty(a.difficulty) - normalizeDifficulty(b.difficulty)
+          );
+        }
+        setQuestionTimeLimit(result.config.questionTimeLimitSec);
+        setPassScore(result.config.passScore);
+        setTimeLeft(result.config.questionTimeLimitSec);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Failed to load trivia");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void loadSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (round >= totalRounds) {
-      onComplete(hits);
-      return;
-    }
-    const t = setTimeout(spawnTarget, 600);
-    return () => { clearTimeout(t); clearTimeout(timerRef.current); };
-  }, [round, hits, totalRounds, onComplete, spawnTarget]);
+    if (!current || locked || loading) return;
+    setTimeLeft(questionTimeLimit);
+    const tick = window.setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(tick);
+          setLocked(true);
+          setShowTimeout(true);
+          advance();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [current, locked, questionTimeLimit, loading, advance]);
 
-  const handleTap = () => {
-    if (!targetActive) return;
-    clearTimeout(timerRef.current);
-    setTargetActive(false);
-    setHits((h) => h + 1);
-    setTimeout(() => setRound((r) => r + 1), 300);
+  const answer = (choiceIdx: number) => {
+    if (!current || locked) return;
+    setSelectedIndex(choiceIdx);
+    setLocked(true);
+    const correct = choiceIdx === current.answerIndex;
+    if (correct) {
+      setCorrectCount((s) => s + 1);
+      setStreak((prev) => {
+        const next = prev + 1;
+        setMaxStreak((m) => Math.max(m, next));
+        if (next > 0 && next % 3 === 0) {
+          setStreakBonus((b) => b + 1);
+        }
+        return next;
+      });
+    } else {
+      setStreak(0);
+    }
+    advance();
   };
+
+  if (loading) {
+    return (
+      <div className="py-6 text-center">
+        <p className="text-xs text-muted-foreground animate-pulse">Loading soccer trivia session…</p>
+      </div>
+    );
+  }
+
+  if (error || !current) {
+    return (
+      <div className="py-6 text-center">
+        <p className="text-xs text-destructive">{error ?? "Trivia unavailable."}</p>
+        <button
+          type="button"
+          onClick={() => onComplete(0)}
+          className="mt-3 px-4 py-2 rounded-xl glass-card-strong text-xs font-bold"
+        >
+          Skip for now
+        </button>
+      </div>
+    );
+  }
+
+  const pct = Math.max(0, Math.min(100, (timeLeft / questionTimeLimit) * 100));
+  const progressDots = questions.length;
 
   return (
     <div className="py-4">
       <div className="flex items-center justify-between mb-3 px-1">
-        <p className="text-xs font-black text-foreground">Tap the target!</p>
+        <p className="text-xs font-black text-foreground">Soccer Trivia Blitz</p>
+        <div className="flex items-center gap-1">
+          <Timer className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className={`text-xs font-black ${timeLeft <= 2 ? "text-destructive" : "text-foreground"}`}>
+            {timeLeft}s
+          </span>
+        </div>
+      </div>
+
+      <div className="h-2 bg-muted rounded-full overflow-hidden mb-3">
+        <div
+          className={`h-full transition-all duration-200 ${timeLeft <= 2 ? "bg-destructive" : "bg-emerald-500"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      <p className="text-[11px] font-bold text-foreground leading-relaxed mb-3">{current.question}</p>
+
+      <div className="grid gap-2">
+        {current.options.map((opt, i) => {
+          const isCorrect = i === current.answerIndex;
+          const isChosen = selectedIndex === i;
+          const stateClass =
+            locked && isCorrect
+              ? "border-emerald-500/60 bg-emerald-500/10"
+              : locked && isChosen && !isCorrect
+                ? "border-destructive/50 bg-destructive/10"
+                : "border-border/30 bg-background/40 hover:bg-muted/40";
+          return (
+            <button
+              key={`${current.id}-${i}`}
+              type="button"
+              disabled={locked}
+              onClick={() => answer(i)}
+              className={`w-full p-2.5 rounded-xl text-left border transition-all text-xs ${stateClass}`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between mt-3">
         <div className="flex gap-1.5">
-          {Array.from({ length: totalRounds }).map((_, i) => (
+          {Array.from({ length: progressDots }).map((_, i) => (
             <div key={i} className={`w-2.5 h-2.5 rounded-full transition-colors ${
-              i < hits ? "bg-emerald-500" : i < round ? "bg-destructive/40" : "bg-muted"
+              i < correctCount ? "bg-emerald-500" : i < index ? "bg-destructive/40" : "bg-muted"
             }`} />
           ))}
         </div>
+        <p className="text-[10px] font-bold text-muted-foreground">
+          Q {Math.min(index + 1, orderedQuestions.current.length)}/{orderedQuestions.current.length} · Pass at {passScore}
+        </p>
       </div>
-      <div
-        className="relative w-full aspect-[4/3] rounded-2xl bg-emerald-900/20 border border-emerald-500/10 overflow-hidden cursor-pointer select-none"
-        onClick={handleTap}
-      >
-        {/* Field lines */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-10">
-          <div className="w-24 h-24 rounded-full border-2 border-emerald-400" />
-        </div>
-        {targetActive && (
-          <div
-            className="absolute w-14 h-14 -ml-7 -mt-7 animate-scale-in"
-            style={{ left: `${targetPos.x}%`, top: `${targetPos.y}%` }}
-          >
-            <div className="w-full h-full rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center animate-pulse">
-              <div className="w-6 h-6 rounded-full bg-emerald-400" />
-            </div>
-          </div>
-        )}
-        {missed && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-xs text-destructive/60 font-bold animate-fade-in">Missed!</p>
-          </div>
-        )}
-        {!targetActive && !missed && round < totalRounds && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-xs text-muted-foreground animate-pulse">Get ready…</p>
-          </div>
-        )}
+      <div className="flex items-center justify-between mt-2 text-[10px]">
+        <p className={`${streak >= 2 ? "text-primary font-bold" : "text-muted-foreground"}`}>
+          Streak: {streak}
+        </p>
+        <p className="text-amber-400 font-bold">Bonus +{streakBonus}</p>
       </div>
-      <p className="text-[10px] text-muted-foreground text-center mt-2">
-        Round {Math.min(round + 1, totalRounds)} of {totalRounds}
-      </p>
+
+      {showTimeout && <p className="text-[10px] text-destructive mt-2">Time up. Next question…</p>}
     </div>
   );
 }
@@ -562,15 +725,24 @@ function StadiumActivity({ onComplete }: { onComplete: (score: number) => void }
 const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
   const [step, setStep] = useState<ZoneStep>("intro");
   const [activityScore, setActivityScore] = useState(0);
+  const [trainingMeta, setTrainingMeta] = useState<TrainingTriviaMeta | null>(null);
   const { activePlayer, addXp, applyAttributeDelta, addFocusPoints } = useGameProgress();
   const config = zoneConfig[zone.type];
   const Icon = config.icon;
 
   const handleActivityComplete = useCallback(
-    (score: number) => {
+    (score: number, meta?: TrainingTriviaMeta) => {
       setActivityScore(score);
+      if (zone.type === "training") setTrainingMeta(meta ?? null);
       // Apply scaled rewards based on performance
-      const mult = zone.type === "rival" ? 1 : Math.max(0.5, Math.min(1.5, score / 3));
+      const trainingEffectiveScore =
+        zone.type === "training" ? score + (meta?.streakBonus ?? 0) : score;
+      const mult =
+        zone.type === "rival"
+          ? 1
+          : zone.type === "training"
+            ? Math.max(0.5, Math.min(1.6, trainingEffectiveScore / 6))
+            : Math.max(0.5, Math.min(1.5, score / 3));
       const xpGain = Math.round(config.xp * mult);
       const attrGain = Math.max(1, Math.round(config.attrGain * mult));
       addXp(activePlayer.id, xpGain);
@@ -597,7 +769,12 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
   };
 
   const scoreLabel = () => {
-    if (zone.type === "training") return `${activityScore}/5 targets hit`;
+    if (zone.type === "training") {
+      const total = trainingMeta?.totalQuestions ?? 10;
+      const bonus = trainingMeta?.streakBonus ?? 0;
+      const bestStreak = trainingMeta?.maxStreak ?? 0;
+      return `${activityScore}/${total} correct · +${bonus} streak bonus · best streak ${bestStreak}`;
+    }
     if (zone.type === "recovery") return `${activityScore} breathing cycles`;
     if (zone.type === "fan-arena") return `${activityScore} taps — ${activityScore >= 15 ? "Epic Hype!" : "Nice effort!"}`;
     if (zone.type === "pressure") return `${activityScore}/3 reactions caught`;
@@ -606,7 +783,13 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
     return "Complete";
   };
 
-  const mult = zone.type === "rival" ? 1 : Math.max(0.5, Math.min(1.5, activityScore / 3));
+  const effectiveTrainingScore = zone.type === "training" ? activityScore + (trainingMeta?.streakBonus ?? 0) : activityScore;
+  const mult =
+    zone.type === "rival"
+      ? 1
+      : zone.type === "training"
+        ? Math.max(0.5, Math.min(1.6, effectiveTrainingScore / 6))
+        : Math.max(0.5, Math.min(1.5, activityScore / 3));
   const finalXp = Math.round(config.xp * mult);
   const finalAttr = Math.max(1, Math.round(config.attrGain * mult));
 

@@ -123,3 +123,43 @@ export function buildLocalTalentPrompt(input: {
   };
 }
 
+export function buildTriviaKnowledgeBasePrompt(input: {
+  batchSize: number;
+  offset: number;
+  roster: Array<{
+    name: string;
+    clubTeam: string;
+    representedCountry: string;
+    position: string;
+    rarity: string;
+    age: number;
+    overall: number;
+  }>;
+}) {
+  const rosterCompact = input.roster
+    .slice(0, 60)
+    .map(
+      (p) =>
+        `${p.name} | club=${p.clubTeam} | country=${p.representedCountry} | position=${p.position} | rarity=${p.rarity} | age=${p.age} | overall=${p.overall}`
+    )
+    .join("\n");
+
+  return {
+    system: [
+      "You generate soccer trivia MCQ content for a mobile training mode.",
+      "Return strict JSON only. No markdown.",
+      "Each question must have exactly 4 distinct options and one correct answerIndex 0-3.",
+      "Use only facts present in the provided roster snapshot and generic football-safe knowledge.",
+      "No unsafe, political, or harmful content.",
+    ].join(" "),
+    user: [
+      `Generate ${input.batchSize} soccer trivia questions, starting logical index offset ${input.offset}.`,
+      "Schema:",
+      '{"questions":[{"question":"...","options":["A","B","C","D"],"answerIndex":0,"explanation":"...","difficulty":"easy|medium|hard","topic":"..."}]}',
+      "Keep question text concise (<=20 words). Explanation <=18 words.",
+      "Roster snapshot:",
+      rosterCompact,
+    ].join("\n"),
+  };
+}
+

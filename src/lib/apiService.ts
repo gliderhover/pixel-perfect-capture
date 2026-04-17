@@ -104,6 +104,17 @@ export type ApiNearbyPlace = {
   mappedZoneLabel: string;
 };
 
+export type ApiTrainingTriviaQuestion = {
+  id: string;
+  question: string;
+  options: [string, string, string, string];
+  answerIndex: number;
+  explanation: string;
+  difficulty: "easy" | "medium" | "hard";
+  topic: string;
+  source: "gemini" | "fallback";
+};
+
 export type ApiUserPlayer = {
   userId: string;
   playerId: string;
@@ -348,6 +359,22 @@ export async function fetchNearbyFootballPlaces(lat: number, lng: number, radius
   return fetchJson<ApiListResponse<ApiNearbyPlace> & { source: string }>(
     `/api/discovery/places-nearby?${search.toString()}`
   );
+}
+
+export async function fetchTrainingTriviaSession(count = 10, seed?: string) {
+  const search = new URLSearchParams({ count: String(count) });
+  if (seed) search.set("seed", seed);
+  return fetchJson<{
+    data: ApiTrainingTriviaQuestion[];
+    count: number;
+    config: {
+      knowledgeBaseSize: number;
+      randomOrder: boolean;
+      questionTimeLimitSec: number;
+      sessionQuestionCount: number;
+      passScore: number;
+    };
+  }>(`/api/game/training-trivia?${search.toString()}`);
 }
 
 export async function applyCultivation(input: {
