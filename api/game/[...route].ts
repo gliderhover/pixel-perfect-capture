@@ -51,6 +51,9 @@ const geoQuerySchema = z.object({
   lat: z.coerce.number().min(-85).max(85),
   lng: z.coerce.number().min(-180).max(180),
   radiusKm: z.coerce.number().min(0.5).max(25).optional(),
+  zoom: z.coerce.number().min(3).max(19).optional(),
+  limit: z.coerce.number().min(8).max(48).optional(),
+  seedKey: z.string().max(100).optional(),
 });
 
 const DEV_HEALTH_ALLOW =
@@ -492,12 +495,15 @@ async function handleNearbyLocalTalents(req: VercelRequest, res: VercelResponse)
     lat: toArrayNumber(req.query.lat),
     lng: toArrayNumber(req.query.lng),
     radiusKm: toArrayNumber(req.query.radiusKm),
+    zoom: toArrayNumber(req.query.zoom),
+    limit: toArrayNumber(req.query.limit),
+    seedKey: toArrayValue(req.query.seedKey),
   });
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid query parameters", details: parsed.error.flatten() });
   }
 
-  const { lat, lng, radiusKm } = parsed.data;
+  const { lat, lng, radiusKm, zoom, limit, seedKey } = parsed.data;
   const supabase = getSupabaseAdminClient();
   const playersRes = await supabase
     .from(DB_TABLES.players)
@@ -511,8 +517,10 @@ async function handleNearbyLocalTalents(req: VercelRequest, res: VercelResponse)
     lat,
     lng,
     radiusKm,
+    zoom,
+    limit,
+    seedKey,
     players,
-    limit: 4,
   });
 
   // Optional AI polish: keep fallback content if generation fails.

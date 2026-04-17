@@ -72,10 +72,12 @@ export type ApiLocalTalentEncounter = {
   position: string;
   hometown: string;
   skillStyle: string;
-  rarity: "common" | "rare" | "epic";
+  rarity: "common" | "rare" | "epic" | "legendary";
   scoutingDescription: string;
   lat: number;
   lng: number;
+  distanceKm: number;
+  encounterTier: "local" | "prospect" | "known" | "surprise";
   source: "local-talent";
   tags: string[];
 };
@@ -315,12 +317,19 @@ export async function fetchLiveDialogue(params?: { title?: string; description?:
   );
 }
 
-export async function fetchNearbyLocalTalents(lat: number, lng: number, radiusKm = 5) {
+export async function fetchNearbyLocalTalents(
+  lat: number,
+  lng: number,
+  options?: { radiusKm?: number; zoom?: number; limit?: number; seedKey?: string }
+) {
   const search = new URLSearchParams({
     lat: String(lat),
     lng: String(lng),
-    radiusKm: String(radiusKm),
+    radiusKm: String(options?.radiusKm ?? 5),
   });
+  if (options?.zoom !== undefined) search.set("zoom", String(options.zoom));
+  if (options?.limit !== undefined) search.set("limit", String(options.limit));
+  if (options?.seedKey) search.set("seedKey", options.seedKey);
   return fetchJson<ApiListResponse<ApiLocalTalentEncounter> & { source: string; note?: string }>(
     `/api/discovery/players-nearby?${search.toString()}`
   );

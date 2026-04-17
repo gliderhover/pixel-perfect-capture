@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Scan, ChevronRight, ZoomIn, ZoomOut, Crosshair } from "lucide-react";
 import { mockZones, mockMission, mockPlayerMarkers, mockNearbyActivity, zoneIcons, getPlayerById } from "@/data/mockData";
@@ -38,11 +38,19 @@ const createZoneIcon = (type: string) => {
   });
 };
 
-const createPlayerMarkerIcon = (portrait: string) => {
+const rarityRingColor: Record<string, string> = {
+  common: "rgba(148,163,184,0.65)",
+  rare: "rgba(59,130,246,0.75)",
+  epic: "rgba(168,85,247,0.8)",
+  legendary: "rgba(245,158,11,0.88)",
+};
+
+const createPlayerMarkerIcon = (portrait: string, rarity: string = "common") => {
   const safe = portrait.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  const ring = rarityRingColor[rarity] ?? rarityRingColor.common;
   return L.divIcon({
     className: "custom-player-marker",
-    html: `<div class="player-marker-face"><img src="${safe}" alt="" loading="lazy" referrerpolicy="no-referrer" /></div>`,
+    html: `<div class="player-marker-face" style="border-color:${ring}; box-shadow:0 0 12px ${ring};"><img src="${safe}" alt="" loading="lazy" referrerpolicy="no-referrer" /></div>`,
     iconSize: [44, 44],
     iconAnchor: [22, 22],
   });
@@ -69,6 +77,36 @@ const WORLD_MAX_BOUNDS: [[number, number], [number, number]] = [
 const mapControlLeft = {
   left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)",
 } as const;
+
+const distanceKm = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+  const dx = (a.lng - b.lng) * 111 * Math.cos(((a.lat + b.lat) * 0.5 * Math.PI) / 180);
+  const dy = (a.lat - b.lat) * 111;
+  return Math.sqrt(dx * dx + dy * dy);
+};
+
+const spawnLimitByZoom = (zoom: number) => {
+  if (zoom <= 6) return 10;
+  if (zoom <= 8) return 14;
+  if (zoom <= 10) return 20;
+  if (zoom <= 12) return 26;
+  if (zoom <= 14) return 32;
+  return 38;
+};
+
+const visibleEncounterCapByZoom = (zoom: number) => {
+  if (zoom <= 7) return 8;
+  if (zoom <= 9) return 12;
+  if (zoom <= 11) return 18;
+  if (zoom <= 13) return 24;
+  return 34;
+};
+
+const spawnRadiusByZoom = (zoom: number) => {
+  if (zoom <= 7) return 7.5;
+  if (zoom <= 10) return 5.5;
+  if (zoom <= 13) return 4.2;
+  return 3.2;
+};
 
 const MapControls = ({
   onLocationResolved,
@@ -136,6 +174,30 @@ const MapControls = ({
   );
 };
 
+const MapViewWatcher = ({
+  onViewChanged,
+}: {
+  onViewChanged: (lat: number, lng: number, zoom: number) => void;
+}) => {
+  const map = useMapEvents({
+    moveend: () => {
+      const center = map.getCenter();
+      onViewChanged(center.lat, center.lng, map.getZoom());
+    },
+    zoomend: () => {
+      const center = map.getCenter();
+      onViewChanged(center.lat, center.lng, map.getZoom());
+    },
+  });
+
+  useEffect(() => {
+    const center = map.getCenter();
+    onViewChanged(center.lat, center.lng, map.getZoom());
+  }, [map, onViewChanged]);
+
+  return null;
+};
+
 type SelectedPlace = ApiNearbyPlace | null;
 
 const ExploreScreen = () => {
@@ -157,6 +219,11 @@ const ExploreScreen = () => {
   const [localTalents, setLocalTalents] = useState<ApiLocalTalentEncounter[]>([]);
   const [nearbyPlaces, setNearbyPlaces] = useState<ApiNearbyPlace[]>([]);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [mapZoom, setMapZoom] = useState(4);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [spawnSeedKey, setSpawnSeedKey] = useState(() => String(Math.floor(Date.now() / 90000)));
+  const lastCoordsRefreshRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastDiscoveryFetchRef = useRef(0);
 
   const handleScan = () => {
     setScanning(true);
@@ -165,6 +232,18 @@ const ExploreScreen = () => {
       setShowCamera(true);
     }, 800);
   };
+
+  const handleMapViewChanged = useCallback((lat: number, lng: number, zoom: number) => {
+    setMapCenter({ lat, lng });
+    setMapZoom(zoom);
+  }, []);
+
+  const visibleLocalTalents = useMemo(() => {
+    const cap = visibleEncounterCapByZoom(mapZoom);
+    return [...localTalents]
+      .sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999))
+      .slice(0, cap);
+  }, [localTalents, mapZoom]);
 
   useEffect(() => {
     setExplorationZoneType(selectedZone?.type ?? null);
@@ -194,11 +273,22 @@ const ExploreScreen = () => {
     let cancelled = false;
     const loadNearbyDiscovery = async () => {
       if (!userCoords) return;
+      if (mapCenter && distanceKm(mapCenter, userCoords) > 35 && mapZoom < 11) return;
+      const now = Date.now();
+      if (now - lastDiscoveryFetchRef.current < 6000) return;
+      lastDiscoveryFetchRef.current = now;
       setDiscoveryError(null);
       try {
+        const radiusKm = spawnRadiusByZoom(mapZoom);
+        const spawnLimit = spawnLimitByZoom(mapZoom);
         const [talentResult, placesResult] = await Promise.all([
-          fetchNearbyLocalTalents(userCoords.lat, userCoords.lng, 5),
-          fetchNearbyFootballPlaces(userCoords.lat, userCoords.lng, 5),
+          fetchNearbyLocalTalents(userCoords.lat, userCoords.lng, {
+            radiusKm,
+            zoom: Math.round(mapZoom),
+            limit: spawnLimit,
+            seedKey: spawnSeedKey,
+          }),
+          fetchNearbyFootballPlaces(userCoords.lat, userCoords.lng, Math.max(4, Math.min(8, radiusKm + 1))),
         ]);
         if (cancelled) return;
         setLocalTalents(talentResult.data);
@@ -215,6 +305,38 @@ const ExploreScreen = () => {
     return () => {
       cancelled = true;
     };
+  }, [userCoords, mapZoom, mapCenter, spawnSeedKey]);
+
+  useEffect(() => {
+    if (!userCoords) return;
+    const interval = window.setInterval(() => {
+      setSpawnSeedKey(String(Math.floor(Date.now() / 90000)));
+    }, 90000);
+    return () => window.clearInterval(interval);
+  }, [userCoords]);
+
+  useEffect(() => {
+    if (!userCoords || !navigator.geolocation) return;
+    lastCoordsRefreshRef.current = userCoords;
+    const interval = window.setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const latest = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          };
+          const previous = lastCoordsRefreshRef.current;
+          if (!previous || distanceKm(previous, latest) >= 0.18) {
+            lastCoordsRefreshRef.current = latest;
+            setUserCoords(latest);
+            setLocationNotice("Nearby encounters refreshed from your latest position.");
+          }
+        },
+        () => {},
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      );
+    }, 30000);
+    return () => window.clearInterval(interval);
   }, [userCoords]);
 
   useEffect(() => {
@@ -280,6 +402,8 @@ const ExploreScreen = () => {
         <MapControls
           onLocationResolved={(lat, lng) => {
             setUserCoords({ lat, lng });
+            lastCoordsRefreshRef.current = { lat, lng };
+            setSpawnSeedKey(String(Math.floor(Date.now() / 90000)));
             setLocationNotice("Centered on your current location.");
           }}
           onLocationDenied={() => {
@@ -290,6 +414,7 @@ const ExploreScreen = () => {
           }}
           onLocatingChange={setLocating}
         />
+        <MapViewWatcher onViewChanged={handleMapViewChanged} />
 
         {/* Real current-location marker */}
         {userCoords && (
@@ -320,7 +445,7 @@ const ExploreScreen = () => {
             <Marker
               key={pm.id}
               position={[pm.lat, pm.lng]}
-              icon={createPlayerMarkerIcon(player.portrait)}
+              icon={createPlayerMarkerIcon(player.portrait, player.rarity)}
               eventHandlers={{
                 click: () => {
                   const full = playersById[pm.playerId] ?? player;
@@ -333,11 +458,11 @@ const ExploreScreen = () => {
         })}
 
         {/* Nearby hidden prospects */}
-        {localTalents.map((talent) => (
+        {visibleLocalTalents.map((talent) => (
           <Marker
             key={talent.id}
             position={[talent.lat, talent.lng]}
-            icon={createPlayerMarkerIcon(talent.portrait)}
+            icon={createPlayerMarkerIcon(talent.portrait, talent.rarity)}
             eventHandlers={{
               click: () => {
                 const base = playersById[talent.basePlayerId] ?? getPlayerById(talent.basePlayerId);
@@ -346,7 +471,8 @@ const ExploreScreen = () => {
                   ...base,
                   name: talent.displayName,
                   representedCountry: talent.hometown,
-                  traits: [...base.traits.slice(0, 2), "Under-the-radar Prospect"],
+                  rarity: talent.rarity === "legendary" ? "legendary" : base.rarity,
+                  traits: [...base.traits.slice(0, 2), `Encounter: ${talent.encounterTier}`],
                 });
                 setSelectedZone(null);
                 setSelectedPlace(null);
@@ -411,6 +537,11 @@ const ExploreScreen = () => {
             {locationNotice && !locating && (
               <p className="text-[9px] text-muted-foreground mt-1">{locationNotice}</p>
             )}
+            {!discoveryError && userCoords && (
+              <p className="text-[9px] text-primary/80 mt-1">
+                Nearby encounters: {visibleLocalTalents.length} shown ({localTalents.length} generated)
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -455,7 +586,7 @@ const ExploreScreen = () => {
       >
         <div className="flex gap-1.5 overflow-x-auto py-0.5 scrollbar-hide min-h-[2.5rem] items-center">
           {[...mockNearbyActivity,
-            ...localTalents.slice(0, 2).map((t) => `Hidden prospect nearby: ${t.displayName}`),
+            ...visibleLocalTalents.slice(0, 3).map((t) => `${t.encounterTier}: ${t.displayName}`),
             ...nearbyPlaces.slice(0, 2).map((p) => `${p.name} → ${p.mappedZoneLabel}`),
           ].map((activity, i) => (
             <div key={i} className="glass-card px-2.5 py-1.5 shrink-0 flex items-center gap-1.5 rounded-xl">
