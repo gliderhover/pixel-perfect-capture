@@ -48,7 +48,8 @@ const rarityRingColor: Record<string, string> = {
 const createPlayerMarkerIcon = (
   portrait: string,
   rarity: string = "common",
-  options?: { expiring?: boolean; leavingSoon?: boolean; remainingSec?: number }
+  options?: { expiring?: boolean; leavingSoon?: boolean; remainingSec?: number },
+  name: string = "??"
 ) => {
   const safe = portrait.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
   const ring = rarityRingColor[rarity] ?? rarityRingColor.common;
@@ -58,10 +59,12 @@ const createPlayerMarkerIcon = (
     options?.remainingSec !== undefined
       ? `<span style="position:absolute;right:-4px;bottom:-4px;min-width:16px;height:16px;border-radius:9999px;background:rgba(15,23,42,0.92);color:#f8fafc;border:1px solid rgba(226,232,240,0.45);font-size:9px;line-height:16px;text-align:center;font-weight:700;padding:0 3px;">${Math.max(0, options.remainingSec)}</span>`
       : "";
+  const fallbackBg = ({ legendary: "rgba(245,158,11,0.45)", epic: "rgba(168,85,247,0.45)", rare: "rgba(59,130,246,0.45)", common: "rgba(148,163,184,0.35)" } as Record<string, string>)[rarity] ?? "rgba(148,163,184,0.35)";
+  const initials = name.split(' ').filter(Boolean).slice(0, 2).map((w) => (w[0] ?? '').toUpperCase()).join('');
   return L.divIcon({
     className: "custom-player-marker",
     html: `<div style="position:relative;opacity:${opacity};transition:opacity 260ms ease;">
-      <div class="player-marker-face" style="border-color:${ring}; box-shadow:${pulse};"><img src="${safe}" alt="" loading="lazy" referrerpolicy="no-referrer" /></div>
+      <div class="player-marker-face" style="border-color:${ring}; box-shadow:${pulse};position:relative;overflow:hidden;"><img src="${safe}" alt="" loading="eager" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none';var fb=this.nextElementSibling;if(fb)fb.style.display='flex';" /><div style="display:none;position:absolute;inset:0;border-radius:50%;background:${fallbackBg};align-items:center;justify-content:center;font-size:11px;font-weight:900;color:white;letter-spacing:0.05em;">${initials}</div></div>
       ${timerBadge}
     </div>`,
     iconSize: [44, 44],
@@ -82,10 +85,7 @@ const createUserLocationIcon = () =>
   });
 
 const NA_FALLBACK_CENTER: [number, number] = [40, -98];
-const WORLD_MAX_BOUNDS: [[number, number], [number, number]] = [
-  [-85, -180],
-  [85, 180],
-];
+const NA_MAX_BOUNDS: [[number, number], [number, number]] = [[14, -170], [72, -50]];
 
 const mapControlLeft = {
   left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)",
@@ -137,11 +137,13 @@ const MapControls = ({
   onLocationDenied,
   onLocationUnavailable,
   onLocatingChange,
+  activePlayer,
 }: {
   onLocationResolved: (lat: number, lng: number) => void;
   onLocationDenied: () => void;
   onLocationUnavailable: (message: string) => void;
   onLocatingChange: (locating: boolean) => void;
+  activePlayer: Player;
 }) => {
   const map = useMap();
   return (
@@ -194,6 +196,13 @@ const MapControls = ({
         <Crosshair className="w-4 h-4 text-foreground" />
         <span className="text-[10px] font-bold text-foreground">My location</span>
       </button>
+      <div className="glass-card-strong rounded-xl px-2 py-2 flex items-center gap-1.5 max-w-[7rem] mt-0.5">
+        <AnimatedPortrait player={activePlayer} size="xs" />
+        <div className="min-w-0">
+          <p className="text-[9px] font-black text-foreground truncate leading-tight">{activePlayer.name.split(" ").pop()}</p>
+          <p className="text-[8px] text-primary font-bold">OVR {activePlayer.stats.overall}</p>
+        </div>
+      </div>
     </div>
   );
 };
@@ -247,7 +256,7 @@ const ExploreScreen = () => {
   const [localTalents, setLocalTalents] = useState<LocalTalentRuntime[]>([]);
   const [nearbyPlaces, setNearbyPlaces] = useState<ApiNearbyPlace[]>([]);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
-  const [mapZoom, setMapZoom] = useState(4);
+  const [mapZoom, setMapZoom] = useState(5);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [spawnSeedKey, setSpawnSeedKey] = useState(
     () => String(Math.floor(Date.now() / LOCAL_TALENT_RUNTIME_CONFIG.respawnIntervalMs))
@@ -280,6 +289,15 @@ const ExploreScreen = () => {
     () => localTalents.find((t) => t.id === activeLocalEncounterId) ?? null,
     [localTalents, activeLocalEncounterId]
   );
+
+  const nearestEncounterPlayer = useMemo(() => {
+    if (visibleLocalTalents.length > 0) {
+      const t = visibleLocalTalents[0];
+      return playersById[t.basePlayerId] ?? getPlayerById(t.basePlayerId) ?? null;
+    }
+    const pm = mockPlayerMarkers[Math.floor(Math.random() * Math.min(mockPlayerMarkers.length, 10))];
+    return playersById[pm.playerId] ?? getPlayerById(pm.playerId) ?? null;
+  }, [visibleLocalTalents, playersById]);
 
   const handleEncounterFlowEnd = useCallback(
     (result: "recruited" | "escaped" | "closed") => {
@@ -517,10 +535,10 @@ const ExploreScreen = () => {
       {/* Real Leaflet Map — North America default; pan/zoom still real */}
       <MapContainer
         center={NA_FALLBACK_CENTER}
-        zoom={4}
-        minZoom={3}
+        zoom={5}
+        minZoom={4}
         maxZoom={18}
-        maxBounds={WORLD_MAX_BOUNDS}
+        maxBounds={NA_MAX_BOUNDS}
         maxBoundsViscosity={0.85}
         className="w-full h-full z-0"
         zoomControl={false}
@@ -545,6 +563,7 @@ const ExploreScreen = () => {
             setLocationNotice(message);
           }}
           onLocatingChange={setLocating}
+          activePlayer={activePlayer}
         />
         <MapViewWatcher onViewChanged={handleMapViewChanged} />
 
@@ -581,7 +600,7 @@ const ExploreScreen = () => {
             <Marker
               key={pm.id}
               position={[pm.lat, pm.lng]}
-              icon={createPlayerMarkerIcon(player.portrait, player.rarity)}
+              icon={createPlayerMarkerIcon(player.portrait, player.rarity, undefined, player.name)}
               eventHandlers={{
                 click: () => {
                   const full = playersById[pm.playerId] ?? player;
@@ -603,7 +622,7 @@ const ExploreScreen = () => {
               expiring: talent.isExpiring,
               leavingSoon: talent.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs,
               remainingSec: talent.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs ? Math.ceil(talent.remainingMs / 1000) : undefined,
-            })}
+            }, talent.displayName)}
             eventHandlers={{
               click: () => {
                 const base = playersById[talent.basePlayerId] ?? getPlayerById(talent.basePlayerId);
@@ -653,8 +672,11 @@ const ExploreScreen = () => {
 
       {/* Floating Mission Pill */}
       <div
-        className="absolute top-[env(safe-area-inset-top,12px)] right-14 z-[1210] mt-3 animate-fade-in-up max-w-[min(100%-7rem,16rem)]"
-        style={{ left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)" }}
+        className="absolute z-[1210] mt-3 max-w-[min(13rem,calc(100vw-5rem))]"
+        style={{
+          top: "max(12px, env(safe-area-inset-top, 0px))",
+          left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)",
+        }}
       >
         <div className="glass-card-strong px-3 py-2.5 flex items-center gap-2.5 rounded-2xl">
           <span className="text-base">🎯</span>
@@ -669,49 +691,13 @@ const ExploreScreen = () => {
               </div>
               <span className="text-[9px] text-primary font-black">{mockMission.progress}/{mockMission.total}</span>
             </div>
-            {zonesLoading && (
-              <p className="text-[9px] text-muted-foreground mt-1">Loading zones...</p>
-            )}
-            {zonesError && (
-              <p className="text-[9px] text-destructive mt-1">Zones unavailable, using fallback</p>
-            )}
-            {!zonesLoading && !zonesError && zones.length === 0 && (
-              <p className="text-[9px] text-muted-foreground mt-1">No active zones</p>
-            )}
-            {!zonesLoading && !zonesError && !usingMockZones && zones.length > 0 && (
-              <p className="text-[9px] text-primary/80 mt-1">Live zone feed</p>
-            )}
-            {discoveryError && (
-              <p className="text-[9px] text-destructive mt-1">Nearby discovery unavailable, using defaults</p>
-            )}
-            {locating && (
-              <p className="text-[9px] text-primary mt-1">Locating your position…</p>
-            )}
-            {locationNotice && !locating && (
-              <p className="text-[9px] text-muted-foreground mt-1">{locationNotice}</p>
-            )}
-            {!discoveryError && userCoords && (
-              <p className="text-[9px] text-primary/80 mt-1">
-                Nearby encounters: {visibleLocalTalents.length} shown ({localTalents.length} generated)
-              </p>
-            )}
-            {!discoveryError && userCoords && visibleLocalTalents.some((t) => t.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs) && (
-              <p className="text-[9px] text-destructive mt-1">Some nearby players are leaving soon.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Active Player Shortcut */}
-      <div className="absolute top-[env(safe-area-inset-top,12px)] right-3 z-[1210] mt-3 animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
-        <div className="glass-card-strong p-1.5 pr-2.5 flex items-center gap-2 rounded-2xl max-w-[9.5rem]">
-          <AnimatedPortrait player={activePlayer} size="xs" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-bold text-foreground leading-tight truncate">{activePlayer.name}</p>
-            <p className="text-[8px] text-muted-foreground truncate">
-              {activePlayer.position} · {activePlayer.representedCountry}
-            </p>
-            <p className="text-[8px] text-primary font-semibold">Active</p>
+            {(() => {
+              if (locating) return <p className="text-[9px] text-primary mt-1">Locating…</p>;
+              if (zonesLoading) return <p className="text-[9px] text-muted-foreground mt-1">Loading…</p>;
+              if (locationNotice) return <p className="text-[9px] text-muted-foreground/80 mt-1 leading-tight">{locationNotice}</p>;
+              if (visibleLocalTalents.length > 0) return <p className="text-[9px] text-primary mt-1">{visibleLocalTalents.length} players nearby</p>;
+              return null;
+            })()}
           </div>
         </div>
       </div>
@@ -741,12 +727,11 @@ const ExploreScreen = () => {
         style={{ bottom: "var(--explore-activity-bottom)" }}
       >
         <div className="flex gap-1.5 overflow-x-auto py-0.5 scrollbar-hide min-h-[2.5rem] items-center">
-          {[...mockNearbyActivity,
-            ...visibleLocalTalents
-              .slice(0, 3)
-              .map((t) => `${t.encounterTier}: ${t.displayName} (${Math.max(0, Math.ceil(t.remainingMs / 1000))}s)`),
-            ...nearbyPlaces.slice(0, 2).map((p) => `${p.name} → ${p.mappedZoneLabel}`),
-          ].map((activity, i) => (
+          {[
+            ...visibleLocalTalents.slice(0, 2).map((t) => `⚡ ${t.displayName}`),
+            ...nearbyPlaces.slice(0, 1).map((p) => `📍 ${p.name}`),
+            ...mockNearbyActivity.slice(0, 2),
+          ].slice(0, 4).map((activity, i) => (
             <div key={i} className="glass-card px-2.5 py-1.5 shrink-0 flex items-center gap-1.5 rounded-xl">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
               <span className="text-[9px] font-semibold text-foreground/80 whitespace-nowrap">{activity}</span>
@@ -831,7 +816,14 @@ const ExploreScreen = () => {
 
       {/* Camera Mission */}
       {showCamera && (
-        <CameraMission onClose={() => setShowCamera(false)} onComplete={() => setShowCamera(false)} />
+        <CameraMission
+          onClose={() => setShowCamera(false)}
+          nearestPlayer={nearestEncounterPlayer}
+          onChallenge={(player) => {
+            setShowCamera(false);
+            setEncounterPlayer(player);
+          }}
+        />
       )}
     </div>
   );
