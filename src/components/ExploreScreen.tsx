@@ -237,8 +237,15 @@ type LocalTalentRuntime = ApiLocalTalentEncounter & {
   isExpiring: boolean;
 };
 
+// Fires as soon as the Leaflet map instance is initialised — does NOT wait
+// for tiles to finish loading (which can hang forever on slow connections).
 const MapReadyWatcher = ({ onReady }: { onReady: () => void }) => {
-  useMapEvents({ load: onReady });
+  const map = useMap();
+  useEffect(() => {
+    // map object is available synchronously; signal ready on first render
+    if (map) onReady();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map]);
   return null;
 };
 
@@ -272,6 +279,12 @@ const ExploreScreen = () => {
   const [activeLocalEncounterId, setActiveLocalEncounterId] = useState<string | null>(null);
 
   const handleMapReady = useCallback(() => setMapReady(true), []);
+
+  // Hard fallback: if Leaflet somehow doesn't mount within 3 s, unblock UI
+  useEffect(() => {
+    const t = setTimeout(() => setMapReady(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleScan = () => {
     setScanning(true);
