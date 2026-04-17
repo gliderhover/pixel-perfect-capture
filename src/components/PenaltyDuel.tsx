@@ -499,9 +499,18 @@ const PenaltyDuel = ({
           )}
 
           {phase === "goal" && (
-            <div className="text-center py-3 rounded-2xl font-bold text-sm animate-fade-in-up"
-              style={{ background: "hsl(var(--destructive) / 0.1)", color: "hsl(var(--destructive))" }}>
-              The player escaped…
+            <div className="flex flex-col gap-2 animate-fade-in-up">
+              <div className="text-center py-3 rounded-2xl font-bold text-sm"
+                style={{ background: "hsl(var(--destructive) / 0.1)", color: "hsl(var(--destructive))" }}>
+                The player escaped…
+              </div>
+              <button
+                type="button"
+                onClick={onGoal}
+                className="w-full py-3.5 rounded-2xl glass-card-strong text-foreground font-black text-sm active:scale-[0.97] transition-transform"
+              >
+                Continue →
+              </button>
             </div>
           )}
         </div>
