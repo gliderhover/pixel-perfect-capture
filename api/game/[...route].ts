@@ -524,7 +524,8 @@ async function handleNearbyLocalTalents(req: VercelRequest, res: VercelResponse)
   });
 
   // Optional AI polish: keep fallback content if generation fails.
-  for (let i = 0; i < rows.length; i += 1) {
+  const aiPolishLimit = Math.min(rows.length, 4);
+  for (let i = 0; i < aiPolishLimit; i += 1) {
     try {
       const row = rows[i]!;
       const prompt = buildLocalTalentPrompt({
@@ -547,6 +548,15 @@ async function handleNearbyLocalTalents(req: VercelRequest, res: VercelResponse)
     } catch (error) {
       if (!(error instanceof GeminiServiceError)) throw error;
     }
+  }
+
+  // Start encounter TTL at response time, not generation time.
+  const nowMs = Date.now();
+  for (const row of rows) {
+    const lifetime = row.lifetimeMs ?? 10_000;
+    row.spawnedAt = new Date(nowMs).toISOString();
+    row.expiresAt = new Date(nowMs + lifetime).toISOString();
+    row.remainingMs = lifetime;
   }
 
   return res.status(200).json({

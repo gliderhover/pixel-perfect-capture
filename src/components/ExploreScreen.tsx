@@ -337,7 +337,6 @@ const ExploreScreen = () => {
     let cancelled = false;
     const loadNearbyDiscovery = async () => {
       if (!userCoords) return;
-      if (mapCenter && distanceKm(mapCenter, userCoords) > 35 && mapZoom < 11) return;
       const now = Date.now();
       if (now - lastDiscoveryFetchRef.current < 6000) return;
       lastDiscoveryFetchRef.current = now;
