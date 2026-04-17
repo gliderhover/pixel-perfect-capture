@@ -10,6 +10,8 @@ import { recruitUserPlayer } from "@/lib/apiService";
 interface PlayerEncounterProps {
   player: Player;
   onClose: () => void;
+  encounterRemainingMs?: number;
+  onFlowEnd?: (result: "recruited" | "escaped" | "closed") => void;
 }
 
 const rarityLabel: Record<string, { bg: string; text: string; glow: string }> = {
@@ -28,7 +30,7 @@ const focusCostByRarity: Record<string, number> = {
 
 type EncounterPhase = "intro" | "equip" | "duel" | "recruited" | "escaped";
 
-const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
+const PlayerEncounter = ({ player, onClose, encounterRemainingMs, onFlowEnd }: PlayerEncounterProps) => {
   const [phase, setPhase] = useState<EncounterPhase>("intro");
   const [revealed, setRevealed] = useState(false);
   const [selectedGloves, setSelectedGloves] = useState<KeeperGloves>(keeperGloves[0]);
@@ -40,6 +42,13 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
   const rarity = rarityLabel[player.rarity];
   const headlineTrait = player.traits[0] ?? "Elite prospect";
   const retryCost = focusCostByRarity[player.rarity] ?? 2;
+  const remainingSeconds = encounterRemainingMs !== undefined ? Math.max(0, Math.ceil(encounterRemainingMs / 1000)) : null;
+  const leavingSoon = remainingSeconds !== null && remainingSeconds <= 3;
+
+  const closeWithResult = (result: "recruited" | "escaped" | "closed") => {
+    onFlowEnd?.(result);
+    onClose();
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setRevealed(true), 100);
@@ -139,7 +148,7 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => closeWithResult("recruited")}
             className="mt-8 w-full max-w-xs py-4 rounded-2xl bg-primary text-primary-foreground font-black glow-primary active:scale-[0.97] transition-transform"
           >
             Add to Squad →
@@ -184,7 +193,7 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
             )}
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => closeWithResult("escaped")}
               className="w-full py-3.5 rounded-2xl glass-card-strong text-foreground font-bold active:scale-[0.97] transition-transform"
             >
               Back to Map
@@ -204,7 +213,7 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
   if (phase === "equip") {
     return (
       <div className="fixed inset-0 z-[1400] flex flex-col bg-background/95 backdrop-blur-xl">
-        <button type="button" onClick={onClose}
+        <button type="button" onClick={() => closeWithResult("closed")}
           className="absolute top-[max(3rem,env(safe-area-inset-top))] right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full glass-card">
           <X className="h-5 w-5 text-muted-foreground" />
         </button>
@@ -284,7 +293,7 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
 
   // --- INTRO ---
   return (
-    <div className="fixed inset-0 z-[1400]" onClick={onClose}>
+    <div className="fixed inset-0 z-[1400]" onClick={() => closeWithResult("closed")}>
       <div className="absolute inset-0 bg-background/85 backdrop-blur-xl" />
       <div className={`absolute inset-0 transition-opacity duration-700 ${revealed ? "opacity-100" : "opacity-0"}`}
         style={{
@@ -299,7 +308,7 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
         }}
       />
 
-      <button type="button" onClick={onClose}
+      <button type="button" onClick={() => closeWithResult("closed")}
         className="absolute top-[max(3rem,env(safe-area-inset-top))] right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full glass-card">
         <X className="h-5 w-5 text-muted-foreground" />
       </button>
@@ -328,6 +337,11 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
           <span className={`mb-2 inline-block rounded-full border border-current/20 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest ${rarity.bg} ${rarity.text}`}>
             {player.rarity}
           </span>
+          {remainingSeconds !== null && (
+            <p className={`mb-1 text-[10px] font-bold ${leavingSoon ? "text-destructive" : "text-primary"}`}>
+              {leavingSoon ? "Leaving soon" : "Encounter timer"}: {remainingSeconds}s
+            </p>
+          )}
           <h2 className="mb-1 text-2xl font-black text-foreground">{player.name}</h2>
           <p className="mb-0.5 text-sm font-semibold text-muted-foreground">
             {player.position} · <span className="text-foreground/90">{player.representedCountry}</span>
@@ -366,7 +380,7 @@ const PlayerEncounter = ({ player, onClose }: PlayerEncounterProps) => {
             <div className="text-center">
               <p className="text-sm font-bold text-destructive/80 mb-1">Not enough Focus Points</p>
               <p className="text-[10px] text-muted-foreground">Explore the map and train to earn more!</p>
-              <button type="button" onClick={onClose}
+              <button type="button" onClick={() => closeWithResult("closed")}
                 className="mt-3 w-full py-3 rounded-2xl glass-card-strong text-foreground font-bold active:scale-[0.97] transition-transform">
                 Back to Map
               </button>

@@ -21,10 +21,30 @@ export type LocalTalentEncounter = {
   scoutingDescription: string;
   lat: number;
   lng: number;
+  spawnedAt: string;
+  expiresAt: string;
+  lifetimeMs: number;
+  remainingMs: number;
   distanceKm: number;
   encounterTier: "local" | "prospect" | "known" | "surprise";
   source: "local-talent";
   tags: string[];
+};
+
+export const LOCAL_TALENT_DISCOVERY_CONFIG = {
+  spawnLifetimeMs: 10_000,
+  // Tier weighting: local > prospect > known > surprise
+  tierThresholds: {
+    local: 0.57,
+    prospect: 0.84,
+    known: 0.96,
+  },
+  distanceBands: {
+    nearRatio: 0.25,
+    midRatio: 0.65,
+    nearPopulationRatio: 0.35,
+    midPopulationRatio: 0.8,
+  },
 };
 
 function hashSeed(input: string) {
@@ -104,9 +124,9 @@ function minSeparationKmByZoom(zoom?: number) {
 }
 
 function chooseTier(rand: number): LocalTalentEncounter["encounterTier"] {
-  if (rand < 0.57) return "local";
-  if (rand < 0.84) return "prospect";
-  if (rand < 0.96) return "known";
+  if (rand < LOCAL_TALENT_DISCOVERY_CONFIG.tierThresholds.local) return "local";
+  if (rand < LOCAL_TALENT_DISCOVERY_CONFIG.tierThresholds.prospect) return "prospect";
+  if (rand < LOCAL_TALENT_DISCOVERY_CONFIG.tierThresholds.known) return "known";
   return "surprise";
 }
 
@@ -119,6 +139,7 @@ export function buildLocalTalentEncounters(params: {
   limit?: number;
   seedKey?: string;
 }) {
+  const nowMs = Date.now();
   const radiusKm = params.radiusKm ?? 4.5;
   const desiredLimit = Math.max(8, Math.min(44, params.limit ?? spawnCountByZoom(params.zoom)));
   const minSeparationKm = minSeparationKmByZoom(params.zoom);
@@ -147,13 +168,13 @@ export function buildLocalTalentEncounters(params: {
             : surprisePool;
     const pool = sourcePool.length > 0 ? sourcePool : fallbackPool;
     const base = pool[Math.floor(seeded(seed, i + 11) * pool.length)]!;
-    const nearBandEnd = Math.max(0.8, radiusKm * 0.25);
-    const midBandEnd = Math.max(1.8, radiusKm * 0.65);
+    const nearBandEnd = Math.max(0.8, radiusKm * LOCAL_TALENT_DISCOVERY_CONFIG.distanceBands.nearRatio);
+    const midBandEnd = Math.max(1.8, radiusKm * LOCAL_TALENT_DISCOVERY_CONFIG.distanceBands.midRatio);
 
     let distanceKm =
-      i < Math.floor(desiredLimit * 0.35)
+      i < Math.floor(desiredLimit * LOCAL_TALENT_DISCOVERY_CONFIG.distanceBands.nearPopulationRatio)
         ? 0.08 + seeded(seed, i + 15) * nearBandEnd
-        : i < Math.floor(desiredLimit * 0.8)
+        : i < Math.floor(desiredLimit * LOCAL_TALENT_DISCOVERY_CONFIG.distanceBands.midPopulationRatio)
           ? nearBandEnd + seeded(seed, i + 19) * (midBandEnd - nearBandEnd)
           : midBandEnd + seeded(seed, i + 21) * Math.max(0.6, radiusKm - midBandEnd);
 
@@ -223,6 +244,10 @@ export function buildLocalTalentEncounters(params: {
             : `${hometown} prospect with ${style}.`,
       lat,
       lng,
+      spawnedAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(nowMs + LOCAL_TALENT_DISCOVERY_CONFIG.spawnLifetimeMs).toISOString(),
+      lifetimeMs: LOCAL_TALENT_DISCOVERY_CONFIG.spawnLifetimeMs,
+      remainingMs: LOCAL_TALENT_DISCOVERY_CONFIG.spawnLifetimeMs,
       distanceKm: Math.round(distanceKm * 10) / 10,
       encounterTier: tier,
       source: "local-talent",

@@ -76,6 +76,10 @@ export type ApiLocalTalentEncounter = {
   scoutingDescription: string;
   lat: number;
   lng: number;
+  spawnedAt: string;
+  expiresAt: string;
+  lifetimeMs: number;
+  remainingMs: number;
   distanceKm: number;
   encounterTier: "local" | "prospect" | "known" | "surprise";
   source: "local-talent";

@@ -45,12 +45,25 @@ const rarityRingColor: Record<string, string> = {
   legendary: "rgba(245,158,11,0.88)",
 };
 
-const createPlayerMarkerIcon = (portrait: string, rarity: string = "common") => {
+const createPlayerMarkerIcon = (
+  portrait: string,
+  rarity: string = "common",
+  options?: { expiring?: boolean; leavingSoon?: boolean; remainingSec?: number }
+) => {
   const safe = portrait.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
   const ring = rarityRingColor[rarity] ?? rarityRingColor.common;
+  const opacity = options?.expiring ? 0.32 : 1;
+  const pulse = options?.leavingSoon ? "0 0 20px rgba(248,113,113,0.9)" : `0 0 12px ${ring}`;
+  const timerBadge =
+    options?.remainingSec !== undefined
+      ? `<span style="position:absolute;right:-4px;bottom:-4px;min-width:16px;height:16px;border-radius:9999px;background:rgba(15,23,42,0.92);color:#f8fafc;border:1px solid rgba(226,232,240,0.45);font-size:9px;line-height:16px;text-align:center;font-weight:700;padding:0 3px;">${Math.max(0, options.remainingSec)}</span>`
+      : "";
   return L.divIcon({
     className: "custom-player-marker",
-    html: `<div class="player-marker-face" style="border-color:${ring}; box-shadow:0 0 12px ${ring};"><img src="${safe}" alt="" loading="lazy" referrerpolicy="no-referrer" /></div>`,
+    html: `<div style="position:relative;opacity:${opacity};transition:opacity 260ms ease;">
+      <div class="player-marker-face" style="border-color:${ring}; box-shadow:${pulse};"><img src="${safe}" alt="" loading="lazy" referrerpolicy="no-referrer" /></div>
+      ${timerBadge}
+    </div>`,
     iconSize: [44, 44],
     iconAnchor: [22, 22],
   });
@@ -106,6 +119,17 @@ const spawnRadiusByZoom = (zoom: number) => {
   if (zoom <= 10) return 5.5;
   if (zoom <= 13) return 4.2;
   return 3.2;
+};
+
+const LOCAL_TALENT_RUNTIME_CONFIG = {
+  defaultLifetimeMs: 10_000,
+  respawnIntervalMs: 12_000,
+  countdownTickMs: 1_000,
+  despawnFadeMs: 350,
+  leavingSoonMs: 3_000,
+  freezeExpiryWhenActiveEncounter: true,
+  maxNearbyByZoom: spawnLimitByZoom,
+  distanceFromUserByZoomKm: spawnRadiusByZoom,
 };
 
 const MapControls = ({
@@ -199,6 +223,10 @@ const MapViewWatcher = ({
 };
 
 type SelectedPlace = ApiNearbyPlace | null;
+type LocalTalentRuntime = ApiLocalTalentEncounter & {
+  remainingMs: number;
+  isExpiring: boolean;
+};
 
 const ExploreScreen = () => {
   const { activePlayer, playersById, setExplorationZoneType } = useGameProgress();
@@ -216,14 +244,17 @@ const ExploreScreen = () => {
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
-  const [localTalents, setLocalTalents] = useState<ApiLocalTalentEncounter[]>([]);
+  const [localTalents, setLocalTalents] = useState<LocalTalentRuntime[]>([]);
   const [nearbyPlaces, setNearbyPlaces] = useState<ApiNearbyPlace[]>([]);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [mapZoom, setMapZoom] = useState(4);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
-  const [spawnSeedKey, setSpawnSeedKey] = useState(() => String(Math.floor(Date.now() / 90000)));
+  const [spawnSeedKey, setSpawnSeedKey] = useState(
+    () => String(Math.floor(Date.now() / LOCAL_TALENT_RUNTIME_CONFIG.respawnIntervalMs))
+  );
   const lastCoordsRefreshRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastDiscoveryFetchRef = useRef(0);
+  const [activeLocalEncounterId, setActiveLocalEncounterId] = useState<string | null>(null);
 
   const handleScan = () => {
     setScanning(true);
@@ -244,6 +275,39 @@ const ExploreScreen = () => {
       .sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999))
       .slice(0, cap);
   }, [localTalents, mapZoom]);
+
+  const activeLocalEncounter = useMemo(
+    () => localTalents.find((t) => t.id === activeLocalEncounterId) ?? null,
+    [localTalents, activeLocalEncounterId]
+  );
+
+  const handleEncounterFlowEnd = useCallback(
+    (result: "recruited" | "escaped" | "closed") => {
+      const activeId = activeLocalEncounterId;
+      if (activeId) {
+        setLocalTalents((prev) => {
+          const updated = prev
+            .map((item) => {
+              if (item.id !== activeId) return item;
+              if (result === "recruited") return null;
+              return {
+                ...item,
+                isExpiring: false,
+                expiresAt: new Date(Date.now() + Math.max(item.remainingMs, 0)).toISOString(),
+              };
+            })
+            .filter((item): item is LocalTalentRuntime => Boolean(item));
+          return updated;
+        });
+        if (result === "recruited") {
+          setLocationNotice("Recruit secured before the encounter expired.");
+        }
+      }
+      setActiveLocalEncounterId(null);
+      setEncounterPlayer(null);
+    },
+    [activeLocalEncounterId]
+  );
 
   useEffect(() => {
     setExplorationZoneType(selectedZone?.type ?? null);
@@ -279,8 +343,8 @@ const ExploreScreen = () => {
       lastDiscoveryFetchRef.current = now;
       setDiscoveryError(null);
       try {
-        const radiusKm = spawnRadiusByZoom(mapZoom);
-        const spawnLimit = spawnLimitByZoom(mapZoom);
+        const radiusKm = LOCAL_TALENT_RUNTIME_CONFIG.distanceFromUserByZoomKm(mapZoom);
+        const spawnLimit = LOCAL_TALENT_RUNTIME_CONFIG.maxNearbyByZoom(mapZoom);
         const [talentResult, placesResult] = await Promise.all([
           fetchNearbyLocalTalents(userCoords.lat, userCoords.lng, {
             radiusKm,
@@ -291,7 +355,32 @@ const ExploreScreen = () => {
           fetchNearbyFootballPlaces(userCoords.lat, userCoords.lng, Math.max(4, Math.min(8, radiusKm + 1))),
         ]);
         if (cancelled) return;
-        setLocalTalents(talentResult.data);
+        setLocalTalents((prev) => {
+          const prevById = new Map(prev.map((item) => [item.id, item]));
+          const now = Date.now();
+          const merged = talentResult.data.map((item) => {
+            const existing = prevById.get(item.id);
+            const computedRemaining = Math.max(0, new Date(item.expiresAt).getTime() - now);
+            if (existing) {
+              return {
+                ...item,
+                remainingMs: existing.remainingMs,
+                isExpiring: existing.isExpiring,
+                expiresAt: new Date(now + existing.remainingMs).toISOString(),
+              };
+            }
+            return {
+              ...item,
+              remainingMs: computedRemaining || item.remainingMs || item.lifetimeMs || LOCAL_TALENT_RUNTIME_CONFIG.defaultLifetimeMs,
+              isExpiring: false,
+            };
+          });
+          if (activeLocalEncounterId && !merged.some((item) => item.id === activeLocalEncounterId)) {
+            const activeExisting = prevById.get(activeLocalEncounterId);
+            if (activeExisting) merged.push(activeExisting);
+          }
+          return merged;
+        });
         setNearbyPlaces(placesResult.data);
       } catch (error) {
         if (!cancelled) {
@@ -305,13 +394,13 @@ const ExploreScreen = () => {
     return () => {
       cancelled = true;
     };
-  }, [userCoords, mapZoom, mapCenter, spawnSeedKey]);
+  }, [userCoords, mapZoom, mapCenter, spawnSeedKey, activeLocalEncounterId]);
 
   useEffect(() => {
     if (!userCoords) return;
     const interval = window.setInterval(() => {
-      setSpawnSeedKey(String(Math.floor(Date.now() / 90000)));
-    }, 90000);
+      setSpawnSeedKey(String(Math.floor(Date.now() / LOCAL_TALENT_RUNTIME_CONFIG.respawnIntervalMs)));
+    }, LOCAL_TALENT_RUNTIME_CONFIG.respawnIntervalMs);
     return () => window.clearInterval(interval);
   }, [userCoords]);
 
@@ -338,6 +427,50 @@ const ExploreScreen = () => {
     }, 30000);
     return () => window.clearInterval(interval);
   }, [userCoords]);
+
+  useEffect(() => {
+    const tick = window.setInterval(() => {
+      const now = Date.now();
+      setLocalTalents((prev) =>
+        prev
+          .map((talent) => {
+            const isActive =
+              LOCAL_TALENT_RUNTIME_CONFIG.freezeExpiryWhenActiveEncounter &&
+              activeLocalEncounterId === talent.id;
+            if (isActive) {
+              return { ...talent, isExpiring: false };
+            }
+
+            const remainingMs = Math.max(0, new Date(talent.expiresAt).getTime() - now);
+            if (remainingMs <= 0) {
+              if (talent.isExpiring) {
+                return {
+                  ...talent,
+                  remainingMs: 0,
+                };
+              }
+              return {
+                ...talent,
+                remainingMs: 0,
+                isExpiring: true,
+                expiresAt: new Date(now + LOCAL_TALENT_RUNTIME_CONFIG.despawnFadeMs).toISOString(),
+              };
+            }
+
+            return {
+              ...talent,
+              remainingMs,
+              isExpiring: false,
+            };
+          })
+          .filter((talent) => {
+            if (!talent.isExpiring) return true;
+            return new Date(talent.expiresAt).getTime() > now;
+          })
+      );
+    }, LOCAL_TALENT_RUNTIME_CONFIG.countdownTickMs);
+    return () => window.clearInterval(tick);
+  }, [activeLocalEncounterId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -403,7 +536,7 @@ const ExploreScreen = () => {
           onLocationResolved={(lat, lng) => {
             setUserCoords({ lat, lng });
             lastCoordsRefreshRef.current = { lat, lng };
-            setSpawnSeedKey(String(Math.floor(Date.now() / 90000)));
+            setSpawnSeedKey(String(Math.floor(Date.now() / LOCAL_TALENT_RUNTIME_CONFIG.respawnIntervalMs)));
             setLocationNotice("Centered on your current location.");
           }}
           onLocationDenied={() => {
@@ -432,7 +565,11 @@ const ExploreScreen = () => {
             position={[zone.lat, zone.lng]}
             icon={createZoneIcon(zone.type)}
             eventHandlers={{
-              click: () => { setSelectedZone(zone); setEncounterPlayer(null); },
+              click: () => {
+                setSelectedZone(zone);
+                setEncounterPlayer(null);
+                setActiveLocalEncounterId(null);
+              },
             }}
           />
         ))}
@@ -449,6 +586,7 @@ const ExploreScreen = () => {
               eventHandlers={{
                 click: () => {
                   const full = playersById[pm.playerId] ?? player;
+                  setActiveLocalEncounterId(null);
                   setEncounterPlayer(full);
                   setSelectedZone(null);
                 },
@@ -462,11 +600,16 @@ const ExploreScreen = () => {
           <Marker
             key={talent.id}
             position={[talent.lat, talent.lng]}
-            icon={createPlayerMarkerIcon(talent.portrait, talent.rarity)}
+            icon={createPlayerMarkerIcon(talent.portrait, talent.rarity, {
+              expiring: talent.isExpiring,
+              leavingSoon: talent.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs,
+              remainingSec: talent.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs ? Math.ceil(talent.remainingMs / 1000) : undefined,
+            })}
             eventHandlers={{
               click: () => {
                 const base = playersById[talent.basePlayerId] ?? getPlayerById(talent.basePlayerId);
                 if (!base) return;
+                setActiveLocalEncounterId(talent.id);
                 setEncounterPlayer({
                   ...base,
                   name: talent.displayName,
@@ -476,6 +619,16 @@ const ExploreScreen = () => {
                 });
                 setSelectedZone(null);
                 setSelectedPlace(null);
+                setLocalTalents((prev) =>
+                  prev.map((item) =>
+                    item.id === talent.id
+                      ? {
+                          ...item,
+                          isExpiring: false,
+                        }
+                      : item
+                  )
+                );
               },
             }}
           />
@@ -492,6 +645,7 @@ const ExploreScreen = () => {
                 setSelectedPlace(place);
                 setSelectedZone(null);
                 setEncounterPlayer(null);
+                setActiveLocalEncounterId(null);
               },
             }}
           />
@@ -542,6 +696,9 @@ const ExploreScreen = () => {
                 Nearby encounters: {visibleLocalTalents.length} shown ({localTalents.length} generated)
               </p>
             )}
+            {!discoveryError && userCoords && visibleLocalTalents.some((t) => t.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs) && (
+              <p className="text-[9px] text-destructive mt-1">Some nearby players are leaving soon.</p>
+            )}
           </div>
         </div>
       </div>
@@ -586,7 +743,9 @@ const ExploreScreen = () => {
       >
         <div className="flex gap-1.5 overflow-x-auto py-0.5 scrollbar-hide min-h-[2.5rem] items-center">
           {[...mockNearbyActivity,
-            ...visibleLocalTalents.slice(0, 3).map((t) => `${t.encounterTier}: ${t.displayName}`),
+            ...visibleLocalTalents
+              .slice(0, 3)
+              .map((t) => `${t.encounterTier}: ${t.displayName} (${Math.max(0, Math.ceil(t.remainingMs / 1000))}s)`),
             ...nearbyPlaces.slice(0, 2).map((p) => `${p.name} → ${p.mappedZoneLabel}`),
           ].map((activity, i) => (
             <div key={i} className="glass-card px-2.5 py-1.5 shrink-0 flex items-center gap-1.5 rounded-xl">
@@ -660,7 +819,15 @@ const ExploreScreen = () => {
 
       {/* Player Encounter */}
       {encounterPlayer && (
-        <PlayerEncounter player={encounterPlayer} onClose={() => setEncounterPlayer(null)} />
+        <PlayerEncounter
+          player={encounterPlayer}
+          encounterRemainingMs={activeLocalEncounter?.remainingMs}
+          onFlowEnd={handleEncounterFlowEnd}
+          onClose={() => {
+            setEncounterPlayer(null);
+            setActiveLocalEncounterId(null);
+          }}
+        />
       )}
 
       {/* Camera Mission */}
