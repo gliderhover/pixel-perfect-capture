@@ -100,31 +100,47 @@ function computeDeltas(message: string): Delta {
   };
 }
 
-function makeReply(name: string, message: string, deltas: Delta): string {
-  const mood =
-    deltas.confidence + deltas.morale >= 3
-      ? "I'm locked in. The work feels good and the rhythm is there."
-      : deltas.morale < 0
-        ? "Tough moment, but I reset quick. That is part of the level."
-        : "I hear you, and I appreciate that support.";
-  return `${mood}\n\nRight now it is about clean details, sharp decisions, and being ready when the match opens up.\n\nNext rep, cleaner execution.`;
+function makeReply(name: string, _message: string, _deltas: Delta): string {
+  const lower = name.toLowerCase();
+
+  if (lower.includes("mbapp")) {
+    const lines = ["I don't overthink it — I just go.", "Simple. Work hard, stay sharp.", "Trust the process. I always do."];
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+  if (lower.includes("bellingham")) {
+    const lines = ["Step up or step aside — that's my mentality.", "Hard days make good players.", "I'll take responsibility for that. Let's go again."];
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+  if (lower.includes("haaland")) {
+    const lines = ["Goals. That's the only thing that matters.", "I reset fast. Next chance, it goes in.", "Simple game. Work, shoot, score."];
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+  if (lower.includes("messi")) {
+    const lines = ["I just try to play my game.", "Every day, a little better.", "The ball knows what I want."];
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+  if (lower.includes("ronaldo") || lower.includes("cristiano")) {
+    const lines = ["I never stop pushing. Never.", "Hard work beats talent when talent doesn't work hard.", "My hunger never dies."];
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+
+  const generic = [
+    "Noted. Head down, keep working.",
+    "I hear you. Let's make it count.",
+    "Fair point. I'll focus on that next session.",
+    "Alright — back to work.",
+    "I'm not worried. I know what I can do.",
+  ];
+  return generic[Math.floor(Math.random() * generic.length)];
 }
 
 function wordCount(text: string) {
-  return text
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
+  return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
 function wantsShortReply(message: string) {
   const lower = message.toLowerCase();
-  return (
-    lower.includes("short answer")
-    || lower.includes("brief")
-    || lower.includes("one line")
-    || lower.includes("quick answer")
-  );
+  return lower.includes("short answer") || lower.includes("brief") || lower.includes("one line") || lower.includes("quick answer");
 }
 
 function stripSpeakerPrefix(reply: string, playerName: string) {
@@ -137,22 +153,19 @@ function stripSpeakerPrefix(reply: string, playerName: string) {
 function enrichIfTooShort(reply: string, message: string): string {
   const trimmed = reply.trim();
   if (!trimmed || wantsShortReply(message) || wordCount(trimmed) >= 28) return trimmed;
-
   const lower = message.toLowerCase();
   const bridge = lower.includes("world cup")
     ? "The World Cup changes the feeling of every session. Small details become everything."
     : lower.includes("confidence")
-      ? "Confidence is built in the work, not in talking. You feel it when the touches are clean and the legs are alive."
+      ? "Confidence is built in the work, not in talking. You feel it when the touches are clean."
       : lower.includes("rival") || lower.includes("opponent")
-        ? "Those matches are emotional, so the key is staying colder than the noise and sharper in the big moments."
+        ? "Those matches are emotional, so the key is staying colder than the noise."
         : lower.includes("improve") || lower.includes("better")
-          ? "There is always another level in the details, and that is where I spend most of my focus."
+          ? "There is always another level in the details — that is where I spend my focus."
           : lower.includes("injur") || lower.includes("body") || lower.includes("recover")
-            ? "At this level, the body tells the truth, so recovery and sharpness matter every day."
-            : "Big games are decided by small actions, and that is what I keep coming back to.";
-  const close = lower.includes("?")
-    ? "If you want, I can go deeper on that."
-    : "That is the level.";
+            ? "At this level, the body tells the truth, so recovery matters every day."
+            : "Big games are decided by small actions.";
+  const close = lower.includes("?") ? "If you want, I can go deeper on that." : "That is the level.";
   return `${trimmed}\n\n${bridge}\n\n${close}`;
 }
 

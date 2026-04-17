@@ -75,6 +75,8 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
   const [activeChatPlayerId, setActiveChatPlayerId] = useState<string | null>(null);
   const [messagesByPlayerId, setMessagesByPlayerId] = useState<ChatThreadState>({});
   const [input, setInput] = useState("");
+  const [isPending, setIsPending] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const [zoneFlavorText, setZoneFlavorText] = useState<string | null>(null);
   const [aiMoodLabelByPlayerId, setAiMoodLabelByPlayerId] = useState<TextByPlayerState>({});
   const [contextualSuggestedByPlayerId, setContextualSuggestedByPlayerId] = useState<SuggestionsByPlayerState>({});
@@ -109,7 +111,8 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
       return;
     }
     if (!activeChatPlayerId || !chatCandidates.some((p) => p.id === activeChatPlayerId)) {
-      setActiveChatPlayerId(chatCandidates[0]!.id);
+      const defaultId = chatCandidates.find((p) => p.id === player.id)?.id ?? chatCandidates[0]!.id;
+      setActiveChatPlayerId(defaultId);
     }
   }, [chatCandidates, activeChatPlayerId]);
 
@@ -178,16 +181,22 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  const appendChat = (userText: string, playerText: string, chips: Chip[]) => {
-    const uid = Date.now();
+  const appendUserMsg = (text: string) => {
     setMessagesByPlayerId((prev) => ({
       ...prev,
-      [currentPlayerId]: [
-        ...(prev[currentPlayerId] ?? []),
-        { id: uid, from: "user", text: userText },
-        { id: uid + 1, from: "player", text: playerText, chips },
-      ],
+      [currentPlayerId]: [...(prev[currentPlayerId] ?? []), { id: Date.now(), from: "user" as const, text }],
     }));
+  };
+  const appendPlayerMsg = (text: string, chips: Chip[]) => {
+    setMessagesByPlayerId((prev) => ({
+      ...prev,
+      [currentPlayerId]: [...(prev[currentPlayerId] ?? []), { id: Date.now() + 1, from: "player" as const, text, chips }],
+    }));
+  };
+
+  const appendChat = (userText: string, playerText: string, chips: Chip[]) => {
+    appendUserMsg(userText);
+    appendPlayerMsg(playerText, chips);
   };
 
   const trainViaApi = async (
@@ -195,6 +204,8 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
     userText: string,
     playerText: string
   ) => {
+    appendUserMsg(userText);
+    setIsPending(true);
     try {
       const result = await trainUserPlayer(userId, activeChatPlayer.id, mode);
       await refreshOwnedPlayers();
@@ -220,15 +231,17 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
         .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
       const chips: Chip[] = [{ label: "XP", val: `+${result.xpGained}`, positive: true }];
       if (topTrainAttr) chips.push({ label: topTrainAttr[0], val: `${topTrainAttr[1] >= 0 ? "+" : ""}${topTrainAttr[1]}`, positive: topTrainAttr[1] >= 0 });
-      appendChat(userText, playerText, chips);
+      appendPlayerMsg(playerText, chips);
+      setIsPending(false);
     } catch (error) {
-      appendChat(userText, "Can't lock in the training update right now. Try again in a second.", [
+      appendPlayerMsg("Can't lock in the training update right now. Try again in a second.", [
         {
           label: "Error",
           val: error instanceof Error ? error.message : "training failed",
           positive: false,
         },
       ]);
+      setIsPending(false);
     }
   };
 
@@ -265,6 +278,9 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
 
   const sendMessage = (text: string) => {
     if (!text.trim()) return;
+    appendUserMsg(text);
+    setIsPending(true);
+    setInput("");
     const run = async () => {
       try {
         const history = messages
@@ -323,21 +339,22 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
           Morale: attrDeltas.morale,
           "Fan bond": attrDeltas.fanBond,
         }).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
-        appendChat(text, chat.reply, [
+        appendPlayerMsg(chat.reply, [
           { label: "XP", val: "+6", positive: true },
           { label: "Confidence", val: `${chat.attributeDeltas.confidence >= 0 ? "+" : ""}${chat.attributeDeltas.confidence}`, positive: chat.attributeDeltas.confidence >= 0 },
           { label: "Form", val: `${chat.attributeDeltas.form >= 0 ? "+" : ""}${chat.attributeDeltas.form}`, positive: chat.attributeDeltas.form >= 0 },
           { label: "Morale", val: `${chat.attributeDeltas.morale >= 0 ? "+" : ""}${chat.attributeDeltas.morale}`, positive: chat.attributeDeltas.morale >= 0 },
           { label: "Fan bond", val: `${chat.attributeDeltas.fanBond >= 0 ? "+" : ""}${chat.attributeDeltas.fanBond}`, positive: chat.attributeDeltas.fanBond >= 0 },
         ]);
+        setIsPending(false);
       } catch (error) {
-        appendChat(text, "Connection dropped. I couldn't process that message yet.", [
+        appendPlayerMsg("Connection dropped. I couldn't process that message yet.", [
           { label: "Error", val: error instanceof Error ? error.message : "chat failed", positive: false },
         ]);
+        setIsPending(false);
       }
     };
     void run();
-    setInput("");
   };
 
   const suggested = useMemo(() => {
@@ -354,7 +371,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
   const hasNoHiredPlayers = chatCandidates.length === 0;
 
   return (
-    <div className="flex h-[100dvh] min-h-[100dvh] flex-col safe-page-bottom with-sidebar-pad pt-3 pr-4">
+    <div className="flex h-[100dvh] min-h-[100dvh] flex-col safe-page-bottom with-sidebar-pad pt-5 pr-4">
       <div className="mb-2 px-0">
         <div className="glass-card-strong rounded-2xl p-3 mb-2">
           <div className="flex items-center gap-3">
@@ -393,9 +410,9 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
         {/* Action buttons - 3 only */}
         <div className="flex gap-2">
           {([
-            ["motivate", "⚡ Motivate"],
-            ["tactics", "📋 Tactics"],
-            ["recovery", "🔋 Recovery"],
+            ["motivate", "🔥 Pump me up!"],
+            ["tactics", "💡 What should I improve?"],
+            ["recovery", "💬 How are you feeling?"],
           ] as const).map(([key, label]) => (
             <button key={key} type="button" onClick={() => sendTrainingChoice(key)}
               className="flex-1 py-3 rounded-xl border border-border/40 bg-card/50 text-[10px] font-bold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10">
@@ -403,6 +420,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
             </button>
           ))}
         </div>
+        <p className="text-[9px] text-muted-foreground text-center mt-1">Tap to send instantly</p>
       </div>
 
       {trainingBanner && (
@@ -467,23 +485,34 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
             </div>
           </div>
         ))}
+        {isPending && (
+          <div className="flex justify-start animate-fade-in">
+            <div className="glass-card rounded-2xl rounded-bl-md px-4 py-2.5 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+          </div>
+        )}
       </div>
       )}
 
       <div className="py-2">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {visibleSuggested.map((prompt, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => sendMessage(prompt)}
-              disabled={hasNoHiredPlayers}
-              className="shrink-0 rounded-xl border border-border/30 bg-card/40 px-3 py-2 text-xs font-semibold text-foreground/90 transition-all hover:border-primary/35 active:scale-95"
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
+        {!inputFocused && !isPending && (
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+            {visibleSuggested.map((prompt, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => sendMessage(prompt)}
+                disabled={hasNoHiredPlayers}
+                className="shrink-0 rounded-xl border border-border/30 bg-card/40 px-3 py-2 text-xs font-semibold text-foreground/90 transition-all hover:border-primary/35 active:scale-95"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="pb-2">
@@ -493,6 +522,8 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             placeholder={hasNoHiredPlayers ? "Recruit a player to start chat..." : "Message your player..."}
             disabled={hasNoHiredPlayers}
             className="flex-1 bg-transparent px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
