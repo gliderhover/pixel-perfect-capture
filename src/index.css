@@ -198,6 +198,12 @@
   .with-sidebar-pad {
     padding-left: calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px);
   }
+
+  @media (max-width: 430px) {
+    .with-sidebar-pad {
+      padding-left: calc(env(safe-area-inset-left, 0px) + 52px + 6px);
+    }
+  }
 }
 
 @keyframes rewardPulse {

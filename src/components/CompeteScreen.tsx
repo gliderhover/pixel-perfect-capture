@@ -110,7 +110,7 @@ const CompeteScreen = () => {
                 </div>
                 <div className="text-center min-w-[2.5rem]">
                   <p className="text-lg font-black text-foreground">{themOvr}</p>
-                  <p className="text-[9px] text-muted-foreground truncate max-w-[4.5rem]">{rivalPlayer.name.split(" ").pop()}</p>
+                  <p className="text-[9px] text-muted-foreground truncate">{rivalPlayer.name.split(" ").pop()}</p>
                 </div>
               </div>
 
