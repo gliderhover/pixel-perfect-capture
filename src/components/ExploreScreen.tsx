@@ -97,6 +97,15 @@ const distanceKm = (a: { lat: number; lng: number }, b: { lat: number; lng: numb
   return Math.sqrt(dx * dx + dy * dy);
 };
 
+const mapZoneFromNearbyPlace = (place: ApiNearbyPlace): MapZone => ({
+  id: `nearby-${place.id}`,
+  type: place.mappedZoneType,
+  name: place.name,
+  lat: place.lat,
+  lng: place.lng,
+  benefit: place.mappedZoneLabel,
+});
+
 const spawnLimitByZoom = (zoom: number) => {
   if (zoom <= 6) return 10;
   if (zoom <= 8) return 14;
@@ -310,18 +319,20 @@ const ExploreScreen = () => {
   );
 
   useEffect(() => {
-    setExplorationZoneType(selectedZone?.type ?? null);
-  }, [selectedZone, setExplorationZoneType]);
+    setExplorationZoneType(activeZone?.type ?? selectedZone?.type ?? selectedPlace?.mappedZoneType ?? null);
+  }, [activeZone, selectedZone, selectedPlace, setExplorationZoneType]);
 
   useEffect(() => {
     let cancelled = false;
     const loadFlavor = async () => {
-      if (!selectedZone) {
+      const type = selectedZone?.type ?? selectedPlace?.mappedZoneType;
+      const name = selectedZone?.name ?? selectedPlace?.name;
+      if (!type || !name) {
         setZoneFlavorText(null);
         return;
       }
       try {
-        const result = await fetchZoneFlavor(selectedZone.type, selectedZone.name);
+        const result = await fetchZoneFlavor(type, name);
         if (!cancelled) setZoneFlavorText(result.flavor);
       } catch {
         if (!cancelled) setZoneFlavorText(null);
@@ -331,7 +342,7 @@ const ExploreScreen = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedZone]);
+  }, [selectedZone, selectedPlace]);
 
   useEffect(() => {
     let cancelled = false;
@@ -566,6 +577,7 @@ const ExploreScreen = () => {
             eventHandlers={{
               click: () => {
                 setSelectedZone(zone);
+                setSelectedPlace(null);
                 setEncounterPlayer(null);
                 setActiveLocalEncounterId(null);
               },
@@ -588,6 +600,7 @@ const ExploreScreen = () => {
                   setActiveLocalEncounterId(null);
                   setEncounterPlayer(full);
                   setSelectedZone(null);
+                  setSelectedPlace(null);
                 },
               }}
             />
@@ -787,11 +800,18 @@ const ExploreScreen = () => {
 
       {/* Zone Experience */}
       {activeZone && (
-        <ZoneExperience zone={activeZone} onClose={() => { setActiveZone(null); setSelectedZone(null); }} />
+        <ZoneExperience
+          zone={activeZone}
+          onClose={() => {
+            setActiveZone(null);
+            setSelectedZone(null);
+            setSelectedPlace(null);
+          }}
+        />
       )}
 
       {/* Nearby Place Bottom Sheet */}
-      {selectedPlace && (
+      {selectedPlace && !activeZone && (
         <div className="fixed inset-0 z-[1300] bg-background/40 backdrop-blur-sm" onClick={() => setSelectedPlace(null)}>
           <div
             className="absolute bottom-0 left-0 right-0 p-5 rounded-t-3xl bg-background/95 backdrop-blur-xl border-t border-border/20 animate-slide-up"
@@ -799,19 +819,31 @@ const ExploreScreen = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3 mb-4">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-2xl">
                 {zoneIcons[selectedPlace.mappedZoneType]}
               </div>
               <div>
                 <h3 className="text-lg font-black text-foreground">{selectedPlace.name}</h3>
                 <p className="text-sm text-primary font-semibold">{selectedPlace.mappedZoneLabel}</p>
+                {zoneFlavorText && (
+                  <p className="text-xs text-muted-foreground mt-1 max-w-[14rem]">{zoneFlavorText}</p>
+                )}
                 <p className="text-xs text-muted-foreground mt-1">{selectedPlace.distanceKm.toFixed(1)} km away</p>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mb-4">
               Nearby {selectedPlace.type.replace("-", " ")} converted into a {selectedPlace.mappedZoneLabel.toLowerCase()}.
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveZone(mapZoneFromNearbyPlace(selectedPlace));
+                setSelectedPlace(null);
+              }}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-sm flex items-center justify-center gap-2 glow-primary active:scale-[0.98] transition-transform">
+              Enter Zone <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
