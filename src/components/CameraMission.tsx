@@ -1,244 +1,453 @@
-import { useState, useEffect } from "react";
-import { Camera, X, Check, MapPin, Zap } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X } from "lucide-react";
 import { useGameProgress } from "@/context/GameProgressContext";
-import { rewardCameraScan } from "@/lib/apiService";
+import type { Player } from "@/data/mockData";
+import AnimatedPortrait from "./AnimatedPortrait";
 
 interface CameraMissionProps {
   onClose: () => void;
-  onComplete: () => void;
+  nearestPlayer?: Player | null;
+  onChallenge?: (player: Player) => void;
 }
 
-const missions = [
-  { text: "Find a football pitch nearby ⚽", reward: "form", fpReward: 2 },
-  { text: "Spot a team crest or logo 🏟️", reward: "fanBond", fpReward: 1 },
-  { text: "Capture your training ground 🌱", reward: "form", fpReward: 2 },
-  { text: "Show your match-day spot 📍", reward: "confidence", fpReward: 3 },
-  { text: "Scout a fan gathering area 📣", reward: "fanBond", fpReward: 2 },
-  { text: "Find a pressure moment 🔥", reward: "confidence", fpReward: 2 },
-];
+type Phase = "scanning" | "locking" | "found" | "missed" | "empty";
 
-const surfaceTags = ["Turf", "Grass", "Concrete"];
-const activityTags = ["Quiet", "Active", "Crowded"];
-const timeTags = ["Day", "Night"];
-
-type Step = "camera" | "tag" | "reward";
-
-const rewardDescriptions: Record<string, string> = {
-  form: "+Form Boost",
-  fanBond: "+Fan Bond",
-  confidence: "+Confidence",
-  morale: "+Morale",
+const RARITY_COLOR: Record<string, string> = {
+  legendary: "#f59e0b",
+  epic: "#a855f7",
+  rare: "#3b82f6",
+  common: "#94a3b8",
 };
 
-const CameraMission = ({ onClose, onComplete }: CameraMissionProps) => {
-  const [step, setStep] = useState<Step>("camera");
-  const [missionData] = useState(() => missions[Math.floor(Math.random() * missions.length)]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [captured, setCaptured] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const { userId, activePlayer, refreshOwnedPlayers, addFocusPoints } = useGameProgress();
+const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionProps) => {
+  const [phase, setPhase] = useState<Phase>("scanning");
+  const [cameraError, setCameraError] = useState(false);
+  const [scanPct, setScanPct] = useState(0);
+  // Capture the player at lock-on time so prop changes can't wipe it mid-flow
+  const [lockedPlayer, setLockedPlayer] = useState<Player | null>(null);
+  const [lockCountdown, setLockCountdown] = useState(8);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const { addFocusPoints } = useGameProgress();
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    );
-  };
-
-  const handleCapture = () => {
-    setCaptured(true);
-    setTimeout(() => setStep("tag"), 600);
-  };
-
-  const handleSubmit = () => {
-    const run = async () => {
-      setSubmitError(null);
+  // Start rear camera
+  useEffect(() => {
+    let alive = true;
+    const start = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        if (alive) setCameraError(true);
+        return;
+      }
       try {
-        // Persist core progression rewards via backend.
-        await rewardCameraScan({
-          userId,
-          playerId: activePlayer.id,
-          zoneType: "mission",
-          missionId: `camera-${Date.now()}`,
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
         });
-        await refreshOwnedPlayers();
-
-        // Keep FP as local session economy reward.
-        addFocusPoints(missionData.fpReward);
-        if (selectedTags.length >= 3) {
-          addFocusPoints(1);
+        if (!alive) { stream.getTracks().forEach((t) => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
         }
-
-        setStep("reward");
-        setTimeout(() => {
-          onComplete();
-          onClose();
-        }, 2500);
-      } catch (error) {
-        setSubmitError(error instanceof Error ? error.message : "Failed to submit camera mission");
+      } catch {
+        if (alive) setCameraError(true);
       }
     };
-    void run();
+    void start();
+    return () => {
+      alive = false;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  // Scan progress
+  useEffect(() => {
+    if (phase !== "scanning") return;
+    const interval = setInterval(() => {
+      setScanPct((prev) => {
+        const next = Math.min(prev + 0.8, 100);
+        if (next >= 100) clearInterval(interval);
+        return next;
+      });
+    }, 50);
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  // Transition after scan completes — capture player into local state immediately
+  useEffect(() => {
+    if (scanPct < 100) return;
+    const t = setTimeout(() => {
+      if (nearestPlayer) {
+        setLockedPlayer(nearestPlayer);
+        setLockCountdown(8);
+        setPhase("locking");
+      } else {
+        setPhase("empty");
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [scanPct, nearestPlayer]);
+
+  // Countdown during locking phase — expire to "missed"
+  useEffect(() => {
+    if (phase !== "locking") return;
+    if (lockCountdown <= 0) {
+      setPhase("missed");
+      return;
+    }
+    const t = setTimeout(() => setLockCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, lockCountdown]);
+
+  const doChallenge = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    if (lockedPlayer) {
+      addFocusPoints(1);
+      onChallenge?.(lockedPlayer);
+    }
+    onClose();
   };
 
+  const doClose = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    onClose();
+  };
+
+  const rarityColor = lockedPlayer ? (RARITY_COLOR[lockedPlayer.rarity] ?? RARITY_COLOR.common) : "#22c55e";
+  const scanY = `${25 + scanPct * 0.5}%`;
+
   return (
-    <div className="fixed inset-0 z-[1400] bg-background">
-      {/* Close */}
-      <button onClick={onClose} className="absolute top-12 right-4 z-50 w-10 h-10 rounded-full glass-card flex items-center justify-center">
-        <X className="w-5 h-5 text-muted-foreground" />
-      </button>
+    <div className="fixed inset-0 z-[1400] overflow-hidden" style={{ background: "#000" }}>
+      {/* Camera feed (hidden when error but kept for stream lifecycle) */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className={`absolute inset-0 w-full h-full object-cover ${cameraError ? "opacity-0" : ""}`}
+      />
 
-      {step === "camera" && (
-        <div className="h-full flex flex-col">
-          <div className="flex-1 relative bg-muted/30 flex items-center justify-center">
-            <div className="absolute inset-8 border-2 border-primary/30 rounded-3xl" />
-            <div className="absolute top-4 left-0 right-0 text-center">
-              <div className="inline-block glass-card-strong px-4 py-2 mx-auto">
-                <p className="text-xs font-bold text-foreground">{missionData.text}</p>
-              </div>
-            </div>
-
-            {/* Connected reward preview */}
-            <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
-              <div className="glass-card px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                <span className="text-sm">⭐</span>
-                <span className="text-[10px] font-bold text-foreground">+25 XP</span>
-              </div>
-              <div className="glass-card px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                <span className="text-sm">🎯</span>
-                <span className="text-[10px] font-bold text-accent">+{missionData.fpReward} FP</span>
-              </div>
-              <div className="glass-card px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                <span className="text-sm">📈</span>
-                <span className="text-[10px] font-bold text-primary">{rewardDescriptions[missionData.reward]}</span>
-              </div>
-            </div>
-
-            {captured && (
-              <div className="absolute inset-0 bg-primary/10 animate-fade-in flex items-center justify-center">
-                <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center animate-encounter-reveal">
-                  <Check className="w-10 h-10 text-primary" />
-                </div>
-              </div>
-            )}
-
-            {!captured && (
-              <div className="text-center">
-                <Camera className="w-16 h-16 text-muted-foreground/40 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">Point & capture</p>
-              </div>
-            )}
-          </div>
-
-          {!captured && (
-            <div className="p-8 flex justify-center">
-              <button
-                onClick={handleCapture}
-                className="w-20 h-20 rounded-full border-4 border-primary/50 flex items-center justify-center active:scale-90 transition-transform"
-              >
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-primary glow-primary" />
-              </button>
-            </div>
-          )}
+      {/* Fallback atmosphere when no camera */}
+      {cameraError && (
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at 50% 70%, hsl(153 40% 8% / 0.6), transparent 70%), linear-gradient(175deg, hsl(225 35% 4%), hsl(153 25% 6%))",
+          }}
+        >
+          {/* Field lines */}
+          <div
+            className="absolute inset-x-[15%] bottom-[20%] h-[35%] rounded-t-full opacity-[0.06]"
+            style={{ border: "2px solid #fff" }}
+          />
+          <div
+            className="absolute left-1/2 top-[35%] bottom-[20%] w-px opacity-[0.04]"
+            style={{ background: "#fff" }}
+          />
         </div>
       )}
 
-      {step === "tag" && (
-        <div className="h-full flex flex-col justify-end p-6 pb-12 animate-slide-up">
-          <div className="glass-card-strong p-6 rounded-3xl">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center">
-                <MapPin className="w-6 h-6 text-primary" />
+      {/* Dark overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            phase === "found"
+              ? "linear-gradient(to top, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.2) 70%)"
+              : "radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.6) 100%)",
+        }}
+      />
+
+      {/* Top bar */}
+      <div
+        className="absolute left-0 right-0 z-10 flex items-center justify-between px-4"
+        style={{ top: "max(3rem, env(safe-area-inset-top, 3rem))" }}
+      >
+        <p
+          className="text-[10px] font-black tracking-[0.25em] uppercase"
+          style={{ color: "#22c55e", textShadow: "0 0 12px rgba(34,197,94,0.7)" }}
+        >
+          {cameraError ? "Scout Mode" : "AR Scout"}
+        </p>
+        <button
+          onClick={doClose}
+          className="w-11 h-11 rounded-full flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.15)" }}
+        >
+          <X className="w-5 h-5 text-white" />
+        </button>
+      </div>
+
+      {/* SCANNING PHASE */}
+      {phase === "scanning" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          {/* Corner brackets */}
+          {(["tl", "tr", "bl", "br"] as const).map((pos) => (
+            <div
+              key={pos}
+              className="absolute w-14 h-14"
+              style={{
+                top: pos[0] === "t" ? "22%" : undefined,
+                bottom: pos[0] === "b" ? "22%" : undefined,
+                left: pos[1] === "l" ? "12%" : undefined,
+                right: pos[1] === "r" ? "12%" : undefined,
+                borderTop: pos[0] === "t" ? "3px solid #22c55e" : undefined,
+                borderBottom: pos[0] === "b" ? "3px solid #22c55e" : undefined,
+                borderLeft: pos[1] === "l" ? "3px solid #22c55e" : undefined,
+                borderRight: pos[1] === "r" ? "3px solid #22c55e" : undefined,
+                borderTopLeftRadius: pos === "tl" ? "10px" : undefined,
+                borderTopRightRadius: pos === "tr" ? "10px" : undefined,
+                borderBottomLeftRadius: pos === "bl" ? "10px" : undefined,
+                borderBottomRightRadius: pos === "br" ? "10px" : undefined,
+                boxShadow: "0 0 8px rgba(34,197,94,0.4)",
+              }}
+            />
+          ))}
+
+          {/* Sweep line */}
+          <div
+            className="absolute left-[12%] right-[12%]"
+            style={{
+              top: scanY,
+              height: "2px",
+              background: "linear-gradient(90deg, transparent, #22c55e 20%, #22c55e 80%, transparent)",
+              boxShadow: "0 0 10px rgba(34,197,94,0.8), 0 0 20px rgba(34,197,94,0.3)",
+              transition: "top 0.08s linear",
+            }}
+          />
+
+          {/* Status */}
+          <div className="mt-[56%] text-center px-8">
+            <p
+              className="text-white font-black text-base tracking-widest uppercase mb-3"
+              style={{ textShadow: "0 0 16px rgba(34,197,94,0.6)" }}
+            >
+              {nearestPlayer ? "Player Detected" : "Scanning Area"}
+            </p>
+            <div className="h-1 w-36 rounded-full mx-auto overflow-hidden" style={{ background: "rgba(255,255,255,0.15)" }}>
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${scanPct}%`,
+                  background: "linear-gradient(90deg, #22c55e, #86efac)",
+                  transition: "width 0.08s linear",
+                  boxShadow: "0 0 8px rgba(34,197,94,0.6)",
+                }}
+              />
+            </div>
+            <p className="text-white/40 text-xs mt-2">
+              {nearestPlayer
+                ? `${nearestPlayer.name} · ${nearestPlayer.representedCountry}`
+                : "Exploring nearby territory…"}
+            </p>
+            <p className="text-white/25 text-[10px] mt-3 text-center px-8">
+              {nearestPlayer ? `${nearestPlayer.name} detected nearby` : "Walk around to discover nearby players"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* LOCKING PHASE */}
+      {phase === "locking" && lockedPlayer && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {/* Countdown ring */}
+          <div className="relative mb-2" style={{ width: 140, height: 140 }}>
+            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 140 140">
+              <circle cx="70" cy="70" r="64" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
+              <circle
+                cx="70" cy="70" r="64" fill="none"
+                stroke={lockCountdown <= 3 ? "#ef4444" : rarityColor}
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 64}`}
+                strokeDashoffset={`${2 * Math.PI * 64 * (1 - lockCountdown / 8)}`}
+                style={{ transition: "stroke-dashoffset 0.9s linear, stroke 0.3s" }}
+              />
+            </svg>
+            <div className="absolute inset-0 rounded-full animate-ping" style={{ background: `${rarityColor}15`, animationDuration: "1.2s" }} />
+            <div className="absolute inset-3 rounded-full" style={{ border: `2px solid ${rarityColor}`, boxShadow: `0 0 20px ${rarityColor}60` }} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <AnimatedPortrait player={lockedPlayer} size="md" />
+            </div>
+            {/* Corner brackets */}
+            {(["tl","tr","bl","br"] as const).map((pos) => (
+              <div key={pos} className="absolute w-5 h-5" style={{
+                top: pos[0]==="t" ? 8 : undefined, bottom: pos[0]==="b" ? 8 : undefined,
+                left: pos[1]==="l" ? 8 : undefined, right: pos[1]==="r" ? 8 : undefined,
+                borderTop: pos[0]==="t" ? `2px solid ${rarityColor}` : undefined,
+                borderBottom: pos[0]==="b" ? `2px solid ${rarityColor}` : undefined,
+                borderLeft: pos[1]==="l" ? `2px solid ${rarityColor}` : undefined,
+                borderRight: pos[1]==="r" ? `2px solid ${rarityColor}` : undefined,
+              }} />
+            ))}
+            {/* Countdown number */}
+            <div
+              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full flex items-center justify-center font-black text-sm"
+              style={{ background: lockCountdown <= 3 ? "#ef4444" : rarityColor, color: "#000", boxShadow: `0 0 10px ${lockCountdown <= 3 ? "#ef444460" : rarityColor + "60"}` }}
+            >
+              {lockCountdown}
+            </div>
+          </div>
+          <p className="text-white font-black text-sm tracking-widest uppercase mb-0.5 mt-4" style={{ textShadow: `0 0 16px ${rarityColor}80` }}>
+            {lockedPlayer.name}
+          </p>
+          <p className="text-white/50 text-xs mb-1">{lockedPlayer.rarity} · {lockedPlayer.position}</p>
+          <p className="text-white/30 text-[10px] mb-6">
+            {lockCountdown <= 3 ? "⚠️ Escaping fast — tap now!" : "Tap fast before they slip away"}
+          </p>
+          <button
+            type="button"
+            onClick={() => setPhase("found")}
+            className="px-8 py-3 rounded-2xl font-black text-sm active:scale-95 transition-transform"
+            style={{ background: `${rarityColor}25`, border: `1px solid ${rarityColor}60`, color: rarityColor, boxShadow: `0 0 20px ${rarityColor}30` }}
+          >
+            ⚡ Lock On
+          </button>
+        </div>
+      )}
+
+      {/* MISSED PHASE */}
+      {phase === "missed" && (
+        <div
+          className="absolute inset-x-0 bottom-0 px-4 animate-slide-up"
+          style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}
+        >
+          <div
+            className="rounded-3xl p-5 text-center"
+            style={{ background: "rgba(0,0,0,0.85)", border: "1px solid rgba(239,68,68,0.3)", backdropFilter: "blur(20px)" }}
+          >
+            <p className="text-4xl mb-3">💨</p>
+            <p className="text-white font-black text-base mb-1">
+              {lockedPlayer ? `${lockedPlayer.name.split(" ")[0]} got away!` : "Player escaped!"}
+            </p>
+            <p className="text-white/50 text-sm mb-1">
+              You were too slow to lock on. Players only stay in range for a few seconds.
+            </p>
+            <p className="text-white/30 text-xs mb-5">
+              Next time tap ⚡ Lock On as soon as the target appears.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setScanPct(0); setLockCountdown(8); setLockedPlayer(null); setPhase("scanning"); }}
+                className="flex-1 py-3 rounded-2xl font-bold text-sm"
+                style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}
+              >
+                Try Again
+              </button>
+              <button
+                type="button"
+                onClick={doClose}
+                className="flex-1 py-3 rounded-2xl font-bold text-sm"
+                style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.12)" }}
+              >
+                Back to Map
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FOUND PHASE */}
+      {phase === "found" && lockedPlayer && (
+        <div
+          className="absolute inset-x-0 bottom-0 px-4 animate-slide-up"
+          style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}
+        >
+          <div className="flex justify-center mb-3">
+            <div
+              className="px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase"
+              style={{
+                background: `${rarityColor}20`,
+                border: `1px solid ${rarityColor}50`,
+                color: rarityColor,
+                textShadow: `0 0 10px ${rarityColor}60`,
+              }}
+            >
+              ⚡ {lockedPlayer.rarity.toUpperCase()} PLAYER FOUND
+            </div>
+          </div>
+
+          <div
+            className="rounded-3xl p-5"
+            style={{
+              background: "rgba(0,0,0,0.75)",
+              border: `1px solid ${rarityColor}35`,
+              backdropFilter: "blur(20px)",
+            }}
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <AnimatedPortrait player={lockedPlayer} size="lg" />
+              <div className="flex-1 min-w-0">
+                <p
+                  className="text-[10px] font-black uppercase tracking-widest mb-0.5"
+                  style={{ color: rarityColor }}
+                >
+                  {lockedPlayer.rarity}
+                </p>
+                <h2 className="text-xl font-black text-white leading-tight truncate">{lockedPlayer.name}</h2>
+                <p className="text-sm mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.55)" }}>
+                  {lockedPlayer.position} · {lockedPlayer.representedCountry}
+                </p>
+                <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.35)" }}>
+                  {lockedPlayer.clubTeam}
+                </p>
               </div>
-              <div>
-                <p className="text-sm font-black text-foreground">Quick Tag</p>
-                <p className="text-[10px] text-muted-foreground">Tag your spot for bonus rewards</p>
+              <div className="text-center shrink-0">
+                <p className="text-2xl font-black text-white">{lockedPlayer.stats.overall}</p>
+                <p className="text-[9px] font-bold" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  OVR
+                </p>
               </div>
             </div>
 
-            <div className="glass-card px-3 py-2 rounded-xl mb-4 flex items-center gap-2">
-              <Zap className="w-3.5 h-3.5 text-accent" />
-              <p className="text-[10px] text-muted-foreground">
-                More tags = more XP. Tag 3+ for <span className="text-accent font-bold">+1 bonus FP</span>
+            {(lockedPlayer as Player & { catchphrases?: string[] }).catchphrases?.[0] && (
+              <p
+                className="text-xs italic text-center mb-4 px-2 leading-relaxed"
+                style={{ color: "rgba(255,255,255,0.45)" }}
+              >
+                "{(lockedPlayer as Player & { catchphrases?: string[] }).catchphrases![0]}"
               </p>
-            </div>
-            {submitError && (
-              <p className="mb-3 text-[10px] text-destructive">{submitError}</p>
             )}
 
-            <div className="space-y-3 mb-6">
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">Surface</p>
-                <div className="flex gap-2">
-                  {surfaceTags.map((tag) => (
-                    <button key={tag} onClick={() => toggleTag(tag)}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                        selectedTags.includes(tag)
-                          ? "bg-primary/15 text-primary border border-primary/30"
-                          : "glass-card text-muted-foreground"
-                      }`}>{tag}</button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">Activity</p>
-                <div className="flex gap-2">
-                  {activityTags.map((tag) => (
-                    <button key={tag} onClick={() => toggleTag(tag)}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                        selectedTags.includes(tag)
-                          ? "bg-primary/15 text-primary border border-primary/30"
-                          : "glass-card text-muted-foreground"
-                      }`}>{tag}</button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">Time</p>
-                <div className="flex gap-2">
-                  {timeTags.map((tag) => (
-                    <button key={tag} onClick={() => toggleTag(tag)}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                        selectedTags.includes(tag)
-                          ? "bg-primary/15 text-primary border border-primary/30"
-                          : "glass-card text-muted-foreground"
-                      }`}>{tag}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <button onClick={handleSubmit}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-sm floating-button glow-primary">
-              Submit & Claim Reward
+            <button
+              type="button"
+              onClick={doChallenge}
+              className="w-full py-4 rounded-2xl font-black text-base active:scale-[0.97] transition-transform"
+              style={{
+                background: `linear-gradient(135deg, ${rarityColor}, ${rarityColor}99)`,
+                color: rarityColor === RARITY_COLOR.legendary || rarityColor === RARITY_COLOR.common ? "#000" : "#fff",
+                boxShadow: `0 0 28px ${rarityColor}40, 0 4px 16px rgba(0,0,0,0.4)`,
+              }}
+            >
+              ⚡ Challenge — Penalty Duel
             </button>
           </div>
         </div>
       )}
 
-      {step === "reward" && (
-        <div className="h-full flex flex-col items-center justify-center p-6 animate-encounter-reveal">
-          <div className="w-24 h-24 rounded-full bg-accent/15 flex items-center justify-center mb-6 glow-accent portrait-breathe">
-            <span className="text-5xl">🎁</span>
-          </div>
-          <h2 className="text-2xl font-black text-foreground mb-2">Mission Complete!</h2>
-          <div className="flex gap-2 mb-2">
-            <span className="glass-card px-3 py-1 rounded-full text-[11px] font-bold text-foreground">
-              ⭐ +{25 + selectedTags.length * 5} XP
-            </span>
-            <span className="glass-card px-3 py-1 rounded-full text-[11px] font-bold text-accent">
-              🎯 +{missionData.fpReward + (selectedTags.length >= 3 ? 1 : 0)} FP
-            </span>
-            <span className="glass-card px-3 py-1 rounded-full text-[11px] font-bold text-primary">
-              📈 {rewardDescriptions[missionData.reward]}
-            </span>
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-1">Rewards applied to {activePlayer.name}</p>
-          <div className="flex gap-2 mt-4">
-            {selectedTags.map((tag) => (
-              <span key={tag} className="px-3 py-1 rounded-full glass-card text-[10px] font-bold text-primary">
-                {tag}
-              </span>
-            ))}
+      {/* EMPTY PHASE */}
+      {phase === "empty" && (
+        <div
+          className="absolute inset-x-0 bottom-0 px-4 animate-slide-up"
+          style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}
+        >
+          <div
+            className="rounded-3xl p-5 text-center"
+            style={{ background: "rgba(0,0,0,0.75)", border: "1px solid rgba(255,255,255,0.1)", backdropFilter: "blur(20px)" }}
+          >
+            <p className="text-4xl mb-3">🔍</p>
+            <p className="text-white font-black text-base mb-1">No players in range</p>
+            <p className="text-white/40 text-sm mb-4">No players nearby right now. Move to a new spot — players appear as you explore different areas.</p>
+            <button
+              type="button"
+              onClick={doClose}
+              className="w-full py-3 rounded-2xl font-bold text-sm"
+              style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.3)" }}
+            >
+              Back to Map
+            </button>
           </div>
         </div>
       )}

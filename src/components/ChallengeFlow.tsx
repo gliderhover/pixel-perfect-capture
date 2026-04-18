@@ -163,24 +163,43 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
         )}
 
         {step === "battle" && (
-          <div className="p-5 text-center animate-fade-in">
-            <div className="flex items-center justify-center gap-4 mb-5">
-              <AnimatedPortrait player={activePlayer} size="md" />
-              <div className="flex flex-col items-center">
-                <Swords className="w-5 h-5 text-primary animate-pulse" />
-                <span className="text-[9px] text-muted-foreground mt-1">Fighting</span>
+          <div className="relative overflow-hidden">
+            {/* Stadium atmosphere */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 0%, hsl(var(--primary)/0.08), transparent 70%)" }} />
+            </div>
+            <div className="p-5 text-center animate-fade-in">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4">
+                {battleProgress < 30 ? "Analyzing matchup…" : battleProgress < 60 ? "Stats in collision…" : battleProgress < 90 ? "Deciding the outcome…" : "Locking in result!"}
+              </p>
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <div className={`transition-all duration-300 ${battleProgress > 20 ? "scale-105" : ""}`}>
+                  <AnimatedPortrait player={activePlayer} size="lg" />
+                  <p className="text-[9px] font-black text-foreground mt-1.5 text-center truncate max-w-[5rem] mx-auto">{activePlayer.name.split(" ").pop()}</p>
+                </div>
+                <div className="flex flex-col items-center gap-1 shrink-0 w-12">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "hsl(var(--primary)/0.15)", border: "1px solid hsl(var(--primary)/0.3)" }}>
+                    <Swords className={`w-4 h-4 text-primary ${battleProgress < 100 ? "animate-pulse" : ""}`} />
+                  </div>
+                  <span className="text-[8px] font-black text-primary uppercase tracking-widest">VS</span>
+                </div>
+                <div className={`transition-all duration-300 ${battleProgress > 20 ? "scale-105" : ""}`}>
+                  <AnimatedPortrait player={rivalPlayer} size="lg" />
+                  <p className="text-[9px] font-black text-foreground mt-1.5 text-center truncate max-w-[5rem] mx-auto">{rivalPlayer.name.split(" ").pop()}</p>
+                </div>
               </div>
-              <AnimatedPortrait player={rivalPlayer} size="md" />
+              <div className="relative mx-auto max-w-[240px] mb-2">
+                <div className="h-3 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(battleProgress, 100)}%`,
+                      background: "linear-gradient(90deg, hsl(var(--primary)), hsl(var(--primary)/0.7))",
+                      boxShadow: "0 0 12px hsl(var(--primary)/0.5)",
+                    }} />
+                </div>
+              </div>
+              <p className="text-[9px] text-muted-foreground">{Math.round(Math.min(battleProgress, 100))}%</p>
             </div>
-
-            <div className="h-2.5 bg-muted rounded-full overflow-hidden max-w-[240px] mx-auto mb-3">
-              <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary transition-all duration-300"
-                style={{ width: `${Math.min(battleProgress, 100)}%` }} />
-            </div>
-
-            <p className="text-sm font-black text-foreground animate-pulse">
-              {battleProgress < 30 ? "Sizing up…" : battleProgress < 60 ? "Trading blows…" : battleProgress < 90 ? "Final push…" : "Finishing!"}
-            </p>
           </div>
         )}
 

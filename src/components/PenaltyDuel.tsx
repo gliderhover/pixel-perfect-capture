@@ -193,16 +193,13 @@ const PenaltyDuel = ({
     executeDive(dir);
   }, [phase, executeDive]);
 
-  // Auto-transition from result
+  // Auto-transition only on goal — save now has explicit buttons
   useEffect(() => {
-    if (phase === "save" || phase === "goal") {
-      const t = setTimeout(() => {
-        if (phase === "save") onSave();
-        else onGoal();
-      }, 3200);
+    if (phase === "goal") {
+      const t = setTimeout(() => onGoal(), 3200);
       return () => clearTimeout(t);
     }
-  }, [phase, onSave, onGoal]);
+  }, [phase, onGoal]);
 
   useEffect(() => { return () => clearTimeout(timerRef.current); }, []);
 
@@ -424,15 +421,29 @@ const PenaltyDuel = ({
               <p className="text-sm font-bold text-primary animate-fade-in">Diving {diveDir}…</p>
             )}
             {phase === "save" && (
-              <div className="animate-duel-result-slam">
+              <div className="animate-duel-result-slam text-center">
                 <p className="text-5xl font-black text-primary mb-2 tracking-tighter">SAVE!</p>
+                {diveDir && shotDir && (
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="text-[10px] px-2.5 py-1 rounded-full font-black bg-primary/20 text-primary">
+                      Dived {diveDir} · Ball {shotDir} ✓
+                    </span>
+                  </div>
+                )}
                 <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postSaveLine}"</p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
               </div>
             )}
             {phase === "goal" && (
-              <div className="animate-duel-result-slam">
+              <div className="animate-duel-result-slam text-center">
                 <p className="text-5xl font-black text-destructive mb-2 tracking-tighter">GOAL</p>
+                {diveDir && shotDir && diveDir !== shotDir && (
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="text-[10px] px-2.5 py-1 rounded-full font-black bg-destructive/20 text-destructive">
+                      Dived {diveDir} · Ball {shotDir}
+                    </span>
+                  </div>
+                )}
                 <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postGoalLine}"</p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
               </div>
@@ -478,16 +489,42 @@ const PenaltyDuel = ({
           )}
 
           {phase === "save" && (
-            <div className="text-center py-3 rounded-2xl font-bold text-sm animate-fade-in-up"
-              style={{ background: "hsl(var(--primary) / 0.1)", color: "hsl(var(--primary))" }}>
-              Player recruited! Starting at Level 1 ✨
+            <div className="flex flex-col gap-2 animate-fade-in-up">
+              <button
+                type="button"
+                onClick={onSave}
+                className="w-full py-4 rounded-2xl font-black text-sm active:scale-[0.97] transition-transform"
+                style={{
+                  background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8))",
+                  color: "hsl(var(--primary-foreground))",
+                  boxShadow: "0 0 24px hsl(var(--primary) / 0.3)",
+                }}
+              >
+                Add to Squad →
+              </button>
+              <button
+                type="button"
+                onClick={onSave}
+                className="w-full py-3 rounded-2xl glass-card-strong text-foreground font-bold text-sm active:scale-[0.97] transition-transform"
+              >
+                🗺️ Catch more players
+              </button>
             </div>
           )}
 
           {phase === "goal" && (
-            <div className="text-center py-3 rounded-2xl font-bold text-sm animate-fade-in-up"
-              style={{ background: "hsl(var(--destructive) / 0.1)", color: "hsl(var(--destructive))" }}>
-              The player escaped…
+            <div className="flex flex-col gap-2 animate-fade-in-up">
+              <div className="text-center py-3 rounded-2xl font-bold text-sm"
+                style={{ background: "hsl(var(--destructive) / 0.1)", color: "hsl(var(--destructive))" }}>
+                The player escaped…
+              </div>
+              <button
+                type="button"
+                onClick={onGoal}
+                className="w-full py-3.5 rounded-2xl glass-card-strong text-foreground font-black text-sm active:scale-[0.97] transition-transform"
+              >
+                Continue →
+              </button>
             </div>
           )}
         </div>

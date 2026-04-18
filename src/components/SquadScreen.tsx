@@ -3,6 +3,7 @@ import { mockPlayers } from "@/data/mockData";
 import type { Player } from "@/data/mockData";
 import { useGameProgress } from "@/context/GameProgressContext";
 import AnimatedPortrait from "./AnimatedPortrait";
+import { type AppTab } from "@/components/FoldableSidebar";
 
 const rarityBorder: Record<string, string> = {
   common: "border-zinc-500/20",
@@ -13,7 +14,11 @@ const rarityBorder: Record<string, string> = {
 
 const evoLabel = ["Rookie", "Developing", "Rising", "Elite"] as const;
 
-const SquadScreen = () => {
+interface SquadScreenProps {
+  onNavigate?: (tab: AppTab) => void;
+}
+
+const SquadScreen = ({ onNavigate }: SquadScreenProps) => {
   const {
     activePlayer,
     setActivePlayerId,
@@ -88,6 +93,24 @@ const SquadScreen = () => {
       </div>
 
       {/* Card Grid */}
+      {roster.length === 0 && !playersLoading && (
+        <div className="col-span-2 glass-card-strong p-6 rounded-2xl text-center mt-2">
+          <div className="text-4xl mb-3">🗺️</div>
+          <p className="text-sm font-black text-foreground mb-1">No players yet</p>
+          <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+            Head to the map, challenge a player to a penalty duel, and save the shot to recruit them.
+          </p>
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate("explore")}
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-primary to-emerald-400 text-primary-foreground font-black text-xs floating-button glow-primary"
+            >
+              Go to Explore Map →
+            </button>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         {filtered.map((player, i) => (
           <button
@@ -108,7 +131,7 @@ const SquadScreen = () => {
       {/* Player Detail Sheet */}
       {detail && (
         <div className="fixed inset-0 z-[1350] bg-background/60 backdrop-blur-md" onClick={() => setSelectedPlayer(null)}>
-          <div className="bottom-sheet p-6 pb-8 animate-slide-up max-h-[75vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="bottom-sheet p-6 pb-8 animate-slide-up max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-5" />
 
             <div className="flex flex-col items-center mb-4 animate-encounter-reveal">

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Send, Heart, Flame, Shield, Sparkles } from "lucide-react";
+import { Send, Heart } from "lucide-react";
 import { useGameProgress } from "@/context/GameProgressContext";
 import AnimatedPortrait from "./AnimatedPortrait";
 import { cn } from "@/lib/utils";
@@ -51,7 +51,12 @@ function moodLabel(
   return "Finding rhythm";
 }
 
-const TrainScreen = () => {
+interface TrainScreenProps {
+  onTrainingComplete?: () => void;
+  streakCount?: number;
+}
+
+const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) => {
   const {
     userId,
     activePlayer: player,
@@ -65,14 +70,16 @@ const TrainScreen = () => {
   } = useGameProgress();
 
   const chatRef = useRef<HTMLDivElement>(null);
+  const [trainingBanner, setTrainingBanner] = useState<{ xpGained: number; deltas: Record<string, number> } | null>(null);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [activeChatPlayerId, setActiveChatPlayerId] = useState<string | null>(null);
   const [messagesByPlayerId, setMessagesByPlayerId] = useState<ChatThreadState>({});
   const [input, setInput] = useState("");
+  const [isPending, setIsPending] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const [zoneFlavorText, setZoneFlavorText] = useState<string | null>(null);
   const [aiMoodLabelByPlayerId, setAiMoodLabelByPlayerId] = useState<TextByPlayerState>({});
   const [contextualSuggestedByPlayerId, setContextualSuggestedByPlayerId] = useState<SuggestionsByPlayerState>({});
-  const [compactSwitcher, setCompactSwitcher] = useState(false);
-
   const zoneName = explorationZoneType ? zoneFlavor[explorationZoneType] : null;
   const ownedIds = useMemo(() => Object.keys(ownedPlayersById), [ownedPlayersById]);
   const chatCandidates = useMemo(
@@ -95,12 +102,17 @@ const TrainScreen = () => {
   );
 
   useEffect(() => {
+    return () => { if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current); };
+  }, []);
+
+  useEffect(() => {
     if (chatCandidates.length === 0) {
       setActiveChatPlayerId(null);
       return;
     }
     if (!activeChatPlayerId || !chatCandidates.some((p) => p.id === activeChatPlayerId)) {
-      setActiveChatPlayerId(chatCandidates[0]!.id);
+      const defaultId = chatCandidates.find((p) => p.id === player.id)?.id ?? chatCandidates[0]!.id;
+      setActiveChatPlayerId(defaultId);
     }
   }, [chatCandidates, activeChatPlayerId]);
 
@@ -169,16 +181,22 @@ const TrainScreen = () => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  const appendChat = (userText: string, playerText: string, chips: Chip[]) => {
-    const uid = Date.now();
+  const appendUserMsg = (text: string) => {
     setMessagesByPlayerId((prev) => ({
       ...prev,
-      [currentPlayerId]: [
-        ...(prev[currentPlayerId] ?? []),
-        { id: uid, from: "user", text: userText },
-        { id: uid + 1, from: "player", text: playerText, chips },
-      ],
+      [currentPlayerId]: [...(prev[currentPlayerId] ?? []), { id: Date.now(), from: "user" as const, text }],
     }));
+  };
+  const appendPlayerMsg = (text: string, chips: Chip[]) => {
+    setMessagesByPlayerId((prev) => ({
+      ...prev,
+      [currentPlayerId]: [...(prev[currentPlayerId] ?? []), { id: Date.now() + 1, from: "player" as const, text, chips }],
+    }));
+  };
+
+  const appendChat = (userText: string, playerText: string, chips: Chip[]) => {
+    appendUserMsg(userText);
+    appendPlayerMsg(playerText, chips);
   };
 
   const trainViaApi = async (
@@ -186,27 +204,48 @@ const TrainScreen = () => {
     userText: string,
     playerText: string
   ) => {
+    appendUserMsg(userText);
+    setIsPending(true);
     try {
       const result = await trainUserPlayer(userId, activeChatPlayer.id, mode);
       await refreshOwnedPlayers();
+      const deltas: Record<string, number> = {};
+      if (result.delta.confidence) deltas["Confidence"] = result.delta.confidence;
+      if (result.delta.form) deltas["Form"] = result.delta.form;
+      if (result.delta.morale) deltas["Morale"] = result.delta.morale;
+      if (result.delta.fanBond) deltas["Fan Bond"] = result.delta.fanBond;
+      if (Object.keys(deltas).length > 0 || result.xpGained) {
+        setTrainingBanner({ xpGained: result.xpGained, deltas });
+        if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+        bannerTimerRef.current = setTimeout(() => setTrainingBanner(null), 4000);
+      }
+      onTrainingComplete?.();
+      const trainDeltas = {
+        Confidence: result.delta.confidence ?? 0,
+        Form: result.delta.form ?? 0,
+        Morale: result.delta.morale ?? 0,
+        "Fan bond": result.delta.fanBond ?? 0,
+      };
+      const topTrainAttr = Object.entries(trainDeltas)
+        .filter(([, v]) => v !== 0)
+        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
       const chips: Chip[] = [{ label: "XP", val: `+${result.xpGained}`, positive: true }];
-      if (result.delta.confidence) chips.push({ label: "Confidence", val: `+${result.delta.confidence}`, positive: true });
-      if (result.delta.form) chips.push({ label: "Form", val: `+${result.delta.form}`, positive: true });
-      if (result.delta.morale) chips.push({ label: "Morale", val: `+${result.delta.morale}`, positive: true });
-      if (result.delta.fanBond) chips.push({ label: "Fan bond", val: `+${result.delta.fanBond}`, positive: true });
-      appendChat(userText, playerText, chips);
+      if (topTrainAttr) chips.push({ label: topTrainAttr[0], val: `${topTrainAttr[1] >= 0 ? "+" : ""}${topTrainAttr[1]}`, positive: topTrainAttr[1] >= 0 });
+      appendPlayerMsg(playerText, chips);
+      setIsPending(false);
     } catch (error) {
-      appendChat(userText, "Can't lock in the training update right now. Try again in a second.", [
+      appendPlayerMsg("Can't lock in the training update right now. Try again in a second.", [
         {
           label: "Error",
           val: error instanceof Error ? error.message : "training failed",
           positive: false,
         },
       ]);
+      setIsPending(false);
     }
   };
 
-  const sendTrainingChoice = (kind: "motivate" | "challenge" | "comfort" | "tactics" | "recovery") => {
+  const sendTrainingChoice = (kind: "motivate" | "tactics" | "recovery") => {
     const z = explorationZoneType;
     if (kind === "motivate") {
       void trainViaApi(
@@ -215,24 +254,6 @@ const TrainScreen = () => {
         z === "rival"
           ? "I'm hunting that win — give me the next duel."
           : "You believing in me flips a switch. Let's go."
-      );
-      return;
-    }
-    if (kind === "challenge") {
-      void trainViaApi(
-        "confidence",
-        "Challenge me — be honest.",
-        "Alright coach, hit me with the hard truth. I'll answer with work."
-      );
-      return;
-    }
-    if (kind === "comfort") {
-      void trainViaApi(
-        "morale",
-        "I need calm today.",
-        matchPhase === "postloss"
-          ? "That one stung. Stay with me — we'll turn it into fuel."
-          : "I've got you. Breathe, reset, next play."
       );
       return;
     }
@@ -257,6 +278,9 @@ const TrainScreen = () => {
 
   const sendMessage = (text: string) => {
     if (!text.trim()) return;
+    appendUserMsg(text);
+    setIsPending(true);
+    setInput("");
     const run = async () => {
       try {
         const history = messages
@@ -308,32 +332,29 @@ const TrainScreen = () => {
           }));
         }
 
-        appendChat(text, chat.reply, [
-          ...(chat.toneTag
-            ? [{ label: "Tone", val: chat.toneTag, positive: true } as Chip]
-            : []),
-          ...(chat.moodTag
-            ? [{ label: "Mood", val: chat.moodTag, positive: true } as Chip]
-            : []),
+        const attrDeltas = chat.attributeDeltas;
+        const topAttr = Object.entries({
+          Confidence: attrDeltas.confidence,
+          Form: attrDeltas.form,
+          Morale: attrDeltas.morale,
+          "Fan bond": attrDeltas.fanBond,
+        }).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
+        appendPlayerMsg(chat.reply, [
           { label: "XP", val: "+6", positive: true },
           { label: "Confidence", val: `${chat.attributeDeltas.confidence >= 0 ? "+" : ""}${chat.attributeDeltas.confidence}`, positive: chat.attributeDeltas.confidence >= 0 },
           { label: "Form", val: `${chat.attributeDeltas.form >= 0 ? "+" : ""}${chat.attributeDeltas.form}`, positive: chat.attributeDeltas.form >= 0 },
           { label: "Morale", val: `${chat.attributeDeltas.morale >= 0 ? "+" : ""}${chat.attributeDeltas.morale}`, positive: chat.attributeDeltas.morale >= 0 },
           { label: "Fan bond", val: `${chat.attributeDeltas.fanBond >= 0 ? "+" : ""}${chat.attributeDeltas.fanBond}`, positive: chat.attributeDeltas.fanBond >= 0 },
-          ...(chat.tags ?? []).slice(0, 2).map((tag) => ({
-            label: "AI",
-            val: tag,
-            positive: true,
-          })),
         ]);
+        setIsPending(false);
       } catch (error) {
-        appendChat(text, "Connection dropped. I couldn't process that message yet.", [
+        appendPlayerMsg("Connection dropped. I couldn't process that message yet.", [
           { label: "Error", val: error instanceof Error ? error.message : "chat failed", positive: false },
         ]);
+        setIsPending(false);
       }
     };
     void run();
-    setInput("");
   };
 
   const suggested = useMemo(() => {
@@ -349,143 +370,86 @@ const TrainScreen = () => {
   const xpPct = Math.min(100, (activeChatPlayer.currentXp / activeChatPlayer.xpToNext) * 100);
   const hasNoHiredPlayers = chatCandidates.length === 0;
 
-  useEffect(() => {
-    const evaluateCompact = () => {
-      const narrow = window.innerWidth <= 420;
-      const manyPlayers = chatCandidates.length >= 5;
-      setCompactSwitcher(narrow || manyPlayers);
-    };
-    evaluateCompact();
-    window.addEventListener("resize", evaluateCompact);
-    return () => window.removeEventListener("resize", evaluateCompact);
-  }, [chatCandidates.length]);
-
   return (
-    <div className="flex h-[100dvh] min-h-[100dvh] flex-col safe-page-bottom with-sidebar-pad pt-3 pr-4">
-      <div className="mb-2 space-y-2 px-0">
-        <div className="glass-card-strong rounded-2xl p-3">
-          <div className="flex items-start gap-3">
+    <div className="flex h-[100dvh] min-h-[100dvh] flex-col safe-page-bottom with-sidebar-pad pt-5 pr-4">
+      <div className="mb-2 px-0">
+        <div className="glass-card-strong rounded-2xl p-3 mb-2">
+          <div className="flex items-center gap-3">
             <AnimatedPortrait player={activeChatPlayer} size="md" showMood />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-sm font-black text-foreground">{activeChatPlayer.name}</p>
-                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[9px] font-black text-primary">
-                  Lv {activeChatPlayer.level}
-                </span>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[9px] font-bold text-muted-foreground">
-                  {mood}
-                </span>
-                {aiMoodLabel && (
-                  <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[9px] font-bold text-primary">
-                    AI: {aiMoodLabel}
-                  </span>
-                )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-sm font-black text-foreground truncate">{activeChatPlayer.name}</p>
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[9px] font-black text-primary shrink-0">Lv {activeChatPlayer.level}</span>
               </div>
-              <p className="truncate text-[10px] text-muted-foreground">
-                {activeChatPlayer.position} · {activeChatPlayer.representedCountry} · {activeChatPlayer.clubTeam}
-              </p>
+              <p className="text-[10px] text-muted-foreground truncate">{activeChatPlayer.position}</p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400"
-                  style={{ width: `${xpPct}%` }}
-                />
+                <div className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400" style={{ width: `${xpPct}%` }} />
               </div>
-              <p className="mt-1 text-[9px] text-muted-foreground">
-                XP {activeChatPlayer.currentXp}/{activeChatPlayer.xpToNext} · Evolution {activeChatPlayer.evolutionStage + 1}/4
-              </p>
-              <div className="mt-2 flex items-center gap-2">
-                <Heart className="h-3.5 w-3.5 shrink-0 text-accent" />
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-accent/80 to-accent"
-                    style={{ width: `${bondPct}%` }}
-                  />
+              <div className="mt-1.5 flex items-center gap-2">
+                <Heart className="h-3 w-3 shrink-0 text-accent" />
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-gradient-to-r from-accent/80 to-accent" style={{ width: `${bondPct}%` }} />
                 </div>
-                <span className="text-[9px] font-black text-accent">Trust {bondPct}</span>
-              </div>
-              {chatCandidates.length > 1 && compactSwitcher && (
-                <div className="mt-2">
-                  <label className="text-[9px] font-bold text-muted-foreground">Chat with</label>
-                  <select
-                    value={currentPlayerId}
-                    onChange={(e) => setActiveChatPlayerId(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-border/35 bg-card/40 px-2 py-1.5 text-[11px] font-semibold text-foreground outline-none"
-                  >
-                    {chatCandidates.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} · Lv {p.level}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {chatCandidates.length > 1 && !compactSwitcher && (
-                <div className="mt-2 flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
-                  {chatCandidates.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setActiveChatPlayerId(p.id)}
-                      className={`shrink-0 rounded-xl border px-2 py-1 flex items-center gap-1.5 transition-colors ${
-                        p.id === currentPlayerId
-                          ? "border-primary/45 bg-primary/12"
-                          : "border-border/35 bg-card/35 hover:border-primary/30"
-                      }`}
-                    >
-                      <img src={p.portrait} alt="" className="w-5 h-5 rounded-full object-cover" />
-                      <span className="text-[9px] font-bold text-foreground whitespace-nowrap">{p.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {zoneName && (
-                  <span className="rounded-lg border border-primary/25 bg-primary/10 px-2 py-0.5 text-[9px] font-bold text-primary">
-                    Zone: {zoneName}
-                  </span>
-                )}
-                <span className="rounded-lg border border-border/40 bg-muted/40 px-2 py-0.5 text-[9px] font-semibold text-muted-foreground">
-                  {matchCopy[matchPhase] ?? matchCopy.idle}
-                </span>
-                {competitiveStreak >= 2 && (
-                  <span className="rounded-lg border border-accent/30 bg-accent/10 px-2 py-0.5 text-[9px] font-bold text-accent">
-                    Streak {competitiveStreak}
-                  </span>
-                )}
+                {streakCount > 0 && <span className="text-[9px] text-accent font-bold shrink-0">🔥 {streakCount}d</span>}
               </div>
             </div>
           </div>
+          {/* Player switcher - only if >1 player */}
+          {chatCandidates.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide mt-2.5 pt-2.5 border-t border-border/20">
+              {chatCandidates.map((p) => (
+                <button key={p.id} type="button" onClick={() => setActiveChatPlayerId(p.id)}
+                  className={`shrink-0 flex items-center gap-1.5 rounded-xl px-2 py-1 transition-colors ${p.id === currentPlayerId ? "bg-primary/15 border border-primary/30" : "bg-muted/30 border border-transparent"}`}>
+                  <img src={p.portrait} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
+                  <span className="text-[9px] font-bold text-foreground whitespace-nowrap">{p.name.split(" ").pop()}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {(
-            [
-              ["motivate", "Motivate", Sparkles],
-              ["challenge", "Challenge", Flame],
-              ["comfort", "Comfort", Heart],
-              ["tactics", "Tactics", Shield],
-              ["recovery", "Recovery", Heart],
-            ] as const
-          ).map(([key, label, Icon]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => sendTrainingChoice(key)}
-              className="flex items-center gap-1 rounded-xl border border-border/40 bg-card/50 px-2.5 py-1.5 text-[10px] font-bold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10"
-            >
-              <Icon className="h-3 w-3" />
+        {/* Action buttons - 3 only */}
+        <div className="flex gap-2">
+          {([
+            ["motivate", "🔥 Pump me up!"],
+            ["tactics", "💡 What should I improve?"],
+            ["recovery", "💬 How are you feeling?"],
+          ] as const).map(([key, label]) => (
+            <button key={key} type="button" onClick={() => sendTrainingChoice(key)}
+              className="flex-1 py-3 rounded-xl border border-border/40 bg-card/50 text-[10px] font-bold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10">
               {label}
             </button>
           ))}
         </div>
+        <p className="text-[9px] text-muted-foreground text-center mt-1">Tap to send instantly</p>
       </div>
+
+      {trainingBanner && (
+        <div className="glass-card-strong rounded-2xl p-3 mb-2 border border-primary/30 animate-fade-in-up">
+          <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-2">
+            ✓ Training session complete · +{trainingBanner.xpGained} XP
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(trainingBanner.deltas).map(([attr, delta]) => (
+              <span
+                key={attr}
+                className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                  delta > 0 ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"
+                }`}
+              >
+                {attr} {delta > 0 ? "+" : ""}{delta}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {hasNoHiredPlayers ? (
         <div className="flex-1 flex items-center justify-center px-2">
-          <div className="glass-card-strong rounded-2xl p-4 text-center max-w-sm">
-            <p className="text-sm font-black text-foreground">No recruited players yet</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Recruit a player from Explore to unlock companion chat.
+          <div className="glass-card-strong rounded-2xl p-6 text-center max-w-sm">
+            <div className="text-4xl mb-3">🏆</div>
+            <p className="text-sm font-black text-foreground mb-1">No players recruited yet</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed mb-4">
+              Head to the Explore map, save a penalty duel, and your first player will appear here ready to chat.
             </p>
           </div>
         </div>
@@ -521,23 +485,34 @@ const TrainScreen = () => {
             </div>
           </div>
         ))}
+        {isPending && (
+          <div className="flex justify-start animate-fade-in">
+            <div className="glass-card rounded-2xl rounded-bl-md px-4 py-2.5 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
+          </div>
+        )}
       </div>
       )}
 
       <div className="py-2">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {visibleSuggested.map((prompt, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => sendMessage(prompt)}
-              disabled={hasNoHiredPlayers}
-              className="shrink-0 rounded-xl border border-border/30 bg-card/40 px-3 py-2 text-xs font-semibold text-foreground/90 transition-all hover:border-primary/35 active:scale-95"
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
+        {!inputFocused && !isPending && (
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+            {visibleSuggested.map((prompt, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => sendMessage(prompt)}
+                disabled={hasNoHiredPlayers}
+                className="shrink-0 rounded-xl border border-border/30 bg-card/40 px-3 py-2 text-xs font-semibold text-foreground/90 transition-all hover:border-primary/35 active:scale-95"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="pb-2">
@@ -547,6 +522,8 @@ const TrainScreen = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage(input)}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             placeholder={hasNoHiredPlayers ? "Recruit a player to start chat..." : "Message your player..."}
             disabled={hasNoHiredPlayers}
             className="flex-1 bg-transparent px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"

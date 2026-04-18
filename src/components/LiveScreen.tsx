@@ -160,9 +160,9 @@ const LiveScreen = () => {
               {/* Subtle type-specific background glow */}
               <div className={`absolute -top-6 -right-6 w-20 h-20 rounded-full ${style.bg} blur-xl`} />
               
-              <div className="relative flex items-center gap-3">
+              <div className="relative flex items-start gap-3">
                 {/* Event type icon */}
-                <div className={`w-12 h-12 rounded-xl ${style.bg} flex items-center justify-center text-xl shrink-0`}>
+                <div className={`w-10 h-10 rounded-xl ${style.bg} flex items-center justify-center text-lg shrink-0 mt-0.5`}>
                   {style.icon}
                 </div>
 
@@ -179,19 +179,18 @@ const LiveScreen = () => {
                     </span>
                     <span className="text-[10px] text-muted-foreground">{event.minute}</span>
                   </div>
-                  <p className="text-sm font-bold text-foreground">{labelName}</p>
+                  <p className="text-sm font-bold text-foreground truncate">{labelName}</p>
+                  {/* Attribute delta chip + mood — stacked below name */}
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${
+                      isPositive ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"
+                    }`}>
+                      {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                      <span className="text-[10px] font-black">{event.delta}</span>
+                    </div>
+                    <span className="text-base">{event.mood}</span>
+                  </div>
                 </div>
-
-                {/* Attribute delta chip */}
-                <div className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full ${
-                  isPositive ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"
-                }`}>
-                  {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                  <span className="text-xs font-black">{event.delta}</span>
-                </div>
-
-                {/* Mood */}
-                <span className="text-lg shrink-0">{event.mood}</span>
               </div>
             </div>
           );
