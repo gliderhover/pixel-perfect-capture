@@ -497,6 +497,15 @@ const PenaltyDuel = ({
                 )}
                 <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postGoalLine}"</p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
+                {/* Coaching tip */}
+                <p className="text-[11px] text-amber-400 mt-3 max-w-[260px] leading-relaxed font-semibold">
+                  💡{" "}
+                  {!diveDir
+                    ? "You didn't dive in time! Commit to a direction the moment the player starts their run-up."
+                    : diveDir !== shotDir
+                    ? `You dived ${diveDir} but the ball went ${shotDir}. Watch the player's planted foot and hips — they reveal the direction.`
+                    : "Close! Stay composed and react to the body shape, not the feint."}
+                </p>
               </div>
             )}
           </div>
@@ -567,14 +576,18 @@ const PenaltyDuel = ({
             <div className="flex flex-col gap-2 animate-fade-in-up">
               <div className="text-center py-3 rounded-2xl font-bold text-sm"
                 style={{ background: "hsl(var(--destructive) / 0.1)", color: "hsl(var(--destructive))" }}>
-                The player escaped…
+                {!diveDir
+                  ? "⏱️ Too slow — you didn't dive!"
+                  : diveDir !== shotDir
+                  ? `Wrong side — ${player.name.split(" ")[0]} went ${shotDir}`
+                  : "They found the corner — unlucky!"}
               </div>
               <button
                 type="button"
                 onClick={onGoal}
                 className="w-full py-3.5 rounded-2xl glass-card-strong text-foreground font-black text-sm active:scale-[0.97] transition-transform"
               >
-                Continue →
+                🗺️ Scout another player →
               </button>
             </div>
           )}

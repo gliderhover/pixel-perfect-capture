@@ -181,10 +181,10 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
 
   return (
     <div className="fixed inset-0 z-[1350] flex items-center justify-center bg-background/70 backdrop-blur-xl p-4" onClick={onClose}>
-      <div className="glass-card-strong w-full max-w-sm rounded-3xl overflow-hidden animate-encounter-reveal" onClick={(e) => e.stopPropagation()}>
-        {/* Close */}
+      <div className="relative glass-card-strong w-full max-w-sm rounded-3xl overflow-y-auto max-h-[92dvh] animate-encounter-reveal" onClick={(e) => e.stopPropagation()}>
+        {/* Close — sticky so it's always tappable even when content scrolls */}
         <button type="button" onClick={onClose}
-          className="absolute top-4 right-4 z-50 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60">
+          className="sticky top-0 float-right z-50 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 mt-2 mr-2">
           <X className="h-5 w-5" />
         </button>
 
@@ -260,7 +260,7 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
               {/* Portraits */}
               <div className="flex items-center justify-center gap-4">
                 <div className="flex flex-col items-center gap-1">
-                  <AnimatedPortrait player={activePlayer} size="sm" />
+                  <AnimatedPortrait player={activePlayer} size="md" />
                   <p className="text-[9px] font-black text-foreground truncate max-w-[4rem] text-center">
                     {activePlayer.name.split(" ").pop()}
                   </p>
@@ -272,7 +272,7 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
                   <span className="text-[8px] font-black text-primary uppercase tracking-widest mt-0.5">VS</span>
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  <AnimatedPortrait player={rivalPlayer} size="sm" />
+                  <AnimatedPortrait player={rivalPlayer} size="md" />
                   <p className="text-[9px] font-black text-foreground truncate max-w-[4rem] text-center">
                     {rivalPlayer.name.split(" ").pop()}
                   </p>

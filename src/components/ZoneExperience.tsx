@@ -459,7 +459,14 @@ function TrainingActivity({
       setLoading(true);
       setError(null);
       try {
-        const result = await fetchTrainingTriviaSession(10, `${Date.now()}-${Math.random()}`);
+        // Race against a 5-second timeout so the fallback triggers even if the
+        // API hangs and never rejects.
+        const result = await Promise.race([
+          fetchTrainingTriviaSession(10, `${Date.now()}-${Math.random()}`),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("trivia-timeout")), 5000)
+          ),
+        ]);
         if (cancelled) return;
         if (!result.data.length) {
           const fallback = FALLBACK_TRIVIA_QUESTIONS.sort(() => Math.random() - 0.5).slice(0, 10);

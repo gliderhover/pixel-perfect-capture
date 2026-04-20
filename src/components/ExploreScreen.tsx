@@ -590,6 +590,9 @@ const ExploreScreen = () => {
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution=""
+          updateWhenZooming={false}
+          updateWhenIdle={true}
+          keepBuffer={4}
         />
         <MapControls
           onLocationResolved={(lat, lng) => {
@@ -624,8 +627,11 @@ const ExploreScreen = () => {
             key={zone.id}
             position={[zone.lat, zone.lng]}
             icon={createZoneIcon(zone.type)}
+            zIndexOffset={500}
             eventHandlers={{
-              click: () => {
+              click: (e) => {
+                // Stop Leaflet from propagating to the map (prevents accidental pan on mobile)
+                e.originalEvent?.stopPropagation();
                 setSelectedZone(zone);
                 setSelectedPlace(null);
                 setEncounterPlayer(null);

@@ -37,6 +37,9 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
   const [discoveredVenue, setDiscoveredVenue] = useState<typeof VENUES[number] | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Capture the nearest player the moment the component mounts / scanning begins
+  // so that prop changes during the 6-second scan never lose the target.
+  const nearestPlayerAtScanStartRef = useRef<Player | null>(nearestPlayer ?? null);
   const { addFocusPoints } = useGameProgress();
 
   // Start rear camera
@@ -82,18 +85,20 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
     return () => clearInterval(interval);
   }, [phase]);
 
-  // Transition after scan completes — capture player into local state immediately
+  // Transition after scan completes — use the player captured at scan-start so
+  // live prop fluctuations during the 6-second scan cannot wipe the target.
   useEffect(() => {
     if (scanPct < 100) return;
     const t = setTimeout(() => {
-      if (nearestPlayer) {
+      const capturedPlayer = nearestPlayerAtScanStartRef.current;
+      if (capturedPlayer) {
         // 20% chance: discover a venue instead even if player nearby
         if (Math.random() < 0.20) {
           const venue = VENUES[Math.floor(Math.random() * VENUES.length)];
           setDiscoveredVenue(venue ?? null);
           setPhase("venue");
         } else {
-          setLockedPlayer(nearestPlayer);
+          setLockedPlayer(capturedPlayer);
           setLockCountdown(8);
           setPhase("locking");
         }
@@ -109,7 +114,7 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [scanPct, nearestPlayer]);
+  }, [scanPct]); // intentionally excludes nearestPlayer — captured at scan start
 
   // Countdown during locking phase — expire to "missed"
   useEffect(() => {
