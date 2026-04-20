@@ -1,21 +1,52 @@
-# Player Cultivation Hub
+# Pocket Pitch Legends
 
-Vite + React app with PWA support (installable on iPhone and other browsers that support web app manifests).
+**Team:** Good Bunny
+**Members:** Candice Shen · Daniel Yang · Yiqi Song · Helen Deng
+**Course:** Generative AI and Social Media — Final Project
+**Instructor:** Tauhid Zaman
 
-## Run locally
+---
 
-### Frontend only (Vite)
+## About the Project
+
+Pocket Pitch Legends is a location-based mobile web app that reimagines how football fans engage with the World Cup 2026. Think Pokémon Go meets football — players explore their real-world surroundings, discover and collect international football legends using their phone's camera, train them through AI-powered conversations, and battle rivals to climb a global leaderboard.
+
+The app is built as an installable Progressive Web App (PWA) and is powered by Google Gemini for in-character AI chat. Each player in your squad has a distinct personality, speaking style, and set of traits — Mbappé talks like Mbappé, Bellingham like Bellingham. Conversations dynamically shift their stats (confidence, form, morale, fan bond), creating a genuine sense of player cultivation over time.
+
+**Core features:**
+- 🗺️ **Explore** — GPS-based map with football zones. Open the AR camera to scan for nearby player cards to challenge.
+- ⚽ **Penalty Duel** — Tap-based mini-game to recruit players to your squad by winning a penalty shootout.
+- 💬 **Train** — AI chat with your collected players using Google Gemini. Each reply is in-character and affects stats.
+- ⚔️ **Compete** — Challenge rival managers to matchups. Win to earn XP and climb the leaderboard.
+- 📡 **Live Feed** — Real-time match events from around the world that shift your players' morale.
+- 🏆 **Leaderboard** — Global rankings updated after every challenge.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18 + TypeScript + Vite |
+| Styling | Tailwind CSS + shadcn/ui |
+| Map | Leaflet / react-leaflet |
+| AI | Google Gemini (via Vercel serverless) |
+| Database | Supabase (PostgreSQL) |
+| Deployment | Vercel |
+| PWA | Web App Manifest + Service Worker |
+
+---
+
+## Run Locally
+
+### Frontend only
 
 ```bash
 npm install
 npm run dev
 ```
 
-Vite-only mode is useful for UI work, but it does not execute Vercel serverless functions under `api/`.
-
-### Full-stack local (frontend + `/api/*`)
-
-Use Vercel dev to run the app and serverless routes together:
+### Full-stack (frontend + `/api/*` serverless routes)
 
 ```bash
 npx vercel link
@@ -23,363 +54,76 @@ npx vercel env pull .env.local
 npx vercel dev
 ```
 
-When `vercel dev` starts, open the shown local URL (typically `http://localhost:3000`).
+When `vercel dev` starts, open the local URL shown (typically `http://localhost:3000`).
 
-### Recommended local workflow (full-stack)
+**Required environment variables:**
 
-1. Install deps: `npm install`
-2. Link envs:
-   - `npx vercel link`
-   - `npx vercel env pull .env.local`
-3. Start app + API: `npx vercel dev`
-4. Seed core data: `npm run seed:core`
-5. Verify backend:
-   - `http://localhost:3000/api/health`
-   - `http://localhost:3000/api/health/counts`
+| Variable | Purpose |
+|----------|---------|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
+| `GEMINI_API_KEY` | Google Gemini API key (server-only) |
+| `GEMINI_MODEL` | Optional — defaults to `gemini-2.5-flash` |
 
-## Build
+---
 
-```bash
-npm run build
-```
+## Database Setup
 
-Preview the production bundle:
-
-```bash
-npm run preview
-```
-
-## PWA icons (replace with your artwork)
-
-Placeholder icons use a simple 3×3 pixel grid on `#0b1020`, defined in `public/icons/icon-source.svg`. Regenerate the PNGs on Windows with:
-
-`powershell -ExecutionPolicy Bypass -File scripts/generate-pwa-icons.ps1`
-
-**Files to overwrite when you have final assets**
-
-| File | Size |
-|------|------|
-| `public/icons/icon-source.svg` | Vector source (also used as the SVG favicon in `index.html`) |
-| `public/icons/icon-192.png` | 192×192 |
-| `public/icons/icon-512.png` | 512×512 (manifest + maskable) |
-| `public/icons/apple-touch-icon.png` | 180×180 (iOS Home Screen) |
-
-## Deploy on Vercel
-
-Connect the repo to Vercel and use the default settings for a Vite project (build command `npm run build`, output directory `dist`). The included `vercel.json` rewrites client-side routes to `index.html` while static files such as `sw.js`, `manifest.webmanifest`, and `icons/` are served from the build output.
-
-## Supabase connection layer
-
-Serverless API routes live under `api/` for Vercel.
-
-- Connection utility: `lib/supabase.ts`
-- Health probe: `GET /api/health`
-- Player seed route: `POST /api/seed/players`
-
-Required environment variables:
-
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `GEMINI_API_KEY` (server-only, used by `/api/chat` and AI flavor endpoints)
-- optional: `GEMINI_MODEL` (default: `gemini-2.5-flash`)
-- optional: `PLACES_PROVIDER` (currently `mock` fallback provider)
-- optional table name overrides:
-  - `SUPABASE_TABLE_PLAYERS`
-  - `SUPABASE_TABLE_LEADERBOARD`
-  - `SUPABASE_TABLE_ZONES`
-  - `SUPABASE_TABLE_USER_PLAYERS`
-  - `SUPABASE_TABLE_CAMERA_SCAN_REWARDS`
-  - `SUPABASE_TABLE_CHALLENGE_RESULTS`
-
-Before running the app, apply `supabase/schema.sql` in the Supabase SQL Editor to create the expected tables and indexes.
-
-### Backend verification (local)
-
-With `npx vercel dev` running:
-
-1. Health + Supabase connectivity + table counts:
-   - `GET /api/health`
-2. Counts only:
-   - `GET /api/health/counts`
-
-Example:
-
-```bash
-curl http://localhost:3000/api/health
-```
-
-Optional debug-safe logs (development only):
-
-- `DB_DEBUG_LOGS=1` for Supabase client init logs
-- `API_DEBUG_LOGS=1` for API route error/empty-collection logs
-- `HEALTH_DEBUG_ENABLED=1` to keep health routes available when `NODE_ENV=production`
-
-### Seed players locally
-
-1. Start local dev server:
-   - `npx vercel dev`
-2. In another terminal, run:
-   - `npm run seed:players`
-
-### Seed full gameplay core data
-
-This seeds players plus missing core collections:
-
-- `players`
-- `zones`
-- `leaderboard_entries`
-- optional demo `user_players`
-
-Run:
+Apply `supabase/schema.sql` in the Supabase SQL Editor, then seed data:
 
 ```bash
 npm run seed:core
 ```
 
-Optional (skip demo user players):
-
-```bash
-SEED_USER_PLAYERS=0 npm run seed:core
-```
-
-After seeding, verify counts:
+Verify with:
 
 ```bash
 curl http://localhost:3000/api/health
 ```
 
-Expected:
+---
 
-- `collections.players` > 0
-- `collections.zones` > 0
-- `collections.leaderboard` > 0
+## Build & Deploy
 
-### End-to-end verification URLs
+```bash
+npm run build
+```
 
-- Health and DB ping: `http://localhost:3000/api/health`
-- Counts only: `http://localhost:3000/api/health/counts`
-- Players feed: `http://localhost:3000/api/players`
-- Zones feed: `http://localhost:3000/api/zones`
-- Leaderboard feed: `http://localhost:3000/api/leaderboard?scope=global`
-- Demo owned players: `http://localhost:3000/api/user-players?userId=demo-user`
-
-### AI + discovery verification URLs
-
-- Chat route (Gemini-backed with fallback): `POST http://localhost:3000/api/chat`
-- Duel line flavor: `POST http://localhost:3000/api/duel-line`
-- Zone flavor text: `GET http://localhost:3000/api/zone-flavor?zoneType=training&zoneName=Hudson%20Elite%20Ground`
-- Live dialogue line: `GET http://localhost:3000/api/live-dialogue?title=Derby&description=Late%20winner`
-- Nearby hidden prospects: `GET http://localhost:3000/api/discovery/players-nearby?lat=40.75&lng=-73.98&radiusKm=5`
-- Nearby football places: `GET http://localhost:3000/api/discovery/places-nearby?lat=40.75&lng=-73.98&radiusKm=5`
-
-### Notes on nearby data sources
-
-- **Hidden prospects** are MVP generated local-talent encounters (not real-world verified local player data).
-- **Nearby football places** currently use a server-side mock provider abstraction (`PLACES_PROVIDER=mock`).
-- If you later add a real places API, keep the key server-side and implement it behind the places provider helper.
-
-Optional custom base URL:
-
-- `SEED_BASE_URL=http://localhost:3000 npm run seed:players`
-
-## Install on iPhone (Safari)
-
-1. Open the deployed site in **Safari** (not another browser) over **HTTPS** (e.g. your Vercel URL).
-2. Tap the **Share** button (square with an arrow pointing up) in the toolbar.
-3. Scroll the share sheet and tap **Add to Home Screen**.
-4. Edit the name if you like, then tap **Add**.
-5. Open the app from the new home screen icon. It runs in **standalone** mode (full screen, no Safari UI).
-
-**Notes**
-
-- Adding to the Home Screen must be done from Safari on iOS.
-- On **iPhone Safari** (not standalone), you may see a small install hint. You can dismiss it; it stays hidden until you clear site data for this origin.
-- After installation, updates roll out on the next visit when the new version is online; the service worker caches core assets for faster repeat loads and basic offline resilience.
+Connect the repo to Vercel for continuous deployment. Build command: `npm run build`, output directory: `dist`.
 
 ---
 
-## Backend AI — Track 2
+## Install on iPhone (PWA)
 
-**Track 2** is a **standalone FastAPI** service: the **AI Conversation & Personality Engine** for a World Cup 2026 player cultivation app. The frontend calls **`POST /chat`** with the player’s state and chat history; the service returns an **in-character reply** (via Gemini) and **rule-based attribute deltas** for that turn.
-
-**Why standalone?** Track 3 (shared database, persistence, leaderboards, player CRUD, websockets, etc.) is **not built yet**. This folder is intentionally self-contained so the UI can integrate **now** without waiting on the main backend.
-
-**Out of scope here:** database, auth, leaderboard, generic player APIs, websockets, live events.
+1. Open the deployed URL in **Safari** over HTTPS.
+2. Tap **Share** → **Add to Home Screen**.
+3. The app runs in full-screen standalone mode.
 
 ---
 
-## API overview
+## API Routes
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/health` | Liveness: `{ "status": "ok" }` |
-| `POST` | `/chat` | One fan message → model reply + `attribute_deltas` |
-
-Interactive docs: **`http://127.0.0.1:8000/docs`** (Swagger UI).
-
-**Errors (non-200):**
-
-- **`400`** — unknown `player_id` (body: `{"detail":{"error":"unknown_player_id","message":"..."}}`).
-- **`422`** — request validation failed (e.g. invalid `history` role, `cultivation_state` out of range); FastAPI’s default `detail` shape.
-
-**Logs:** successful `POST /chat` emits one **`INFO`** line (`chat_ok` …); unknown player → **`WARNING`**; Gemini failure with fallback → **`WARNING`**. Skipped malformed history rows (defensive path) → **`WARNING`** from `prompt_builder`.
-
----
-
-## `POST /chat` contract
-
-### Request (JSON)
-
-| Field | Type | Notes |
-|-------|------|--------|
-| `player_id` | string | Non-empty. Use a known persona id, e.g. `mbappe`, `messi`, `bellingham`, `son`, `musiala`, `pulisic` (see `src/personas.py`). |
-| `message` | string | Non-empty. Latest user/fan message. |
-| `cultivation_state` | object | `confidence`, `form`, `morale`, `fan_bond` — each **integer 0–100**. |
-| `history` | array | Optional. Items: `{ "role": "user" \| "assistant", "content": "..." }`. |
-
-```json
-{
-  "player_id": "mbappe",
-  "message": "Stay sharp for the next match.",
-  "cultivation_state": {
-    "confidence": 72,
-    "form": 68,
-    "morale": 75,
-    "fan_bond": 60
-  },
-  "history": [
-    { "role": "user", "content": "How are you feeling?" },
-    { "role": "assistant", "content": "Focused. Ready to work." }
-  ]
-}
-```
-
-### Response (JSON)
-
-| Field | Type | Notes |
-|-------|------|--------|
-| `reply` | string | Plain text player reply (Gemini, with in-character fallback if the model call fails). |
-| `attribute_deltas` | object | Per-field **integer deltas** for this message, each clamped to **-8…+8** (rule-based scoring, not from the LLM). |
-
-```json
-{
-  "reply": "…",
-  "attribute_deltas": {
-    "confidence": 2,
-    "form": 0,
-    "morale": 3,
-    "fan_bond": 1
-  }
-}
-```
+| `GET` | `/api/health` | Liveness + DB connectivity check |
+| `POST` | `/api/chat` | AI player chat (Gemini-backed) |
+| `POST` | `/api/duel-line` | Generate in-game duel dialogue |
+| `GET` | `/api/zone-flavor` | Zone flavor text |
+| `GET` | `/api/live-dialogue` | Live match event line |
+| `GET` | `/api/players` | Player roster |
+| `GET` | `/api/zones` | Zone data |
+| `GET` | `/api/leaderboard` | Global leaderboard |
+| `GET` | `/api/user-players` | Owned players for a user |
+| `GET` | `/api/discovery/players-nearby` | Nearby hidden prospects |
 
 ---
 
-## Source layout (what each file does)
+## PWA Icons
 
-| File | Role |
+Replace placeholder icons with final artwork by overwriting:
+
+| File | Size |
 |------|------|
-| **`src/app.py`** | FastAPI app: `GET /health`, `POST /chat`. Loads `.env`, builds persona + mood + scores + prompts, calls **`generate_reply`**, returns `ChatResponse`. On Gemini errors, returns a **safe in-character fallback** (no 500). |
-| **`src/schemas.py`** | Pydantic models: request/response validation (`CultivationState` 0–100, `AttributeDeltas` -8…8, chat history roles). |
-| **`src/personas.py`** | Registry of **player personas** (identity, team, speaking style, etc.) and **`get_persona(player_id)`**. |
-| **`src/mood.py`** | **`infer_mood(cultivation_state)`** → dict with labels and tone hints from current stats (deterministic, no LLM). |
-| **`src/scoring.py`** | **`compute_attribute_deltas(message, …)`** → small integer deltas from **keyword / phrase rules** (no LLM). |
-| **`src/prompt_builder.py`** | **`build_system_prompt`** + **`build_chat_messages`** → OpenAI-style message list for Gemini (system + history + latest user). |
-| **`src/llm_client.py`** | **`get_gemini_client()`**, **`generate_reply(messages)`**, **`sanitize_reply_text`** — Google **google-genai** SDK, `GEMINI_API_KEY` from env. |
-
----
-
-## Setup
-
-All commands assume you are in **`backend-ai`** (this folder).
-
-### 1. Create a virtual environment
-
-```bash
-python3 -m venv .venv
-```
-
-Activate it:
-
-- **macOS / Linux:** `source .venv/bin/activate`
-- **Windows (cmd):** `.venv\Scripts\activate.bat`
-- **Windows (PowerShell):** `.venv\Scripts\Activate.ps1`
-
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configure `.env`
-
-1. Copy the example file (optional): `cp .env.example .env`
-2. Edit **`.env`** in **`backend-ai`** and set:
-
-```bash
-GEMINI_API_KEY=your_key_here
-```
-
-Optional: `GEMINI_MODEL=gemini-2.5-flash` (default is set in code if unset).
-
-The app loads **`backend-ai/.env`** by path so it still works if you start Uvicorn from another working directory.
-
-**Security:** do not commit `.env` or real keys; keep secrets out of git.
-
-### 4. Run the API locally
-
-```bash
-python -m uvicorn src.app:app --reload --host 127.0.0.1 --port 8000
-```
-
-Then open **`http://127.0.0.1:8000/docs`**.
-
-### 5. Try `POST /chat` in Swagger
-
-1. Open **`/docs`** → **`POST /chat`** → **Try it out**.
-2. Paste a JSON body (use a valid `player_id` from `personas.py`, e.g. `son`).
-3. **Execute** — check **`reply`** and **`attribute_deltas`** in the response.
-
-### 6. Run the sample conversation script
-
-With the server running on **`http://127.0.0.1:8000`**:
-
-```bash
-python tests/sample_conversations.py
-```
-
-It prints three realistic scenarios (different players and states), the request JSON, and the response (`reply` + deltas).
-
-### 7. Quick `curl` checks
-
-```bash
-curl -s http://127.0.0.1:8000/health
-```
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"player_id":"mbappe","message":"You got this.","cultivation_state":{"confidence":70,"form":65,"morale":72,"fan_bond":55},"history":[]}'
-```
-
----
-
-## Track 3 note
-
-The app now exposes lightweight serverless contracts in `api/` for:
-
-- `POST /api/chat`
-- `POST /api/cultivation/apply`
-- `GET /api/health`
-
-The `backend-ai` service can still be used as an advanced AI backend, but local gameplay loop integration now works directly through the Vercel serverless routes above.
-
-## Data ownership boundaries
-
-- **DB-backed source of truth**
-  - `players`, `zones`, `leaderboard_entries`, `user_players`
-  - API flows: recruit, train, challenge result, camera reward, chat + cultivation apply
-- **Mock-backed API (intentional for demo)**
-  - `GET /api/live-events`
-- **Frontend flavor/local-only**
-  - map nearby activity strings, rival personalities, non-persistent UI effects
+| `public/icons/icon-192.png` | 192×192 |
+| `public/icons/icon-512.png` | 512×512 |
+| `public/icons/apple-touch-icon.png` | 180×180 |
