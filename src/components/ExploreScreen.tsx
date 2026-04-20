@@ -139,8 +139,33 @@ const getPlayerIcon = (
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-const NA_FALLBACK_CENTER: [number, number] = [40, -98];
 const NA_MAX_BOUNDS: [[number, number], [number, number]] = [[14, -170], [72, -50]];
+
+// ─── Starter city presets (2026 World Cup host cities) ───────────────────────
+// Shown before the user sets their own location so the map renders immediately
+// at street level with a real neighbourhood instead of a blank continent view.
+// Tiles are cached by the browser after the first visit — subsequent opens are instant.
+const STARTER_CITIES = [
+  { label: "Manhattan, New York",   lat: 40.7549,  lng: -73.9840,  zoom: 14 },
+  { label: "Downtown Los Angeles",  lat: 34.0522,  lng: -118.2437, zoom: 14 },
+  { label: "Mexico City Centro",    lat: 19.4326,  lng: -99.1332,  zoom: 14 },
+  { label: "Downtown Toronto",      lat: 43.6532,  lng: -79.3832,  zoom: 14 },
+  { label: "South Beach, Miami",    lat: 25.7617,  lng: -80.1918,  zoom: 14 },
+] as const;
+
+// Stable for the whole session; rotates to a new city on each fresh app open.
+const _storedCityIdx = (() => {
+  try {
+    const stored = sessionStorage.getItem("ppl-starter-city-idx");
+    if (stored !== null) return parseInt(stored, 10) % STARTER_CITIES.length;
+    const idx = Math.floor(Math.random() * STARTER_CITIES.length);
+    sessionStorage.setItem("ppl-starter-city-idx", String(idx));
+    return idx;
+  } catch { return 0; }
+})();
+const STARTER_CITY = STARTER_CITIES[_storedCityIdx]!;
+const NA_FALLBACK_CENTER: [number, number] = [STARTER_CITY.lat, STARTER_CITY.lng];
+// ─────────────────────────────────────────────────────────────────────────────
 
 const mapControlLeft = {
   left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)",
@@ -248,7 +273,7 @@ const MapControls = ({
               } else {
                 onLocationUnavailable("Location request timed out. Try again.");
               }
-              map.flyTo(NA_FALLBACK_CENTER, 5, { duration: 1.2 });
+              map.flyTo(NA_FALLBACK_CENTER, STARTER_CITY.zoom, { duration: 1.2 });
             },
             { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 }
           );
@@ -664,7 +689,7 @@ const ExploreScreen = () => {
       {/* Real Leaflet Map — North America default; pan/zoom still real */}
       <MapContainer
         center={NA_FALLBACK_CENTER}
-        zoom={5}
+        zoom={STARTER_CITY.zoom}
         minZoom={4}
         maxZoom={18}
         maxBounds={NA_MAX_BOUNDS}
@@ -807,6 +832,17 @@ const ExploreScreen = () => {
         ))}
       </MapContainer>
 
+      {/* Starter city badge — shown while the user hasn't set their own location yet */}
+      {mapReady && !userCoords && !locating && (
+        <div className="absolute top-[max(16px,env(safe-area-inset-top,16px))] left-1/2 -translate-x-1/2 z-[1250] pointer-events-none">
+          <div className="flex items-center gap-1.5 glass-card-strong px-3 py-1.5 rounded-full shadow-lg">
+            <span className="text-[10px]">📍</span>
+            <span className="text-[10px] font-bold text-foreground whitespace-nowrap">{STARTER_CITY.label}</span>
+            <span className="text-[9px] text-muted-foreground whitespace-nowrap">· Tap ⬤ to use your location</span>
+          </div>
+        </div>
+      )}
+
       {locating && (
         <div className="absolute top-[max(16px,env(safe-area-inset-top,16px))] left-1/2 -translate-x-1/2 z-[1250] pointer-events-none">
           <div className="flex items-center gap-2 glass-card-strong px-4 py-2 rounded-full">
@@ -834,9 +870,7 @@ const ExploreScreen = () => {
                   ? "Area scouted!"
                   : scoutProgress < 40
                   ? "Scanning the area…"
-                  : scoutProgress < 93
-                  ? "Finding players nearby…"
-                  : "Almost there…"}
+                  : "Finding players nearby…"}
               </p>
             </div>
             <div className="h-1.5 rounded-full overflow-hidden bg-muted">
