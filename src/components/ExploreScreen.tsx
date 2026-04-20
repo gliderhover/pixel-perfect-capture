@@ -27,13 +27,33 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
+const ZONE_HIGH_VALUE = new Set(["stadium", "rival", "pressure"]);
+
 const createZoneIcon = (type: string) => {
   const emoji = zoneIcons[type] || "📍";
+  const big = ZONE_HIGH_VALUE.has(type);
+  const size = big ? 64 : 52;
+  const glowColor =
+    type === "stadium" ? "rgba(250,204,21,0.55)" :
+    type === "rival"   ? "rgba(239,68,68,0.55)" :
+    type === "pressure"? "rgba(168,85,247,0.55)" :
+    type === "training"? "rgba(34,197,94,0.4)" :
+    type === "recovery"? "rgba(56,189,248,0.4)" :
+    type === "fan-arena"? "rgba(251,146,60,0.4)" :
+    "rgba(148,163,184,0.3)";
+  const pulseAnim = big ? `animation:zone-pulse 2s ease-in-out infinite;` : "";
   return L.divIcon({
     className: "custom-zone-marker",
-    html: `<div class="zone-marker-inner zone-type-${type}"><span>${emoji}</span></div>`,
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
+    html: `
+      <style>
+        @keyframes zone-pulse{0%,100%{box-shadow:0 0 0 0 ${glowColor},0 2px 8px rgba(0,0,0,0.35)}50%{box-shadow:0 0 0 8px rgba(0,0,0,0),0 2px 12px rgba(0,0,0,0.4)}}
+      </style>
+      <div class="zone-marker-inner zone-type-${type}" style="width:${size}px;height:${size}px;font-size:${big ? 28 : 22}px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(11,16,32,0.82);border:2px solid ${glowColor};box-shadow:0 0 12px ${glowColor},0 2px 8px rgba(0,0,0,0.35);${pulseAnim}backdrop-filter:blur(4px);">
+        <span style="line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6))">${emoji}</span>
+        ${big ? `<span style="position:absolute;top:-6px;right:-6px;background:${glowColor.replace("0.55","1").replace("0.4","1")};color:#000;font-size:8px;font-weight:900;padding:2px 5px;border-radius:999px;line-height:1.4;letter-spacing:0.05em">${type === "stadium" ? "LIVE" : type === "rival" ? "PVP" : "HOT"}</span>` : ""}
+      </div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
 };
 
