@@ -313,12 +313,15 @@ const ExploreScreen = () => {
       setScoutDone(false);
       setScoutProgress(0);
       clearAll();
-      // Staged milestones that feel accurate for a 1-4 s API call
+      // Staged milestones — keeps crawling so bar never freezes visibly
       scoutTimersRef.current = [
-        setTimeout(() => setScoutProgress(12), 80),
-        setTimeout(() => setScoutProgress(38), 500),
-        setTimeout(() => setScoutProgress(62), 1100),
-        setTimeout(() => setScoutProgress(83), 2000),
+        setTimeout(() => setScoutProgress(15),  60),
+        setTimeout(() => setScoutProgress(42),  420),
+        setTimeout(() => setScoutProgress(68),  900),
+        setTimeout(() => setScoutProgress(82), 1600),
+        setTimeout(() => setScoutProgress(89), 2600),
+        setTimeout(() => setScoutProgress(94), 3800),
+        setTimeout(() => setScoutProgress(97), 5500),
       ];
       return clearAll;
     } else if (wasScoutingRef.current) {
@@ -793,9 +796,9 @@ const ExploreScreen = () => {
               <p className="text-[11px] font-black text-foreground">
                 {scoutDone
                   ? "Area scouted!"
-                  : scoutProgress < 35
+                  : scoutProgress < 40
                   ? "Scanning the area…"
-                  : scoutProgress < 70
+                  : scoutProgress < 93
                   ? "Finding players nearby…"
                   : "Almost there…"}
               </p>
