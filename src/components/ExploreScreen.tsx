@@ -165,6 +165,48 @@ const _storedCityIdx = (() => {
 })();
 const STARTER_CITY = STARTER_CITIES[_storedCityIdx]!;
 const NA_FALLBACK_CENTER: [number, number] = [STARTER_CITY.lat, STARTER_CITY.lng];
+
+// ─── Tile preloading ──────────────────────────────────────────────────────────
+// Warm the browser HTTP cache with the tiles Leaflet will ask for, so the map
+// renders without black areas on first load.  Runs once at module init (not per
+// render) so it never blocks the UI thread.
+const _lngToTileX = (lng: number, z: number) =>
+  Math.floor(((lng + 180) / 360) * Math.pow(2, z));
+const _latToTileY = (lat: number, z: number) => {
+  const r = (lat * Math.PI) / 180;
+  return Math.floor(
+    ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * Math.pow(2, z)
+  );
+};
+const _CARTO_SUBS = ["a", "b", "c", "d"] as const;
+const _preloadCityTiles = (city: typeof STARTER_CITY) => {
+  // A portrait mobile viewport at zoom 14 shows ≈ 2–3 tiles wide × 5–6 tall.
+  // Preload 5 × 10 = 50 tiles (center ± 2 x, ± 4 y) to cover the full screen
+  // plus one tile of buffer on every side.  Uses requestIdleCallback so it
+  // never competes with the initial render.
+  const load = () => {
+    const cx = _lngToTileX(city.lng, city.zoom);
+    const cy = _latToTileY(city.lat, city.zoom);
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -4; dy <= 5; dy++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        const s = _CARTO_SUBS[(Math.abs(x) + Math.abs(y)) % 4];
+        // Preload both 1× and @2x variants so retina + non-retina are covered
+        for (const retina of ["", "@2x"]) {
+          const img = new Image();
+          img.src = `https://${s}.basemaps.cartocdn.com/dark_all/${city.zoom}/${x}/${y}${retina}.png`;
+        }
+      }
+    }
+  };
+  if (typeof requestIdleCallback !== "undefined") {
+    requestIdleCallback(load, { timeout: 2000 });
+  } else {
+    setTimeout(load, 200);
+  }
+};
+_preloadCityTiles(STARTER_CITY);
 // ─────────────────────────────────────────────────────────────────────────────
 
 const mapControlLeft = {
@@ -832,9 +874,15 @@ const ExploreScreen = () => {
         ))}
       </MapContainer>
 
-      {/* Starter city badge — shown while the user hasn't set their own location yet */}
+      {/* Starter city badge — centred over the MAP area only (right of sidebar) */}
       {mapReady && !userCoords && !locating && (
-        <div className="absolute top-[max(16px,env(safe-area-inset-top,16px))] left-1/2 -translate-x-1/2 z-[1250] pointer-events-none">
+        <div
+          className="absolute top-[max(16px,env(safe-area-inset-top,16px))] z-[1250] pointer-events-none flex justify-center"
+          style={{
+            left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px))",
+            right: "env(safe-area-inset-right, 0px)",
+          }}
+        >
           <div className="flex items-center gap-1.5 glass-card-strong px-3 py-1.5 rounded-full shadow-lg">
             <span className="text-[10px]">📍</span>
             <span className="text-[10px] font-bold text-foreground whitespace-nowrap">{STARTER_CITY.label}</span>
@@ -844,7 +892,13 @@ const ExploreScreen = () => {
       )}
 
       {locating && (
-        <div className="absolute top-[max(16px,env(safe-area-inset-top,16px))] left-1/2 -translate-x-1/2 z-[1250] pointer-events-none">
+        <div
+          className="absolute top-[max(16px,env(safe-area-inset-top,16px))] z-[1250] pointer-events-none flex flex-col items-center"
+          style={{
+            left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px))",
+            right: "env(safe-area-inset-right, 0px)",
+          }}
+        >
           <div className="flex items-center gap-2 glass-card-strong px-4 py-2 rounded-full">
             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
             <span className="text-[10px] font-bold text-foreground whitespace-nowrap">Finding your location…</span>
