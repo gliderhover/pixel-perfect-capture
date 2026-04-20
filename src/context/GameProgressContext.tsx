@@ -103,7 +103,21 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [usingMockPlayers, setUsingMockPlayers] = useState(true);
-  const userId = import.meta.env.VITE_DEMO_USER_ID?.trim() || "demo-user";
+  // Generate a stable unique ID per device so each new user starts with a clean
+  // squad instead of sharing the seeded demo-user data.
+  const userId = useMemo(() => {
+    const envId = import.meta.env.VITE_DEMO_USER_ID?.trim();
+    if (envId) return envId; // override kept for dev/testing
+    try {
+      const stored = localStorage.getItem("ppl-user-id");
+      if (stored) return stored;
+      const id = `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem("ppl-user-id", id);
+      return id;
+    } catch {
+      return "demo-user";
+    }
+  }, []);
   const [focusPoints, setFocusPoints] = useState(() => {
     try { const v = localStorage.getItem("ppc-focus-points"); return v ? Number(v) : 10; } catch { return 10; }
   });

@@ -442,7 +442,9 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
       </div>
 
       {showNamePrompt && (
-        <div className="fixed inset-0 z-[300] flex items-end justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+        <div
+          className="fixed z-[300] flex items-end justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+          style={{ top: 0, bottom: 0, left: "var(--game-sidebar-width, 56px)", right: 0 }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowNamePrompt(false); }}>
           <div className="w-full max-w-md glass-card-strong rounded-t-3xl px-5 pt-4 animate-fade-in-up"
             style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}>

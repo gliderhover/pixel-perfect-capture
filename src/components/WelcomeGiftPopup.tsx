@@ -49,7 +49,10 @@ const WelcomeGiftPopup = ({ onDone }: WelcomeGiftPopupProps) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[2100] flex items-end justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
+    <div
+      className="fixed z-[2100] flex items-end justify-center bg-black/70 backdrop-blur-sm animate-fade-in"
+      style={{ top: 0, bottom: 0, left: "var(--game-sidebar-width, 56px)", right: 0 }}
+    >
       <div
         className="w-full max-w-md bg-card border-t border-border/30 rounded-t-3xl px-5 pt-5 animate-slide-up"
         style={{ paddingBottom: "max(1.75rem, env(safe-area-inset-bottom))" }}
