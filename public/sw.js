@@ -1,13 +1,13 @@
 /* App shell + safe runtime caching. Bump VERSION after changing precache list or logic. */
-const VERSION = 3;
-const SHELL_CACHE = `ppc-shell-v${VERSION}`;
-const ASSETS_CACHE = `ppc-assets-v${VERSION}`;
+const VERSION = 4;
+const SHELL_CACHE = `ppl-shell-v${VERSION}`;
+const ASSETS_CACHE = `ppl-assets-v${VERSION}`;
 
 const PRECACHE_URLS = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/icons/icon-source.svg",
+  "/favicon.ico",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/apple-touch-icon.png",

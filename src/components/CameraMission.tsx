@@ -10,7 +10,7 @@ interface CameraMissionProps {
   onChallenge?: (player: Player) => void;
 }
 
-type Phase = "scanning" | "locking" | "found" | "missed" | "empty";
+type Phase = "scanning" | "locking" | "found" | "missed" | "empty" | "venue";
 
 const RARITY_COLOR: Record<string, string> = {
   legendary: "#f59e0b",
@@ -19,6 +19,14 @@ const RARITY_COLOR: Record<string, string> = {
   common: "#94a3b8",
 };
 
+const VENUES = [
+  { name: "World Cup Stadium", type: "stadium", emoji: "🏟️", xp: 35, bonus: "+35 XP · +Morale", color: "#f59e0b", desc: "A legendary arena buzzing with World Cup energy. Soak it in." },
+  { name: "Training Complex", type: "training", emoji: "⚽", xp: 26, bonus: "+26 XP · +Form", color: "#22c55e", desc: "Elite pitch. This is where champions are made every morning." },
+  { name: "Fan Zone HQ",      type: "fan-arena", emoji: "📣", xp: 20, bonus: "+20 XP · +Fan Bond", color: "#f97316", desc: "Thousands of fans. The atmosphere here is absolutely electric." },
+  { name: "Recovery Center",  type: "recovery",  emoji: "💆", xp: 15, bonus: "+15 XP · +Morale", color: "#38bdf8", desc: "Ice baths, physios, and silence. Your squad needs this." },
+  { name: "Rival Arena",      type: "rival",     emoji: "⚔️", xp: 25, bonus: "+25 XP · +Confidence", color: "#ef4444", desc: "Enemy territory. Scouts watching. Every touch gets judged." },
+];
+
 const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionProps) => {
   const [phase, setPhase] = useState<Phase>("scanning");
   const [cameraError, setCameraError] = useState(false);
@@ -26,6 +34,7 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
   // Capture the player at lock-on time so prop changes can't wipe it mid-flow
   const [lockedPlayer, setLockedPlayer] = useState<Player | null>(null);
   const [lockCountdown, setLockCountdown] = useState(8);
+  const [discoveredVenue, setDiscoveredVenue] = useState<typeof VENUES[number] | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const { addFocusPoints } = useGameProgress();
@@ -78,11 +87,25 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
     if (scanPct < 100) return;
     const t = setTimeout(() => {
       if (nearestPlayer) {
-        setLockedPlayer(nearestPlayer);
-        setLockCountdown(8);
-        setPhase("locking");
+        // 20% chance: discover a venue instead even if player nearby
+        if (Math.random() < 0.20) {
+          const venue = VENUES[Math.floor(Math.random() * VENUES.length)];
+          setDiscoveredVenue(venue ?? null);
+          setPhase("venue");
+        } else {
+          setLockedPlayer(nearestPlayer);
+          setLockCountdown(8);
+          setPhase("locking");
+        }
       } else {
-        setPhase("empty");
+        // 40% chance to find a venue when no player nearby (better than empty)
+        if (Math.random() < 0.40) {
+          const venue = VENUES[Math.floor(Math.random() * VENUES.length)];
+          setDiscoveredVenue(venue ?? null);
+          setPhase("venue");
+        } else {
+          setPhase("empty");
+        }
       }
     }, 400);
     return () => clearTimeout(t);
@@ -330,7 +353,7 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setScanPct(0); setLockCountdown(8); setLockedPlayer(null); setPhase("scanning"); }}
+                onClick={() => { setScanPct(0); setLockCountdown(8); setLockedPlayer(null); setDiscoveredVenue(null); setPhase("scanning"); }}
                 className="flex-1 py-3 rounded-2xl font-bold text-sm"
                 style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}
               >
@@ -422,6 +445,56 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
               }}
             >
               ⚡ Challenge — Penalty Duel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* VENUE PHASE */}
+      {phase === "venue" && discoveredVenue && (
+        <div
+          className="absolute inset-x-0 bottom-0 px-4 animate-slide-up"
+          style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}
+        >
+          <div className="flex justify-center mb-3">
+            <div
+              className="px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase"
+              style={{ background: `${discoveredVenue.color}20`, border: `1px solid ${discoveredVenue.color}50`, color: discoveredVenue.color }}
+            >
+              📍 LOCATION DISCOVERED
+            </div>
+          </div>
+          <div
+            className="rounded-3xl p-5"
+            style={{ background: "rgba(0,0,0,0.82)", border: `1px solid ${discoveredVenue.color}35`, backdropFilter: "blur(20px)" }}
+          >
+            <div className="flex items-center gap-4 mb-3">
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shrink-0"
+                style={{ background: `${discoveredVenue.color}20`, border: `1px solid ${discoveredVenue.color}40` }}
+              >
+                {discoveredVenue.emoji}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest mb-0.5" style={{ color: discoveredVenue.color }}>
+                  {discoveredVenue.type.replace("-", " ")}
+                </p>
+                <h2 className="text-lg font-black text-white leading-tight">{discoveredVenue.name}</h2>
+                <p className="text-xs mt-0.5 font-bold" style={{ color: discoveredVenue.color }}>{discoveredVenue.bonus}</p>
+              </div>
+            </div>
+            <p className="text-xs text-white/50 italic mb-4 leading-relaxed">"{discoveredVenue.desc}"</p>
+            <button
+              type="button"
+              onClick={doClose}
+              className="w-full py-4 rounded-2xl font-black text-base active:scale-[0.97] transition-transform"
+              style={{
+                background: `linear-gradient(135deg, ${discoveredVenue.color}, ${discoveredVenue.color}99)`,
+                color: "#000",
+                boxShadow: `0 0 28px ${discoveredVenue.color}40`,
+              }}
+            >
+              ✓ Collect Bonus
             </button>
           </div>
         </div>
