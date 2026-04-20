@@ -732,6 +732,20 @@ const ExploreScreen = () => {
         </div>
       )}
 
+      {/* Pokémon-style movement nudge — shows when location is known but no players/activities nearby */}
+      {mapReady && userCoords && localTalents.length === 0 && !encounterPlayer && !showCamera && !activeZone && (
+        <div className="absolute left-1/2 -translate-x-1/2 z-[1250] pointer-events-none"
+          style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 72px)" }}>
+          <div className="flex items-center gap-2 glass-card-strong px-4 py-2.5 rounded-2xl max-w-[260px] shadow-lg">
+            <span className="text-lg shrink-0">🚶</span>
+            <div>
+              <p className="text-[11px] font-black text-foreground leading-tight">No players nearby!</p>
+              <p className="text-[9px] text-muted-foreground leading-tight mt-0.5">Move to a Stadium or Training Zone on the map to find more recruits.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {!mapReady && (
         <div className="absolute inset-0 z-[1300] bg-background flex flex-col items-center justify-center gap-4 pointer-events-none">
           <div className="text-5xl" style={{ animation: "bounce 1s infinite" }}>⚽</div>
@@ -861,6 +875,8 @@ const ExploreScreen = () => {
         <CameraMission
           onClose={() => setShowCamera(false)}
           nearestPlayer={nearestEncounterPlayer}
+          activeZoneName={activeZone?.name ?? selectedZone?.name ?? null}
+          activeZoneType={activeZone?.type ?? selectedZone?.type ?? null}
           onChallenge={(player) => {
             setShowCamera(false);
             setEncounterPlayer(player);

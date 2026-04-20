@@ -114,7 +114,7 @@ const AnimatedPortrait = ({ player, size = "md", showMood = false, className = "
               <img
                 src={player.portrait}
                 alt=""
-                className={`absolute inset-0 h-full w-full object-cover scale-[1.08] portrait-parallax-img ${imgRounded[size]} transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
+                className={`absolute inset-0 h-full w-full object-top scale-[1.08] portrait-parallax-img ${imgRounded[size]} transition-opacity duration-300 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
                 loading="eager"
                 decoding="async"
                 referrerPolicy="no-referrer"

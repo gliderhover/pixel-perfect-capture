@@ -181,12 +181,16 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
 
   return (
     <div className="fixed inset-0 z-[1350] flex items-center justify-center bg-background/70 backdrop-blur-xl p-4" onClick={onClose}>
-      <div className="relative glass-card-strong w-full max-w-sm rounded-3xl overflow-y-auto max-h-[92dvh] animate-encounter-reveal" onClick={(e) => e.stopPropagation()}>
-        {/* Close — sticky so it's always tappable even when content scrolls */}
-        <button type="button" onClick={onClose}
-          className="sticky top-0 float-right z-50 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 mt-2 mr-2">
-          <X className="h-5 w-5" />
-        </button>
+      <div className="relative glass-card-strong w-full max-w-sm rounded-3xl animate-encounter-reveal flex flex-col max-h-[92dvh]" onClick={(e) => e.stopPropagation()}>
+        {/* Close button — always visible above scrollable content */}
+        <div className="shrink-0 flex justify-end px-3 pt-3 pb-0">
+          <button type="button" onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        {/* Scrollable content area */}
+        <div className="overflow-y-auto flex-1 rounded-b-3xl">
 
         {step === "setup" && (
           <div className="p-5 animate-fade-in">
@@ -246,7 +250,7 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
         )}
 
         {step === "battle" && (
-          <div className="relative overflow-hidden">
+          <div className="relative">
             {/* Stadium atmosphere */}
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 0%, hsl(var(--primary)/0.08), transparent 70%)" }} />
@@ -373,6 +377,7 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

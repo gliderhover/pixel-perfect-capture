@@ -8,6 +8,8 @@ interface CameraMissionProps {
   onClose: () => void;
   nearestPlayer?: Player | null;
   onChallenge?: (player: Player) => void;
+  activeZoneName?: string | null;
+  activeZoneType?: string | null;
 }
 
 type Phase = "scanning" | "locking" | "found" | "missed" | "empty" | "venue";
@@ -27,7 +29,7 @@ const VENUES = [
   { name: "Rival Arena",      type: "rival",     emoji: "⚔️", xp: 25, bonus: "+25 XP · +Confidence", color: "#ef4444", desc: "Enemy territory. Scouts watching. Every touch gets judged." },
 ];
 
-const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionProps) => {
+const CameraMission = ({ onClose, nearestPlayer, onChallenge, activeZoneName, activeZoneType }: CameraMissionProps) => {
   const [phase, setPhase] = useState<Phase>("scanning");
   const [cameraError, setCameraError] = useState(false);
   const [scanPct, setScanPct] = useState(0);
@@ -196,7 +198,7 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
           className="text-[10px] font-black tracking-[0.25em] uppercase"
           style={{ color: "#22c55e", textShadow: "0 0 12px rgba(34,197,94,0.7)" }}
         >
-          {cameraError ? "Scout Mode" : "AR Scout"}
+          {cameraError ? "Scout Mode" : activeZoneName ? `AR Scout · ${activeZoneName}` : "AR Scout"}
         </p>
         <button
           onClick={doClose}
@@ -272,6 +274,18 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge }: CameraMissionPro
             <p className="text-white/25 text-[10px] mt-3 text-center px-8">
               {nearestPlayer ? `${nearestPlayer.name} detected nearby` : "Walk around to discover nearby players"}
             </p>
+            {activeZoneType && (
+              <div className="mt-3 px-3 py-1 rounded-full text-[9px] font-black tracking-wider uppercase"
+                style={{ background: "rgba(34,197,94,0.15)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.3)" }}>
+                {activeZoneType === "stadium" ? "🌟 Stadium Zone" :
+                 activeZoneType === "training" ? "⚽ Training Ground" :
+                 activeZoneType === "rival" ? "⚔️ Rival Territory" :
+                 activeZoneType === "fan-arena" ? "📣 Fan Zone" :
+                 activeZoneType === "recovery" ? "💆 Recovery Zone" :
+                 activeZoneType === "pressure" ? "🔥 Pressure Zone" :
+                 `📍 ${activeZoneType}`}
+              </div>
+            )}
           </div>
         </div>
       )}

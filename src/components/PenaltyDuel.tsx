@@ -411,13 +411,16 @@ const PenaltyDuel = ({
           </div>
 
           {/* ─── PHASE MESSAGES ─── */}
-          <div className="relative z-20 mt-6 text-center min-h-[4.5rem] flex flex-col items-center justify-center">
+          <div className="relative z-20 mt-4 text-center min-h-0 flex-1 overflow-y-auto flex flex-col items-center justify-center px-4">
             {phase === "ready" && (
               <div className="animate-fade-in-up">
                 <p className="text-sm text-foreground/80 italic max-w-[260px] leading-relaxed">
                   "{preLine}"
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
+                {gloveName && gloveName !== "Basic Gloves" && (
+                  <p className="text-[10px] text-emerald-400 mt-2 font-bold">🧤 {gloveName} active — wider save window</p>
+                )}
               </div>
             )}
             {phase === "runup" && (
@@ -483,18 +486,6 @@ const PenaltyDuel = ({
             {phase === "goal" && (
               <div className="animate-duel-result-slam text-center">
                 <p className="text-5xl font-black text-destructive mb-2 tracking-tighter">GOAL</p>
-                {diveDir && shotDir && diveDir !== shotDir && (
-                  <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
-                    <span className="text-[10px] px-2.5 py-1 rounded-full font-black bg-destructive/20 text-destructive">
-                      Dived {diveDir} · Ball {shotDir}
-                    </span>
-                    {capturedPower !== null && (
-                      <span className="text-[10px] px-2.5 py-1 rounded-full font-black bg-amber-500/20 text-amber-400">
-                        {capturedPower >= 35 && capturedPower <= 70 ? "⚡ Good power, wrong side" : capturedPower > 85 ? "🔥 Overpowered!" : "💨 Hesitated too long"}
-                      </span>
-                    )}
-                  </div>
-                )}
                 <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postGoalLine}"</p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
                 {/* Coaching tip */}
