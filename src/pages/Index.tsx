@@ -9,6 +9,7 @@ import LeaderboardScreen from "@/components/LeaderboardScreen";
 import RulesPanel from "@/components/RulesPanel";
 import InstallPWAHint from "@/components/InstallPWAHint";
 import OnboardingSheet, { shouldShowOnboarding } from "@/components/OnboardingSheet";
+import WelcomeGiftPopup, { shouldShowGift } from "@/components/WelcomeGiftPopup";
 import ContextTip, { shouldShowTip, type Tip } from "@/components/ContextTip";
 import { useDailyStreak } from "@/hooks/useDailyStreak";
 import { cn } from "@/lib/utils";
@@ -63,6 +64,7 @@ const Index = () => {
   const [installHintVisible, setInstallHintVisible] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
+  const [showGift, setShowGift] = useState(false);
   const [activeTip, setActiveTip] = useState<Tip | null>(null);
   const { streakCount, trainedToday, recordActivity, recordTraining } = useDailyStreak();
 
@@ -104,7 +106,15 @@ const Index = () => {
       {activeTab === "compete" && <CompeteScreen />}
       {activeTab === "live" && <LiveScreen />}
       {activeTab === "leaderboard" && <LeaderboardScreen />}
-      {showOnboarding && <OnboardingSheet onDone={() => setShowOnboarding(false)} />}
+      {showOnboarding && (
+        <OnboardingSheet onDone={() => {
+          setShowOnboarding(false);
+          if (shouldShowGift()) setShowGift(true);
+        }} />
+      )}
+      {showGift && !showOnboarding && (
+        <WelcomeGiftPopup onDone={() => setShowGift(false)} />
+      )}
       {activeTip && !showOnboarding && (
         <ContextTip tip={activeTip} onDismiss={() => setActiveTip(null)} />
       )}

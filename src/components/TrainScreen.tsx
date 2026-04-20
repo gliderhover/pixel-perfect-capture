@@ -395,7 +395,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
             <AnimatedPortrait player={activeChatPlayer} size="md" showMood />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <p className="text-sm font-black text-foreground truncate">{activeChatPlayer.name}</p>
+                <p className="text-sm font-black text-foreground leading-tight">{activeChatPlayer.name}</p>
                 <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[9px] font-black text-primary shrink-0">Lv {activeChatPlayer.level}</span>
               </div>
               <p className="text-[10px] text-muted-foreground truncate">{activeChatPlayer.position}</p>

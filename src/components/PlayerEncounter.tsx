@@ -132,8 +132,8 @@ const PlayerEncounter = ({ player, onClose, encounterRemainingMs, onFlowEnd }: P
           <div className="mb-4">
             <AnimatedPortrait player={player} size="lg" />
           </div>
-          <p className="text-foreground font-bold text-lg">{player.name}</p>
-          <p className="text-sm text-muted-foreground mt-1">{player.position} · {player.clubTeam}</p>
+          <p className="text-foreground font-bold text-xl leading-tight text-center px-2">{player.name}</p>
+          <p className="text-sm text-muted-foreground mt-1">{player.position} · {player.nationalTeam}</p>
           <div className="mt-4 glass-card px-5 py-3 rounded-2xl inline-block">
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Starts at</p>
             <p className="text-xl font-black text-accent">Level 1</p>
@@ -346,7 +346,7 @@ const PlayerEncounter = ({ player, onClose, encounterRemainingMs, onFlowEnd }: P
           <p className="mb-0.5 text-sm font-semibold text-muted-foreground">
             {player.position} · <span className="text-foreground/90">{player.representedCountry}</span>
           </p>
-          <p className="mb-0.5 text-xs text-muted-foreground">{player.clubTeam} · Age {player.age}</p>
+          <p className="mb-0.5 text-xs text-muted-foreground">{player.nationalTeam} · Age {player.age}</p>
           <p className="text-xs font-bold tracking-wide text-primary">✦ {headlineTrait}</p>
           <p className="mt-1 text-[10px] text-muted-foreground">OVR {player.stats.overall}</p>
         </div>

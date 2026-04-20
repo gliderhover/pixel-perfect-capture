@@ -69,8 +69,8 @@ const CompeteScreen = () => {
               <div className="flex items-start gap-2 mb-3">
                 <div className="flex flex-1 min-w-0 flex-col items-center gap-1">
                   <AnimatedPortrait player={activePlayer} size="sm" />
-                  <p className="text-[10px] font-black text-foreground truncate w-full text-center">{activePlayer.name}</p>
-                  <p className="text-[9px] text-muted-foreground truncate w-full text-center">
+                  <p className="text-[10px] font-black text-foreground break-words leading-tight w-full text-center">{activePlayer.name}</p>
+                  <p className="text-[9px] text-muted-foreground w-full text-center">
                     {activePlayer.position} · {activePlayer.representedCountry}
                   </p>
                 </div>
@@ -80,14 +80,14 @@ const CompeteScreen = () => {
                 </div>
                 <div className="flex flex-1 min-w-0 flex-col items-center gap-1">
                   <AnimatedPortrait player={rivalPlayer} size="sm" />
-                  <p className="text-[10px] font-black text-foreground truncate w-full text-center">{rivalPlayer.name}</p>
-                  <p className="text-[9px] text-muted-foreground truncate w-full text-center">
+                  <p className="text-[10px] font-black text-foreground break-words leading-tight w-full text-center">{rivalPlayer.name}</p>
+                  <p className="text-[9px] text-muted-foreground w-full text-center">
                     {rivalPlayer.position} · {rivalPlayer.representedCountry}
                   </p>
                 </div>
               </div>
 
-              <p className="text-[9px] text-center text-muted-foreground mb-2 truncate px-1">
+              <p className="text-[9px] text-center text-muted-foreground mb-2 px-1">
                 @{rival.name} · Lvl {rival.level}
               </p>
 
@@ -110,7 +110,7 @@ const CompeteScreen = () => {
                 </div>
                 <div className="text-center min-w-[2.5rem]">
                   <p className="text-lg font-black text-foreground">{themOvr}</p>
-                  <p className="text-[9px] text-muted-foreground truncate">{rivalPlayer.name.split(" ").pop()}</p>
+                  <p className="text-[9px] text-muted-foreground break-words leading-tight text-center">{rivalPlayer.name}</p>
                 </div>
               </div>
 

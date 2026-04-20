@@ -204,7 +204,7 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
             <div className="flex items-start justify-center gap-3 mb-4">
               <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
                 <AnimatedPortrait player={activePlayer} size="md" />
-                <p className="text-[10px] font-black text-foreground truncate w-full text-center">{activePlayer.name}</p>
+                <p className="text-[10px] font-black text-foreground break-words leading-tight w-full text-center">{activePlayer.name}</p>
                 <p className="text-[9px] text-muted-foreground">{activePlayer.position}</p>
               </div>
               <div className="flex flex-col items-center pt-3 shrink-0">
@@ -212,7 +212,7 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
               </div>
               <div className="flex flex-col items-center gap-1 flex-1 min-w-0">
                 <AnimatedPortrait player={rivalPlayer} size="md" />
-                <p className="text-[10px] font-black text-foreground truncate w-full text-center">{rivalPlayer.name}</p>
+                <p className="text-[10px] font-black text-foreground break-words leading-tight w-full text-center">{rivalPlayer.name}</p>
                 <p className="text-[9px] text-muted-foreground">{rivalPlayer.position}</p>
               </div>
             </div>
@@ -265,8 +265,8 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
               <div className="flex items-center justify-center gap-4">
                 <div className="flex flex-col items-center gap-1">
                   <AnimatedPortrait player={activePlayer} size="md" />
-                  <p className="text-[9px] font-black text-foreground truncate max-w-[4rem] text-center">
-                    {activePlayer.name.split(" ").pop()}
+                  <p className="text-[9px] font-black text-foreground break-words leading-tight max-w-[5rem] text-center">
+                    {activePlayer.name}
                   </p>
                 </div>
                 <div className="flex flex-col items-center shrink-0">
@@ -277,8 +277,8 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <AnimatedPortrait player={rivalPlayer} size="md" />
-                  <p className="text-[9px] font-black text-foreground truncate max-w-[4rem] text-center">
-                    {rivalPlayer.name.split(" ").pop()}
+                  <p className="text-[9px] font-black text-foreground break-words leading-tight max-w-[5rem] text-center">
+                    {rivalPlayer.name}
                   </p>
                 </div>
               </div>

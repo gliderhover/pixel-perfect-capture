@@ -428,12 +428,12 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge, activeZoneName, ac
                 >
                   {lockedPlayer.rarity}
                 </p>
-                <h2 className="text-xl font-black text-white leading-tight truncate">{lockedPlayer.name}</h2>
-                <p className="text-sm mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.55)" }}>
+                <h2 className="text-xl font-black text-white leading-tight">{lockedPlayer.name}</h2>
+                <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.55)" }}>
                   {lockedPlayer.position} · {lockedPlayer.representedCountry}
                 </p>
-                <p className="text-xs mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.35)" }}>
-                  {lockedPlayer.clubTeam}
+                <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
+                  {lockedPlayer.nationalTeam}
                 </p>
               </div>
               <div className="text-center shrink-0">

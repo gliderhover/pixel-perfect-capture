@@ -331,7 +331,7 @@ const PenaltyDuel = ({
 
           <p className="relative z-20 text-sm font-black text-foreground mb-0.5">{player.name}</p>
           <p className="relative z-20 text-[9px] text-muted-foreground mb-4">
-            {player.position} · {player.clubTeam}
+            {player.position} · {player.nationalTeam}
           </p>
 
           {/* ─── GOAL FRAME ─── */}

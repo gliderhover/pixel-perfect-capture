@@ -65,9 +65,9 @@ const SquadScreen = ({ onNavigate }: SquadScreenProps) => {
         <AnimatedPortrait player={activePlayer} size="md" showMood />
         <div className="flex-1 min-w-0">
           <p className="text-[10px] text-primary font-black uppercase tracking-widest">Active Player</p>
-          <p className="text-lg font-black text-foreground mt-0.5 truncate">{activePlayer.name}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {activePlayer.position} · {activePlayer.clubTeam}
+          <p className="text-lg font-black text-foreground mt-0.5 leading-tight">{activePlayer.name}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+            {activePlayer.position} · {activePlayer.nationalTeam}
           </p>
             <p className="text-[10px] text-primary font-bold mt-1">
               Lv {activePlayer.level} · {evoLabel[activePlayer.evolutionStage]} · OVR {activePlayer.stats.overall}
@@ -120,9 +120,9 @@ const SquadScreen = ({ onNavigate }: SquadScreenProps) => {
             style={{ animationDelay: `${i * 0.05}s` }}
           >
             <AnimatedPortrait player={player} size="sm" />
-            <p className="text-sm font-black text-foreground truncate mt-3">{player.name}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{player.position}</p>
-            <p className="text-[9px] text-muted-foreground/90 mt-0.5 truncate">{player.clubTeam}</p>
+            <p className="text-sm font-black text-foreground leading-tight line-clamp-2 mt-3">{player.name}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{player.position}</p>
+            <p className="text-[9px] text-muted-foreground/90 mt-0.5">{player.nationalTeam}</p>
             <p className="text-[9px] font-bold text-primary/90 mt-1">Lv {player.level} · OVR {player.stats.overall}</p>
           </button>
         ))}
@@ -140,9 +140,8 @@ const SquadScreen = ({ onNavigate }: SquadScreenProps) => {
               <p className="text-sm text-muted-foreground mt-1">
                 Age {detail.age} · {detail.position}
               </p>
-              <p className="text-xs text-foreground/90 mt-1 text-center px-4">{detail.clubTeam}</p>
-              <p className="text-xs text-primary font-semibold mt-0.5">
-                {detail.representedCountry} · {detail.nationalTeam}
+              <p className="text-xs text-primary font-semibold mt-1 text-center px-4">
+                {detail.nationalTeam}
               </p>
               <div className="mt-3 w-full max-w-xs space-y-2">
                 <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
