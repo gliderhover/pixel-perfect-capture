@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from "react";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Scan, ChevronRight, ZoomIn, ZoomOut, Crosshair } from "lucide-react";
@@ -14,10 +14,12 @@ import {
   type ApiNearbyPlace,
   type ApiZone,
 } from "@/lib/apiService";
-import PlayerEncounter from "./PlayerEncounter";
-import CameraMission from "./CameraMission";
-import ZoneExperience from "./ZoneExperience";
 import "leaflet/dist/leaflet.css";
+
+// Lazy-load heavy interaction screens — only fetched when the user actually triggers them
+const PlayerEncounter = lazy(() => import("./PlayerEncounter"));
+const CameraMission   = lazy(() => import("./CameraMission"));
+const ZoneExperience  = lazy(() => import("./ZoneExperience"));
 
 // Fix default marker icon issue in webpack/vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -102,6 +104,40 @@ const createUserLocationIcon = () =>
     iconSize: [18, 18],
     iconAnchor: [9, 9],
   });
+
+// ─── Icon caches ─────────────────────────────────────────────────────────────
+// Zone icons only depend on `type` — build each once and reuse.
+const _zoneIconCache = new Map<string, L.DivIcon>();
+const getZoneIcon = (type: string): L.DivIcon => {
+  if (!_zoneIconCache.has(type)) _zoneIconCache.set(type, createZoneIcon(type));
+  return _zoneIconCache.get(type)!;
+};
+
+// User-location icon never changes — create once at module load.
+const USER_LOCATION_ICON = createUserLocationIcon();
+
+// Player marker icons are keyed by all the values that affect their visual output.
+// This prevents the 1s countdown tick from rebuilding every icon on the map.
+const _playerIconCache = new Map<string, L.DivIcon>();
+const getPlayerIcon = (
+  portrait: string,
+  rarity: string,
+  options?: { expiring?: boolean; leavingSoon?: boolean; remainingSec?: number },
+  name: string = "??"
+): L.DivIcon => {
+  const secKey = options?.remainingSec != null ? String(options.remainingSec) : "-";
+  const key = `${portrait}|${rarity}|${options?.expiring ? 1 : 0}|${options?.leavingSoon ? 1 : 0}|${secKey}|${name}`;
+  if (!_playerIconCache.has(key)) {
+    // Cap cache size to avoid unbounded growth over a long session
+    if (_playerIconCache.size > 400) {
+      const oldest = _playerIconCache.keys().next().value;
+      if (oldest) _playerIconCache.delete(oldest);
+    }
+    _playerIconCache.set(key, createPlayerMarkerIcon(portrait, rarity, options, name));
+  }
+  return _playerIconCache.get(key)!;
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 const NA_FALLBACK_CENTER: [number, number] = [40, -98];
 const NA_MAX_BOUNDS: [[number, number], [number, number]] = [[14, -170], [72, -50]];
@@ -667,7 +703,7 @@ const ExploreScreen = () => {
         {userCoords && (
           <Marker
             position={[userCoords.lat, userCoords.lng]}
-            icon={createUserLocationIcon()}
+            icon={USER_LOCATION_ICON}
             zIndexOffset={900}
           />
         )}
@@ -677,7 +713,7 @@ const ExploreScreen = () => {
           <Marker
             key={zone.id}
             position={[zone.lat, zone.lng]}
-            icon={createZoneIcon(zone.type)}
+            icon={getZoneIcon(zone.type)}
             zIndexOffset={500}
             eventHandlers={{
               click: (e) => {
@@ -700,7 +736,7 @@ const ExploreScreen = () => {
             <Marker
               key={pm.id}
               position={[pm.lat, pm.lng]}
-              icon={createPlayerMarkerIcon(player.portrait, player.rarity, undefined, player.name)}
+              icon={getPlayerIcon(player.portrait, player.rarity, undefined, player.name)}
               eventHandlers={{
                 click: () => {
                   const full = playersById[pm.playerId] ?? player;
@@ -719,7 +755,7 @@ const ExploreScreen = () => {
           <Marker
             key={talent.id}
             position={[talent.lat, talent.lng]}
-            icon={createPlayerMarkerIcon(talent.portrait, talent.rarity, {
+            icon={getPlayerIcon(talent.portrait, talent.rarity, {
               expiring: talent.isExpiring,
               leavingSoon: talent.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs,
               remainingSec: talent.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs ? Math.ceil(talent.remainingMs / 1000) : undefined,
@@ -758,7 +794,7 @@ const ExploreScreen = () => {
           <Marker
             key={place.id}
             position={[place.lat, place.lng]}
-            icon={createZoneIcon(place.mappedZoneType)}
+            icon={getZoneIcon(place.mappedZoneType)}
             eventHandlers={{
               click: () => {
                 setSelectedPlace(place);
@@ -898,14 +934,16 @@ const ExploreScreen = () => {
 
       {/* Zone Experience */}
       {activeZone && (
-        <ZoneExperience
-          zone={activeZone}
-          onClose={() => {
-            setActiveZone(null);
-            setSelectedZone(null);
-            setSelectedPlace(null);
-          }}
-        />
+        <Suspense fallback={null}>
+          <ZoneExperience
+            zone={activeZone}
+            onClose={() => {
+              setActiveZone(null);
+              setSelectedZone(null);
+              setSelectedPlace(null);
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Nearby Place Bottom Sheet */}
@@ -948,29 +986,33 @@ const ExploreScreen = () => {
 
       {/* Player Encounter */}
       {encounterPlayer && (
-        <PlayerEncounter
-          player={encounterPlayer}
-          encounterRemainingMs={activeLocalEncounter?.remainingMs}
-          onFlowEnd={handleEncounterFlowEnd}
-          onClose={() => {
-            setEncounterPlayer(null);
-            setActiveLocalEncounterId(null);
-          }}
-        />
+        <Suspense fallback={null}>
+          <PlayerEncounter
+            player={encounterPlayer}
+            encounterRemainingMs={activeLocalEncounter?.remainingMs}
+            onFlowEnd={handleEncounterFlowEnd}
+            onClose={() => {
+              setEncounterPlayer(null);
+              setActiveLocalEncounterId(null);
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Camera Mission */}
       {showCamera && (
-        <CameraMission
-          onClose={() => setShowCamera(false)}
-          nearestPlayer={nearestEncounterPlayer}
-          activeZoneName={activeZone?.name ?? selectedZone?.name ?? null}
-          activeZoneType={activeZone?.type ?? selectedZone?.type ?? null}
-          onChallenge={(player) => {
-            setShowCamera(false);
-            setEncounterPlayer(player);
-          }}
-        />
+        <Suspense fallback={null}>
+          <CameraMission
+            onClose={() => setShowCamera(false)}
+            nearestPlayer={nearestEncounterPlayer}
+            activeZoneName={activeZone?.name ?? selectedZone?.name ?? null}
+            activeZoneType={activeZone?.type ?? selectedZone?.type ?? null}
+            onChallenge={(player) => {
+              setShowCamera(false);
+              setEncounterPlayer(player);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );
