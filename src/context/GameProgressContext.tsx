@@ -86,6 +86,8 @@ type GameProgressContextValue = {
   playersLoading: boolean;
   playersError: string | null;
   usingMockPlayers: boolean;
+  coachName: string;
+  setCoachName: (name: string) => void;
 };
 
 const GameProgressContext = createContext<GameProgressContextValue | null>(null);
@@ -107,6 +109,14 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => { localStorage.setItem("ppc-focus-points", String(focusPoints)); }, [focusPoints]);
+
+  const [coachName, setCoachNameState] = useState<string>(() => {
+    try { return localStorage.getItem("ppl-coach-name") ?? ""; } catch { return ""; }
+  });
+  const setCoachName = useCallback((name: string) => {
+    setCoachNameState(name.trim());
+    try { localStorage.setItem("ppl-coach-name", name.trim()); } catch {}
+  }, []);
 
   const spendFocusPoints = useCallback((n: number) => {
     if (focusPoints < n) return false;
@@ -321,6 +331,8 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       focusPoints,
       spendFocusPoints,
       addFocusPoints,
+      coachName,
+      setCoachName,
       addXp,
       addBond,
       addShards,
@@ -347,6 +359,8 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       focusPoints,
       spendFocusPoints,
       addFocusPoints,
+      coachName,
+      setCoachName,
       addXp,
       addBond,
       addShards,

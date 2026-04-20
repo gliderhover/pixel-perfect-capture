@@ -42,6 +42,7 @@ const chatSchema = z.object({
       recentTrainingOutcome: z.enum(["strong", "average", "weak", "none"]).optional(),
       injuryState: z.enum(["none", "minor", "recovering"]).optional(),
       justRecruited: z.boolean().optional(),
+      coachName: z.string().max(30).optional(),
     })
     .optional(),
 });
@@ -427,6 +428,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         recentTrainingOutcome: context?.recentTrainingOutcome,
         injuryState: context?.injuryState,
         justRecruited: context?.justRecruited,
+        coachName: context?.coachName,
         playerState: state,
       },
       flavorPack,
