@@ -150,11 +150,11 @@ const spawnRadiusByZoom = (zoom: number) => {
 };
 
 const LOCAL_TALENT_RUNTIME_CONFIG = {
-  defaultLifetimeMs: 10_000,
-  respawnIntervalMs: 12_000,
+  defaultLifetimeMs: 60_000,   // 60 s base — players stick around long enough to actually recruit
+  respawnIntervalMs: 90_000,   // new wave every 90 s so the map doesn't feel empty right away
   countdownTickMs: 1_000,
   despawnFadeMs: 350,
-  leavingSoonMs: 3_000,
+  leavingSoonMs: 8_000,        // "leaving soon" warning in last 8 s
   freezeExpiryWhenActiveEncounter: true,
   maxNearbyByZoom: spawnLimitByZoom,
   distanceFromUserByZoomKm: spawnRadiusByZoom,
@@ -254,6 +254,7 @@ type SelectedPlace = ApiNearbyPlace | null;
 type LocalTalentRuntime = ApiLocalTalentEncounter & {
   remainingMs: number;
   isExpiring: boolean;
+  revealedAt: number; // epoch ms — marker is hidden until this time (staggered appearance)
 };
 
 // Fires as soon as the Leaflet map instance is initialised — does NOT wait
@@ -286,6 +287,7 @@ const ExploreScreen = () => {
   const [locating, setLocating] = useState(false);
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [localTalents, setLocalTalents] = useState<LocalTalentRuntime[]>([]);
+  const [talentsLoading, setTalentsLoading] = useState(false);
   const [nearbyPlaces, setNearbyPlaces] = useState<ApiNearbyPlace[]>([]);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [mapZoom, setMapZoom] = useState(5);
@@ -320,7 +322,9 @@ const ExploreScreen = () => {
 
   const visibleLocalTalents = useMemo(() => {
     const cap = visibleEncounterCapByZoom(mapZoom);
+    const now = Date.now();
     return [...localTalents]
+      .filter((t) => (t.revealedAt ?? 0) <= now) // hide until stagger delay elapses
       .sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999))
       .slice(0, cap);
   }, [localTalents, mapZoom]);
@@ -401,6 +405,7 @@ const ExploreScreen = () => {
       if (now - lastDiscoveryFetchRef.current < 6000) return;
       lastDiscoveryFetchRef.current = now;
       setDiscoveryError(null);
+      setTalentsLoading(true);
       try {
         const radiusKm = LOCAL_TALENT_RUNTIME_CONFIG.distanceFromUserByZoomKm(mapZoom);
         const spawnLimit = LOCAL_TALENT_RUNTIME_CONFIG.maxNearbyByZoom(mapZoom);
@@ -416,22 +421,30 @@ const ExploreScreen = () => {
         if (cancelled) return;
         setLocalTalents((prev) => {
           const prevById = new Map(prev.map((item) => [item.id, item]));
-          const now = Date.now();
-          const merged = talentResult.data.map((item) => {
+          const ts = Date.now();
+          // Shuffle incoming so stagger order isn't always distance-sorted
+          const shuffled = [...talentResult.data].sort(() => Math.random() - 0.5);
+          const merged = shuffled.map((item, idx) => {
             const existing = prevById.get(item.id);
-            const computedRemaining = Math.max(0, new Date(item.expiresAt).getTime() - now);
+            const computedRemaining = Math.max(0, new Date(item.expiresAt).getTime() - ts);
             if (existing) {
               return {
                 ...item,
                 remainingMs: existing.remainingMs,
                 isExpiring: existing.isExpiring,
-                expiresAt: new Date(now + existing.remainingMs).toISOString(),
+                revealedAt: existing.revealedAt,
+                expiresAt: new Date(ts + existing.remainingMs).toISOString(),
               };
             }
+            // Brand-new talent: stagger reveal (600 ms between each one) and
+            // add a random ±20 s jitter to lifetime so they don't all expire together.
+            const baseRemaining = computedRemaining || item.remainingMs || item.lifetimeMs || LOCAL_TALENT_RUNTIME_CONFIG.defaultLifetimeMs;
+            const jitter = Math.random() * 20_000; // 0–20 s extra
             return {
               ...item,
-              remainingMs: computedRemaining || item.remainingMs || item.lifetimeMs || LOCAL_TALENT_RUNTIME_CONFIG.defaultLifetimeMs,
+              remainingMs: baseRemaining + jitter,
               isExpiring: false,
+              revealedAt: ts + idx * 600, // appear one-by-one, 600 ms apart
             };
           });
           if (activeLocalEncounterId && !merged.some((item) => item.id === activeLocalEncounterId)) {
@@ -447,6 +460,8 @@ const ExploreScreen = () => {
           setLocalTalents([]);
           setNearbyPlaces([]);
         }
+      } finally {
+        if (!cancelled) setTalentsLoading(false);
       }
     };
     void loadNearbyDiscovery();
@@ -732,8 +747,24 @@ const ExploreScreen = () => {
         </div>
       )}
 
-      {/* Pokémon-style movement nudge — shows when location is known but no players/activities nearby */}
-      {mapReady && userCoords && localTalents.length === 0 && !encounterPlayer && !showCamera && !activeZone && (
+      {/* Scouting loading bar — while fetching nearby talents after location set */}
+      {mapReady && userCoords && talentsLoading && !encounterPlayer && !showCamera && !activeZone && (
+        <div className="absolute left-1/2 -translate-x-1/2 z-[1250] pointer-events-none"
+          style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 72px)" }}>
+          <div className="glass-card-strong px-4 py-2.5 rounded-2xl min-w-[220px] shadow-lg">
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+              <p className="text-[11px] font-black text-foreground">Scouting the area…</p>
+            </div>
+            <div className="h-1 rounded-full overflow-hidden bg-muted">
+              <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "65%" }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pokémon-style movement nudge — only after loading finishes with no results */}
+      {mapReady && userCoords && !talentsLoading && localTalents.length === 0 && !encounterPlayer && !showCamera && !activeZone && (
         <div className="absolute left-1/2 -translate-x-1/2 z-[1250] pointer-events-none"
           style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 72px)" }}>
           <div className="flex items-center gap-2 glass-card-strong px-4 py-2.5 rounded-2xl max-w-[260px] shadow-lg">
