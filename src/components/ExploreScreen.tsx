@@ -288,6 +288,10 @@ const ExploreScreen = () => {
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [localTalents, setLocalTalents] = useState<LocalTalentRuntime[]>([]);
   const [talentsLoading, setTalentsLoading] = useState(false);
+  const [scoutProgress, setScoutProgress] = useState(0);   // 0-100 – drives the loading bar
+  const [scoutDone, setScoutDone] = useState(false);       // true for ~1.5 s after fetch lands
+  const scoutTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const wasScoutingRef = useRef(false);
   const [nearbyPlaces, setNearbyPlaces] = useState<ApiNearbyPlace[]>([]);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [mapZoom, setMapZoom] = useState(5);
@@ -300,6 +304,35 @@ const ExploreScreen = () => {
   const [activeLocalEncounterId, setActiveLocalEncounterId] = useState<string | null>(null);
 
   const handleMapReady = useCallback(() => setMapReady(true), []);
+
+  // Drive the scouting progress bar: 0 → ~85% during fetch, snap 100% on completion
+  useEffect(() => {
+    const clearAll = () => { scoutTimersRef.current.forEach(clearTimeout); scoutTimersRef.current = []; };
+    if (talentsLoading) {
+      wasScoutingRef.current = true;
+      setScoutDone(false);
+      setScoutProgress(0);
+      clearAll();
+      // Staged milestones that feel accurate for a 1-4 s API call
+      scoutTimersRef.current = [
+        setTimeout(() => setScoutProgress(12), 80),
+        setTimeout(() => setScoutProgress(38), 500),
+        setTimeout(() => setScoutProgress(62), 1100),
+        setTimeout(() => setScoutProgress(83), 2000),
+      ];
+      return clearAll;
+    } else if (wasScoutingRef.current) {
+      // Fetch finished — fill to 100 then briefly show "done" state
+      wasScoutingRef.current = false;
+      clearAll();
+      setScoutProgress(100);
+      setScoutDone(true);
+      scoutTimersRef.current = [
+        setTimeout(() => { setScoutDone(false); setScoutProgress(0); }, 1600),
+      ];
+      return clearAll;
+    }
+  }, [talentsLoading]);
 
   // Hard fallback: if Leaflet somehow doesn't mount within 3 s, unblock UI
   useEffect(() => {
@@ -747,31 +780,53 @@ const ExploreScreen = () => {
         </div>
       )}
 
-      {/* Scouting loading bar — while fetching nearby talents after location set */}
-      {mapReady && userCoords && talentsLoading && !encounterPlayer && !showCamera && !activeZone && (
+      {/* Scouting progress bar — real animated progress, snaps to 100% on completion */}
+      {mapReady && userCoords && (talentsLoading || scoutDone) && !encounterPlayer && !showCamera && !activeZone && (
         <div className="absolute left-1/2 -translate-x-1/2 z-[1250] pointer-events-none"
           style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 72px)" }}>
-          <div className="glass-card-strong px-4 py-2.5 rounded-2xl min-w-[220px] shadow-lg">
+          <div className="glass-card-strong px-4 py-2.5 rounded-2xl min-w-[230px] shadow-lg">
             <div className="flex items-center gap-2 mb-1.5">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
-              <p className="text-[11px] font-black text-foreground">Scouting the area…</p>
+              {scoutDone
+                ? <span className="text-[11px] shrink-0">✅</span>
+                : <div className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+              }
+              <p className="text-[11px] font-black text-foreground">
+                {scoutDone
+                  ? "Area scouted!"
+                  : scoutProgress < 35
+                  ? "Scanning the area…"
+                  : scoutProgress < 70
+                  ? "Finding players nearby…"
+                  : "Almost there…"}
+              </p>
             </div>
-            <div className="h-1 rounded-full overflow-hidden bg-muted">
-              <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "65%" }} />
+            <div className="h-1.5 rounded-full overflow-hidden bg-muted">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${scoutProgress}%`,
+                  background: scoutDone
+                    ? "hsl(var(--primary))"
+                    : "linear-gradient(90deg, hsl(var(--primary)), hsl(153 70% 55%))",
+                  transition: "width 0.55s cubic-bezier(0.4, 0, 0.2, 1)",
+                }}
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* Pokémon-style movement nudge — only after loading finishes with no results */}
-      {mapReady && userCoords && !talentsLoading && localTalents.length === 0 && !encounterPlayer && !showCamera && !activeZone && (
+      {/* Nudge — only after loading + done animation finishes, and no players found */}
+      {mapReady && userCoords && !talentsLoading && !scoutDone && localTalents.length === 0 && !encounterPlayer && !showCamera && !activeZone && (
         <div className="absolute left-1/2 -translate-x-1/2 z-[1250] pointer-events-none"
           style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 72px)" }}>
-          <div className="flex items-center gap-2 glass-card-strong px-4 py-2.5 rounded-2xl max-w-[260px] shadow-lg">
-            <span className="text-lg shrink-0">🚶</span>
+          <div className="flex items-center gap-2.5 glass-card-strong px-4 py-3 rounded-2xl max-w-[270px] shadow-lg">
+            <span className="text-xl shrink-0">🚶</span>
             <div>
-              <p className="text-[11px] font-black text-foreground leading-tight">No players nearby!</p>
-              <p className="text-[9px] text-muted-foreground leading-tight mt-0.5">Move to a Stadium or Training Zone on the map to find more recruits.</p>
+              <p className="text-[11px] font-black text-foreground leading-tight">No players spotted yet</p>
+              <p className="text-[9px] text-muted-foreground leading-snug mt-0.5">
+                Move towards a Stadium or Zone — or hang tight, players drift into the area every few minutes.
+              </p>
             </div>
           </div>
         </div>
