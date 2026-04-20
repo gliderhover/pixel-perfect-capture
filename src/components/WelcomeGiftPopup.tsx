@@ -19,11 +19,18 @@ interface WelcomeGiftPopupProps {
 }
 
 const WelcomeGiftPopup = ({ onDone }: WelcomeGiftPopupProps) => {
-  const { userId, refreshOwnedPlayers } = useGameProgress();
+  const { userId, refreshOwnedPlayers, setActivePlayerId } = useGameProgress();
   const giftPlayer = pickGiftPlayer(userId);
 
   const [phase, setPhase] = useState<"box" | "reveal" | "done">("box");
   const [error, setError] = useState<string | null>(null);
+
+  // Snap the active player to the gift IMMEDIATELY (before the API call lands)
+  // so other screens don't briefly fall back to the legendary placeholder.
+  useEffect(() => {
+    setActivePlayerId(giftPlayer.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Recruit the player as soon as the component mounts (silently, don't block UX)
   useEffect(() => {
@@ -31,7 +38,10 @@ const WelcomeGiftPopup = ({ onDone }: WelcomeGiftPopupProps) => {
     const gift = async () => {
       try {
         await recruitUserPlayer(userId, giftPlayer.id);
-        if (!cancelled) await refreshOwnedPlayers();
+        if (!cancelled) {
+          await refreshOwnedPlayers();
+          setActivePlayerId(giftPlayer.id); // re-assert in case it got cleared
+        }
       } catch {
         // Non-fatal — player may already be owned or API may be offline; onboarding continues either way
       }
