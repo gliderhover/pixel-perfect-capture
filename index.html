@@ -25,6 +25,59 @@
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Pocket Pitch Legends" />
+
+    <!--
+      Eager map-tile prefetch — runs BEFORE main.tsx loads, so the browser
+      starts downloading the starter city's CartoDB tiles in parallel with the
+      JS bundle. By the time React mounts MapContainer, tiles are already
+      cached in the HTTP layer, eliminating the "black map" flash on first open.
+    -->
+    <script>
+      (function () {
+        var CITIES = [
+          { lat: 40.7549, lng: -73.984,   z: 14 }, // Manhattan
+          { lat: 34.0522, lng: -118.2437, z: 14 }, // LA
+          { lat: 19.4326, lng: -99.1332,  z: 14 }, // Mexico City
+          { lat: 43.6532, lng: -79.3832,  z: 14 }, // Toronto
+          { lat: 25.7617, lng: -80.1918,  z: 14 }, // Miami
+        ];
+        var SUBS = ["a", "b", "c", "d"];
+        // Pick stable city for this session — must match ExploreScreen.tsx logic
+        var idx;
+        try {
+          var stored = sessionStorage.getItem("ppl-starter-city-idx");
+          if (stored !== null) {
+            idx = parseInt(stored, 10) % CITIES.length;
+          } else {
+            idx = Math.floor(Math.random() * CITIES.length);
+            sessionStorage.setItem("ppl-starter-city-idx", String(idx));
+          }
+        } catch (e) { idx = 0; }
+        var city = CITIES[idx];
+        function tileX(lng, z) { return Math.floor(((lng + 180) / 360) * Math.pow(2, z)); }
+        function tileY(lat, z) {
+          var r = (lat * Math.PI) / 180;
+          return Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * Math.pow(2, z));
+        }
+        var cx = tileX(city.lng, city.z);
+        var cy = tileY(city.lat, city.z);
+        var head = document.head;
+        // 7 wide × 11 tall = 77 tiles, only @2x (covers any modern phone retina)
+        for (var dx = -3; dx <= 3; dx++) {
+          for (var dy = -4; dy <= 6; dy++) {
+            var x = cx + dx, y = cy + dy;
+            var s = SUBS[(Math.abs(x) + Math.abs(y)) % 4];
+            var url = "https://" + s + ".basemaps.cartocdn.com/dark_all/" + city.z + "/" + x + "/" + y + "@2x.png";
+            var link = document.createElement("link");
+            link.rel = "preload";
+            link.as = "image";
+            link.href = url;
+            link.crossOrigin = "anonymous";
+            head.appendChild(link);
+          }
+        }
+      })();
+    </script>
   </head>
 
   <body>

@@ -389,6 +389,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] flex-col safe-page-bottom with-sidebar-pad pt-5 pr-4">
+      {!hasNoHiredPlayers && (
       <div className="mb-2 px-0">
         <div className="glass-card-strong rounded-2xl p-3 mb-2">
           <div className="flex items-center gap-3">
@@ -440,6 +441,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
         </div>
         <></>
       </div>
+      )}
 
       {showNamePrompt && (
         <div

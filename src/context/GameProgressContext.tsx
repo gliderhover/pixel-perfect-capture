@@ -95,7 +95,8 @@ const GameProgressContext = createContext<GameProgressContextValue | null>(null)
 export function GameProgressProvider({ children }: { children: ReactNode }) {
   const [catalogPlayersById, setCatalogPlayersById] = useState<Record<string, Player>>(() => cloneInitialRoster());
   const [ownedPlayersById, setOwnedPlayersById] = useState<Record<string, ApiUserPlayer>>({});
-  const [activePlayerId, setActivePlayerIdState] = useState(mockPlayers[0]?.id ?? "1");
+  // Start with null; snapped to first owned player once ownedPlayersById loads
+  const [activePlayerId, setActivePlayerIdState] = useState<string | null>(null);
   const [explorationZoneType, setExplorationZoneType] = useState<MapZone["type"] | null>(null);
   const [matchPhase, setMatchPhase] = useState<MatchPhase>("prematch");
   const [livePulse, setLivePulse] = useState<LivePulse>("neutral");
@@ -141,6 +142,17 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   const addFocusPoints = useCallback((n: number) => {
     setFocusPoints((p) => p + n);
   }, []);
+
+  // Auto-select the first owned player whenever the owned list changes and
+  // no valid active player is set yet (or the current one is no longer owned).
+  useEffect(() => {
+    const ownedIds = Object.keys(ownedPlayersById);
+    if (ownedIds.length === 0) return;
+    setActivePlayerIdState((prev) => {
+      if (prev && ownedPlayersById[prev]) return prev; // keep current if still owned
+      return ownedIds[0] ?? prev;
+    });
+  }, [ownedPlayersById]);
 
   const refreshOwnedPlayers = useCallback(async () => {
     const result = await fetchUserPlayers(userId);
@@ -215,9 +227,18 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   }, [catalogPlayersById, ownedPlayersById]);
 
   const activePlayer = useMemo(() => {
-    const p = playersById[activePlayerId] ?? playersById[mockPlayers[0].id];
-    return p ? normalizePlayer(p) : normalizePlayer({ ...mockPlayers[0] });
-  }, [playersById, activePlayerId]);
+    // Prefer the explicitly selected player; fall back to first owned; never show
+    // an unowned placeholder — callers must handle the null/empty-squad case.
+    if (activePlayerId && playersById[activePlayerId]) {
+      return normalizePlayer(playersById[activePlayerId]!);
+    }
+    const firstOwnedId = Object.keys(ownedPlayersById)[0];
+    if (firstOwnedId && playersById[firstOwnedId]) {
+      return normalizePlayer(playersById[firstOwnedId]!);
+    }
+    // No owned players yet — return a sentinel with empty name so UI can detect it
+    return normalizePlayer({ ...mockPlayers[0], name: "" });
+  }, [playersById, activePlayerId, ownedPlayersById]);
 
   const setActivePlayerId = useCallback((id: string) => {
     if (getPlayerById(id)) setActivePlayerIdState(id);

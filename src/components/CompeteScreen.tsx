@@ -7,7 +7,8 @@ import ChallengeFlow from "./ChallengeFlow";
 
 const CompeteScreen = () => {
   const [challengeTarget, setChallengeTarget] = useState<number | null>(null);
-  const { activePlayer, playersById } = useGameProgress();
+  const { activePlayer, playersById, ownedPlayersById } = useGameProgress();
+  const hasOwnedPlayers = Object.keys(ownedPlayersById).length > 0;
 
   const challengeRival = challengeTarget !== null ? mockRivals[challengeTarget] : null;
   const challengeRivalPlayer = challengeRival
@@ -52,6 +53,16 @@ const CompeteScreen = () => {
       </div>
 
       <h2 className="text-xs font-black text-foreground uppercase tracking-wider mb-3">Nearby Rivals</h2>
+
+      {!hasOwnedPlayers ? (
+        <div className="glass-card-strong rounded-2xl p-6 text-center mt-2">
+          <div className="text-4xl mb-3">⚔️</div>
+          <p className="text-sm font-black text-foreground mb-1">Recruit a player first</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Head to the Explore map, win a penalty duel, and your recruited player will appear here ready to compete.
+          </p>
+        </div>
+      ) : (
       <div className="space-y-2.5">
         {mockRivals.map((rival, i) => {
           const rivalPlayer =
@@ -131,6 +142,7 @@ const CompeteScreen = () => {
           );
         })}
       </div>
+      )}
 
       {challengeRival && challengeRivalPlayer && (
         <ChallengeFlow

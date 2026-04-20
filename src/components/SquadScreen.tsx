@@ -60,7 +60,8 @@ const SquadScreen = ({ onNavigate }: SquadScreenProps) => {
         )}
       </div>
 
-      {/* Active Player Hero */}
+      {/* Active Player Hero — only shown once the user has at least one recruited player */}
+      {roster.length > 0 && (
       <div className="glass-card-strong p-4 mb-5 flex items-center gap-4 card-shimmer">
         <AnimatedPortrait player={activePlayer} size="md" showMood />
         <div className="flex-1 min-w-0">
@@ -74,6 +75,7 @@ const SquadScreen = ({ onNavigate }: SquadScreenProps) => {
             </p>
         </div>
       </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide">

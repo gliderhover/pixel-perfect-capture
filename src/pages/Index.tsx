@@ -64,7 +64,8 @@ const Index = () => {
   const [installHintVisible, setInstallHintVisible] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => shouldShowOnboarding());
-  const [showGift, setShowGift] = useState(false);
+  // Show gift immediately on mount if onboarding is already done and gift hasn't been claimed
+  const [showGift, setShowGift] = useState(() => !shouldShowOnboarding() && shouldShowGift());
   const [activeTip, setActiveTip] = useState<Tip | null>(null);
   const { streakCount, trainedToday, recordActivity, recordTraining } = useDailyStreak();
 

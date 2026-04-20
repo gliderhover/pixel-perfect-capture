@@ -180,38 +180,25 @@ const _latToTileY = (lat: number, z: number) => {
 };
 const _CARTO_SUBS = ["a", "b", "c", "d"] as const;
 const _preloadCityTiles = (city: typeof STARTER_CITY) => {
-  // A portrait mobile viewport at zoom 14 shows ≈ 2–3 tiles wide × 5–6 tall.
-  // Preload 5 × 10 = 50 tiles (center ± 2 x, ± 4 y) to cover the full screen
-  // plus one tile of buffer on every side.  Uses requestIdleCallback so it
-  // never competes with the initial render.
-  const load = () => {
-    const cx = _lngToTileX(city.lng, city.zoom);
-    const cy = _latToTileY(city.lat, city.zoom);
-    for (let dx = -2; dx <= 2; dx++) {
-      for (let dy = -4; dy <= 5; dy++) {
-        const x = cx + dx;
-        const y = cy + dy;
-        const s = _CARTO_SUBS[(Math.abs(x) + Math.abs(y)) % 4];
-        // Preload both 1× and @2x variants so retina + non-retina are covered
-        for (const retina of ["", "@2x"]) {
-          const img = new Image();
-          img.src = `https://${s}.basemaps.cartocdn.com/dark_all/${city.zoom}/${x}/${y}${retina}.png`;
-        }
+  // Use fetch() so requests are guaranteed to pass through the Service Worker
+  // and get written into the tile cache immediately — no race with Leaflet.
+  // Runs synchronously at module init; promises are fire-and-forget.
+  const cx = _lngToTileX(city.lng, city.zoom);
+  const cy = _latToTileY(city.lat, city.zoom);
+  for (let dx = -4; dx <= 4; dx++) {
+    for (let dy = -5; dy <= 8; dy++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      const s = _CARTO_SUBS[(Math.abs(x) + Math.abs(y)) % 4];
+      for (const retina of ["", "@2x"]) {
+        const url = `https://${s}.basemaps.cartocdn.com/dark_all/${city.zoom}/${x}/${y}${retina}.png`;
+        fetch(url).catch(() => {/* SW will cache on success; silently ignore network errors */});
       }
     }
-  };
-  if (typeof requestIdleCallback !== "undefined") {
-    requestIdleCallback(load, { timeout: 2000 });
-  } else {
-    setTimeout(load, 200);
   }
 };
 _preloadCityTiles(STARTER_CITY);
 // ─────────────────────────────────────────────────────────────────────────────
-
-const mapControlLeft = {
-  left: "calc(env(safe-area-inset-left, 0px) + var(--game-sidebar-width, 56px) + 10px)",
-} as const;
 
 const distanceKm = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
   const dx = (a.lng - b.lng) * 111 * Math.cos(((a.lat + b.lat) * 0.5 * Math.PI) / 180);
@@ -276,7 +263,7 @@ const MapControls = ({
 }) => {
   const map = useMap();
   return (
-    <div className="absolute top-28 z-[1210] flex flex-col gap-1.5" style={mapControlLeft}>
+    <div className="absolute z-[1210] flex flex-col gap-1.5" style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 64px)", right: "calc(env(safe-area-inset-right, 0px) + 12px)" }}>
       <button
         type="button"
         onClick={() => map.zoomIn()}
@@ -362,11 +349,31 @@ type LocalTalentRuntime = ApiLocalTalentEncounter & {
 
 // Fires as soon as the Leaflet map instance is initialised — does NOT wait
 // for tiles to finish loading (which can hang forever on slow connections).
+// Also forces invalidateSize() after layout settles to fix iOS dvh quirks
+// where the URL bar hide/show causes the map to stop requesting tiles for
+// the bottom of the viewport (this is THE root cause of the "black tiles" bug).
 const MapReadyWatcher = ({ onReady }: { onReady: () => void }) => {
   const map = useMap();
   useEffect(() => {
-    // map object is available synchronously; signal ready on first render
-    if (map) onReady();
+    if (!map) return;
+    onReady();
+    // Repeated invalidateSize() catches every iOS viewport jitter:
+    // immediate (0ms), after first paint (100ms), after URL-bar settle (600ms),
+    // after orientation/resize finishes (1500ms).
+    const timers = [0, 100, 600, 1500].map((ms) =>
+      setTimeout(() => map.invalidateSize({ animate: false, pan: false }), ms)
+    );
+    // Also re-invalidate when the page becomes visible again (PWA tab switch)
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        map.invalidateSize({ animate: false, pan: false });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      timers.forEach(clearTimeout);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map]);
   return null;
@@ -395,6 +402,8 @@ const ExploreScreen = () => {
   const [scoutDone, setScoutDone] = useState(false);       // true for ~1.5 s after fetch lands
   const scoutTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const wasScoutingRef = useRef(false);
+  const mapSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleCompletedRef = useRef(false);
   const [nearbyPlaces, setNearbyPlaces] = useState<ApiNearbyPlace[]>([]);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [mapZoom, setMapZoom] = useState(5);
@@ -427,8 +436,8 @@ const ExploreScreen = () => {
         setTimeout(() => setScoutProgress(97), 5500),
       ];
       return clearAll;
-    } else if (wasScoutingRef.current) {
-      // Fetch finished — fill to 100 then briefly show "done" state
+    } else if (wasScoutingRef.current && !settleCompletedRef.current) {
+      // API finished before map-settle timer — fill to 100 then briefly show "done" state
       wasScoutingRef.current = false;
       clearAll();
       setScoutProgress(100);
@@ -439,6 +448,26 @@ const ExploreScreen = () => {
       return clearAll;
     }
   }, [talentsLoading]);
+
+  // Complete scouting bar ~1.5 s after user location is set — don't block on API latency
+  useEffect(() => {
+    if (!userCoords) return;
+    settleCompletedRef.current = false;
+    if (mapSettleTimerRef.current) clearTimeout(mapSettleTimerRef.current);
+    mapSettleTimerRef.current = setTimeout(() => {
+      settleCompletedRef.current = true;
+      wasScoutingRef.current = false;
+      scoutTimersRef.current.forEach(clearTimeout);
+      scoutTimersRef.current = [];
+      setScoutProgress(100);
+      setScoutDone(true);
+      const t = setTimeout(() => { setScoutDone(false); setScoutProgress(0); }, 1600);
+      scoutTimersRef.current = [t];
+    }, 1500);
+    return () => {
+      if (mapSettleTimerRef.current) clearTimeout(mapSettleTimerRef.current);
+    };
+  }, [userCoords]);
 
   // Hard fallback: if Leaflet somehow doesn't mount within 3 s, unblock UI
   useEffect(() => {
@@ -739,6 +768,10 @@ const ExploreScreen = () => {
         className="w-full h-full z-0"
         zoomControl={false}
         attributionControl={false}
+        // Disable Leaflet's mobile tap shim — it intercepts touch events and
+        // sends them to the map drag handler instead of the marker, causing
+        // "tap moves the map instead of opening the player" on iOS.
+        tap={false}
         style={{
           // City-grid placeholder shown while tiles load — better than solid black
           background: `
@@ -789,6 +822,7 @@ const ExploreScreen = () => {
             position={[zone.lat, zone.lng]}
             icon={getZoneIcon(zone.type)}
             zIndexOffset={500}
+            bubblingMouseEvents={false}
             eventHandlers={{
               click: (e) => {
                 // Stop Leaflet from propagating to the map (prevents accidental pan on mobile)
@@ -811,8 +845,10 @@ const ExploreScreen = () => {
               key={pm.id}
               position={[pm.lat, pm.lng]}
               icon={getPlayerIcon(player.portrait, player.rarity, undefined, player.name)}
+              bubblingMouseEvents={false}
               eventHandlers={{
-                click: () => {
+                click: (e) => {
+                  e.originalEvent?.stopPropagation();
                   const full = playersById[pm.playerId] ?? player;
                   setActiveLocalEncounterId(null);
                   setEncounterPlayer(full);
@@ -834,8 +870,10 @@ const ExploreScreen = () => {
               leavingSoon: talent.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs,
               remainingSec: talent.remainingMs <= LOCAL_TALENT_RUNTIME_CONFIG.leavingSoonMs ? Math.ceil(talent.remainingMs / 1000) : undefined,
             }, talent.displayName)}
+            bubblingMouseEvents={false}
             eventHandlers={{
-              click: () => {
+              click: (e) => {
+                e.originalEvent?.stopPropagation();
                 const base = playersById[talent.basePlayerId] ?? getPlayerById(talent.basePlayerId);
                 if (!base) return;
                 setActiveLocalEncounterId(talent.id);
@@ -869,8 +907,10 @@ const ExploreScreen = () => {
             key={place.id}
             position={[place.lat, place.lng]}
             icon={getZoneIcon(place.mappedZoneType)}
+            bubblingMouseEvents={false}
             eventHandlers={{
-              click: () => {
+              click: (e) => {
+                e.originalEvent?.stopPropagation();
                 setSelectedPlace(place);
                 setSelectedZone(null);
                 setEncounterPlayer(null);
@@ -950,8 +990,8 @@ const ExploreScreen = () => {
         </div>
       )}
 
-      {/* Nudge — only after loading + done animation finishes, and no players found */}
-      {mapReady && userCoords && !talentsLoading && !scoutDone && localTalents.length === 0 && !encounterPlayer && !showCamera && !activeZone && (
+      {/* Nudge — only after loading + done animation finishes, and no players at all (local or mock) */}
+      {mapReady && userCoords && !talentsLoading && !scoutDone && localTalents.length === 0 && mockPlayerMarkers.length === 0 && !encounterPlayer && !showCamera && !activeZone && (
         <div className="absolute left-1/2 -translate-x-1/2 z-[1250] pointer-events-none"
           style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 72px)" }}>
           <div className="flex items-center gap-2.5 glass-card-strong px-4 py-3 rounded-2xl max-w-[270px] shadow-lg">

@@ -1,9 +1,9 @@
 /* App shell + safe runtime caching. Bump VERSION after changing precache list or logic. */
-const VERSION = 5;
+const VERSION = 6;
 const SHELL_CACHE  = `ppl-shell-v${VERSION}`;
 const ASSETS_CACHE = `ppl-assets-v${VERSION}`;
-const TILE_CACHE   = `ppl-tiles-v1`;   // intentionally separate — survives app updates
-const MAX_TILE_ENTRIES = 2000;          // ~30 MB at ~15 KB/tile — safe for mobile
+const TILE_CACHE   = "ppl-tiles-v1";   // intentionally separate — survives app updates
+const MAX_TILE_ENTRIES = 3000;          // ~45 MB at ~15 KB/tile — safe for mobile
 
 const PRECACHE_URLS = [
   "/",
@@ -15,11 +15,87 @@ const PRECACHE_URLS = [
   "/icons/apple-touch-icon.png",
 ];
 
+// ─── Starter city tile prefetch ───────────────────────────────────────────────
+// All 5 WC2026 host cities. Tiles are baked into the SW cache so the map
+// renders with zero black tiles on first open — no network round-trip needed.
+const PREFETCH_CITIES = [
+  { lat: 40.7549,  lng: -73.9840,  zoom: 14 }, // Manhattan, New York
+  { lat: 34.0522,  lng: -118.2437, zoom: 14 }, // Downtown Los Angeles
+  { lat: 19.4326,  lng: -99.1332,  zoom: 14 }, // Mexico City Centro
+  { lat: 43.6532,  lng: -79.3832,  zoom: 14 }, // Downtown Toronto
+  { lat: 25.7617,  lng: -80.1918,  zoom: 14 }, // South Beach, Miami
+];
+
+// Generous grid: 9 wide × 14 tall covers any phone in portrait or landscape,
+// including Leaflet's keepBuffer=4 pre-fetch zone.
+const DX = 4;        // ±4 tiles horizontally  → 9 wide
+const DY_UP   = 5;   // 5 tiles above center
+const DY_DOWN = 8;   // 8 tiles below (phones are tall)
+
+const CARTO_SUBS = ["a", "b", "c", "d"];
+
+function lngToTileX(lng, z) {
+  return Math.floor(((lng + 180) / 360) * Math.pow(2, z));
+}
+function latToTileY(lat, z) {
+  const r = (lat * Math.PI) / 180;
+  return Math.floor(
+    ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * Math.pow(2, z)
+  );
+}
+
+function buildTileUrls() {
+  const urls = [];
+  for (const city of PREFETCH_CITIES) {
+    const cx = lngToTileX(city.lng, city.zoom);
+    const cy = latToTileY(city.lat, city.zoom);
+    for (let dx = -DX; dx <= DX; dx++) {
+      for (let dy = -DY_UP; dy <= DY_DOWN; dy++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        const s = CARTO_SUBS[(Math.abs(x) + Math.abs(y)) % 4];
+        // Both 1× and @2x so retina and non-retina devices are covered
+        urls.push(`https://${s}.basemaps.cartocdn.com/dark_all/${city.zoom}/${x}/${y}.png`);
+        urls.push(`https://${s}.basemaps.cartocdn.com/dark_all/${city.zoom}/${x}/${y}@2x.png`);
+      }
+    }
+  }
+  return urls;
+}
+
+// Fire-and-forget — does NOT block install or activate.
+// Batches 8 concurrent fetches to stay polite on the network.
+async function prefetchStarterCityTiles() {
+  const cache = await caches.open(TILE_CACHE);
+  const existingKeys = new Set((await cache.keys()).map((r) => r.url));
+  const urls = buildTileUrls().filter((u) => !existingKeys.has(u));
+  if (urls.length === 0) return; // all already cached
+
+  const BATCH = 8;
+  for (let i = 0; i < urls.length; i += BATCH) {
+    await Promise.allSettled(
+      urls.slice(i, i + BATCH).map(async (url) => {
+        try {
+          const response = await fetch(url);
+          if (response && response.ok) {
+            await cache.put(url, response);
+          }
+        } catch {
+          // Network unavailable — skip, will be cached on next live fetch
+        }
+      })
+    );
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then(async (cache) => {
       await Promise.all(PRECACHE_URLS.map((url) => cache.add(url).catch(() => {})));
-      self.skipWaiting();
+      await self.skipWaiting();
+      // Kick off tile prefetch without blocking install — runs concurrently
+      prefetchStarterCityTiles();
     })
   );
 });
@@ -39,6 +115,8 @@ self.addEventListener("activate", (event) => {
       )
       .then(() => self.clients.claim())
   );
+  // Also kick off prefetch on activate in case install missed it
+  prefetchStarterCityTiles();
 });
 
 function isNavigationRequest(request) {
@@ -68,7 +146,7 @@ async function cacheFirstTile(request) {
       // Evict oldest entries if we're over the limit (LRU-lite)
       const keys = await cache.keys();
       if (keys.length >= MAX_TILE_ENTRIES) {
-        await Promise.all(keys.slice(0, 100).map((k) => cache.delete(k)));
+        await Promise.all(keys.slice(0, 200).map((k) => cache.delete(k)));
       }
       cache.put(request, response.clone()); // fire-and-forget
     }
@@ -85,7 +163,7 @@ self.addEventListener("fetch", (event) => {
 
   // Intercept map tile requests regardless of origin — cache-first
   const url = new URL(request.url);
-  if (TILE_HOSTS.includes(url.hostname)) {
+  if (TILE_HOSTS.some((host) => url.hostname.includes(host))) {
     event.respondWith(cacheFirstTile(request));
     return;
   }
