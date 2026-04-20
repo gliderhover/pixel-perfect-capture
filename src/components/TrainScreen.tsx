@@ -442,9 +442,14 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
       </div>
 
       {showNamePrompt && (
-        <div className="glass-card-strong rounded-2xl p-4 mb-2 border border-primary/20 animate-fade-in-up">
-          <p className="text-[11px] font-black text-foreground mb-1">What should I call you, Coach? <span className="text-muted-foreground font-normal">(optional)</span></p>
-          <div className="flex gap-2 mt-2">
+        <div className="fixed inset-0 z-[300] flex items-end justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowNamePrompt(false); }}>
+          <div className="w-full max-w-md glass-card-strong rounded-t-3xl px-5 pt-4 animate-fade-in-up"
+            style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}>
+            {/* drag handle */}
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/30 mx-auto mb-4" />
+            <p className="text-sm font-black text-foreground">What should I call you, Coach?</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">Optional — tap Skip to continue</p>
             <input
               type="text"
               value={nameInput}
@@ -452,13 +457,14 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
               onKeyDown={(e) => { if (e.key === "Enter") { if (nameInput.trim()) setCoachName(nameInput.trim()); setShowNamePrompt(false); } }}
               placeholder="Your name…"
               maxLength={20}
+              autoFocus
               style={{ fontSize: "16px" }}
-              className="flex-1 bg-muted/40 rounded-xl px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground border border-border/30"
+              className="w-full bg-muted/40 rounded-2xl px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground border border-border/30 mb-3"
             />
             <button type="button"
               onClick={() => { if (nameInput.trim()) setCoachName(nameInput.trim()); setShowNamePrompt(false); }}
-              className="px-4 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-black active:scale-95 transition-transform">
-              {nameInput.trim() ? "Got it" : "Skip"}
+              className="w-full py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-black active:scale-95 transition-transform">
+              {nameInput.trim() ? "Got it 👍" : "Skip for now"}
             </button>
           </div>
         </div>
