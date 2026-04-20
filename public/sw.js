@@ -1,7 +1,9 @@
 /* App shell + safe runtime caching. Bump VERSION after changing precache list or logic. */
-const VERSION = 4;
-const SHELL_CACHE = `ppl-shell-v${VERSION}`;
+const VERSION = 5;
+const SHELL_CACHE  = `ppl-shell-v${VERSION}`;
 const ASSETS_CACHE = `ppl-assets-v${VERSION}`;
+const TILE_CACHE   = `ppl-tiles-v1`;   // intentionally separate — survives app updates
+const MAX_TILE_ENTRIES = 2000;          // ~30 MB at ~15 KB/tile — safe for mobile
 
 const PRECACHE_URLS = [
   "/",
@@ -29,7 +31,8 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys.map((key) => {
-            if (key === SHELL_CACHE || key === ASSETS_CACHE) return undefined;
+            // Keep tile cache across app version bumps — tiles never go stale
+            if (key === SHELL_CACHE || key === ASSETS_CACHE || key === TILE_CACHE) return undefined;
             return caches.delete(key);
           })
         )
@@ -42,11 +45,51 @@ function isNavigationRequest(request) {
   return request.mode === "navigate" || request.destination === "document";
 }
 
+// ─── Map tile hosts — cache-first, survive app updates ───────────────────────
+const TILE_HOSTS = [
+  "basemaps.cartocdn.com",
+  "cartodb-basemaps-a.global.ssl.fastly.net",
+  "cartodb-basemaps-b.global.ssl.fastly.net",
+  "cartodb-basemaps-c.global.ssl.fastly.net",
+  "cartodb-basemaps-d.global.ssl.fastly.net",
+  "tile.openstreetmap.org",
+  "a.tile.openstreetmap.org",
+  "b.tile.openstreetmap.org",
+  "c.tile.openstreetmap.org",
+];
+
+async function cacheFirstTile(request) {
+  const cache = await caches.open(TILE_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  try {
+    const response = await fetch(request);
+    if (response && response.ok) {
+      // Evict oldest entries if we're over the limit (LRU-lite)
+      const keys = await cache.keys();
+      if (keys.length >= MAX_TILE_ENTRIES) {
+        await Promise.all(keys.slice(0, 100).map((k) => cache.delete(k)));
+      }
+      cache.put(request, response.clone()); // fire-and-forget
+    }
+    return response;
+  } catch {
+    return new Response("", { status: 503, statusText: "Tile unavailable offline" });
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
 
+  // Intercept map tile requests regardless of origin — cache-first
   const url = new URL(request.url);
+  if (TILE_HOSTS.includes(url.hostname)) {
+    event.respondWith(cacheFirstTile(request));
+    return;
+  }
+
   if (url.origin !== self.location.origin) return;
 
   // Documents: always prefer network so users get fresh HTML after deploy; offline → precached shell only.

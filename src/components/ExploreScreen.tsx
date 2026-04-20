@@ -739,7 +739,14 @@ const ExploreScreen = () => {
         className="w-full h-full z-0"
         zoomControl={false}
         attributionControl={false}
-        style={{ background: "hsl(225 30% 5%)" }}
+        style={{
+          // City-grid placeholder shown while tiles load — better than solid black
+          background: `
+            repeating-linear-gradient(rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 52px),
+            repeating-linear-gradient(90deg, rgba(255,255,255,0.018) 0px, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 52px),
+            hsl(225 30% 5%)
+          `,
+        }}
       >
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
