@@ -238,8 +238,8 @@ const spawnRadiusByZoom = (zoom: number) => {
 };
 
 const LOCAL_TALENT_RUNTIME_CONFIG = {
-  defaultLifetimeMs: 60_000,   // 60 s base — players stick around long enough to actually recruit
-  respawnIntervalMs: 90_000,   // new wave every 90 s so the map doesn't feel empty right away
+  defaultLifetimeMs: 30_000,   // 30 s base — faster map turnover
+  respawnIntervalMs: 30_000,   // refresh cadence matches lifetime
   countdownTickMs: 1_000,
   despawnFadeMs: 350,
   leavingSoonMs: 8_000,        // "leaving soon" warning in last 8 s
@@ -736,17 +736,27 @@ const ExploreScreen = () => {
 
             const remainingMs = Math.max(0, new Date(talent.expiresAt).getTime() - now);
             if (remainingMs <= 0) {
-              if (talent.isExpiring) {
-                return {
-                  ...talent,
-                  remainingMs: 0,
-                };
-              }
+              // Recycle to a fresh nearby spot instead of disappearing.
+              const anchor = userCoords ?? mapCenter ?? { lat: talent.lat, lng: talent.lng };
+              const radiusKm = Math.max(
+                0.8,
+                LOCAL_TALENT_RUNTIME_CONFIG.distanceFromUserByZoomKm(mapZoom)
+              );
+              const angle = Math.random() * Math.PI * 2;
+              const dist = 0.3 + Math.random() * Math.max(0.5, radiusKm - 0.3);
+              const dLat = (dist / 111) * Math.cos(angle);
+              const dLng = (dist / (111 * Math.cos((anchor.lat * Math.PI) / 180))) * Math.sin(angle);
+              const nextLifetime =
+                LOCAL_TALENT_RUNTIME_CONFIG.defaultLifetimeMs + Math.random() * 8_000;
               return {
                 ...talent,
-                remainingMs: 0,
-                isExpiring: true,
-                expiresAt: new Date(now + LOCAL_TALENT_RUNTIME_CONFIG.despawnFadeMs).toISOString(),
+                lat: anchor.lat + dLat,
+                lng: anchor.lng + dLng,
+                remainingMs: nextLifetime,
+                isExpiring: false,
+                revealedAt: now + Math.random() * 1200,
+                spawnedAt: new Date(now).toISOString(),
+                expiresAt: new Date(now + nextLifetime).toISOString(),
               };
             }
 
@@ -756,14 +766,11 @@ const ExploreScreen = () => {
               isExpiring: false,
             };
           })
-          .filter((talent) => {
-            if (!talent.isExpiring) return true;
-            return new Date(talent.expiresAt).getTime() > now;
-          })
+          .filter((talent) => Boolean(talent))
       );
     }, LOCAL_TALENT_RUNTIME_CONFIG.countdownTickMs);
     return () => window.clearInterval(tick);
-  }, [activeLocalEncounterId]);
+  }, [activeLocalEncounterId, userCoords, mapCenter, mapZoom]);
 
   useEffect(() => {
     let cancelled = false;

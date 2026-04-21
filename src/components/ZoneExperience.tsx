@@ -61,8 +61,8 @@ const zoneConfig: Record<
   recovery: {
     icon: Heart,
     emoji: "💆",
-    purpose: "Restore morale and focus before the next challenge",
-    cta: "Start Recovery",
+    purpose: "Recovery Rhythm: time calm actions to restore match readiness fast.",
+    cta: "Start Recovery Rhythm",
     rewardLabel: "+Morale",
     attribute: "morale",
     xp: 15,
@@ -75,8 +75,8 @@ const zoneConfig: Record<
   "fan-arena": {
     icon: Users,
     emoji: "📣",
-    purpose: "Build stronger fan connection and earn support bonuses",
-    cta: "Hype the Crowd",
+    purpose: "Zone Control Battle: challenge the current holder and claim fan-zone control.",
+    cta: "Start Zone Control",
     rewardLabel: "+Fan Bond",
     attribute: "fanBond",
     xp: 15,
@@ -89,8 +89,8 @@ const zoneConfig: Record<
   rival: {
     icon: Swords,
     emoji: "⚔️",
-    purpose: "Face nearby rivals and prove your squad strength",
-    cta: "View Rivals",
+    purpose: "3-Move Tactical Duel: pick a rival, lock three moves, resolve fast.",
+    cta: "Start Tactical Duel",
     rewardLabel: "+XP",
     attribute: "confidence",
     xp: 25,
@@ -103,8 +103,8 @@ const zoneConfig: Record<
   pressure: {
     icon: Flame,
     emoji: "🔥",
-    purpose: "Face pressure and build confidence under stress",
-    cta: "Enter Pressure Test",
+    purpose: "Clutch Moment Challenge: choose the right response in high-pressure moments.",
+    cta: "Enter Clutch Moment",
     rewardLabel: "+Confidence",
     attribute: "confidence",
     xp: 30,
@@ -117,8 +117,8 @@ const zoneConfig: Record<
   stadium: {
     icon: Trophy,
     emoji: "🏟️",
-    purpose: "Tap into live match energy and special event bonuses",
-    cta: "Join Event",
+    purpose: "Squad Power Clash: assign Captain/Attacker/Defender and resolve 3 key phases.",
+    cta: "Start Squad Clash",
     rewardLabel: "+All Stats",
     attribute: "morale",
     xp: 35,
@@ -655,135 +655,110 @@ function TrainingActivity({
 
 /* ── Recovery Center: Breathing / Calm Timer ───────────────────────────── */
 function RecoveryActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const [phase, setPhase] = useState<"inhale" | "hold" | "exhale">("inhale");
-  const [cycle, setCycle] = useState(0);
-  const [scale, setScale] = useState(1);
-  const totalCycles = 3;
-  const phaseMs = { inhale: 2000, hold: 1500, exhale: 2000 };
+  const ACTIONS = ["Breathe", "Hydrate", "Stretch", "Ice Bath", "Physio Reset"] as const;
+  const CONDITIONS = ["Tired", "Tense", "Sore", "Low morale"] as const;
+  const [step, setStep] = useState(0);
+  const [phase, setPhase] = useState<"calm" | "push">("push");
+  const [timeLeft, setTimeLeft] = useState(12);
+  const [hits, setHits] = useState(0);
+  const [lastAction, setLastAction] = useState<string>("Tap on calm");
 
   useEffect(() => {
-    if (cycle >= totalCycles) { onComplete(totalCycles); return; }
-    const seq: ("inhale" | "hold" | "exhale")[] = ["inhale", "hold", "exhale"];
-    let i = 0;
-    setPhase(seq[0]);
-    setScale(1.3);
+    const toggle = window.setInterval(() => {
+      setPhase((p) => (p === "calm" ? "push" : "calm"));
+      setStep((s) => (s + 1) % ACTIONS.length);
+    }, 1200);
+    return () => window.clearInterval(toggle);
+  }, []);
 
-    const advance = () => {
-      i++;
-      if (i >= seq.length) {
-        setCycle((c) => c + 1);
-        return;
-      }
-      setPhase(seq[i]);
-      setScale(seq[i] === "inhale" ? 1.3 : seq[i] === "hold" ? 1.3 : 1);
-    };
-    const t1 = setTimeout(advance, phaseMs.inhale);
-    const t2 = setTimeout(advance, phaseMs.inhale + phaseMs.hold);
-    const t3 = setTimeout(advance, phaseMs.inhale + phaseMs.hold + phaseMs.exhale);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, [cycle, totalCycles, onComplete]);
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      onComplete(Math.min(6, Math.max(1, Math.round((hits / 10) * 6))));
+      return;
+    }
+    const t = window.setTimeout(() => setTimeLeft((v) => v - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [timeLeft, hits, onComplete]);
 
-  const phaseLabel = { inhale: "Breathe In", hold: "Hold", exhale: "Breathe Out" };
+  const tap = () => {
+    setLastAction(ACTIONS[step] ?? "Recover");
+    if (phase === "calm") setHits((h) => h + 1);
+  };
 
   return (
-    <div className="py-6 flex flex-col items-center">
-      <div className="flex gap-1.5 mb-4">
-        {Array.from({ length: totalCycles }).map((_, i) => (
-          <div key={i} className={`w-3 h-3 rounded-full transition-colors duration-500 ${
-            i < cycle ? "bg-sky-400" : "bg-muted"
-          }`} />
-        ))}
-      </div>
-      <div className="relative w-32 h-32 flex items-center justify-center mb-4">
+    <div className="py-4">
+      <p className="text-xs font-black text-foreground">Recovery Rhythm</p>
+      <p className="text-[10px] text-muted-foreground mb-3">Condition: {CONDITIONS[(step + 1) % CONDITIONS.length]}</p>
+      <div className="h-3 rounded-full overflow-hidden bg-muted mb-3">
         <div
-          className="absolute inset-0 rounded-full bg-sky-400/10 border border-sky-400/20 transition-transform duration-[2000ms] ease-in-out"
-          style={{ transform: `scale(${scale})` }}
+          className={`h-full transition-all duration-300 ${phase === "calm" ? "bg-sky-400" : "bg-rose-400/70"}`}
+          style={{ width: `${phase === "calm" ? 100 : 45}%` }}
         />
-        <div
-          className="w-20 h-20 rounded-full bg-sky-500/20 border border-sky-400/30 flex items-center justify-center transition-transform duration-[2000ms] ease-in-out"
-          style={{ transform: `scale(${scale})` }}
-        >
-          <Wind className="w-8 h-8 text-sky-400" />
-        </div>
       </div>
-      <p className="text-lg font-black text-foreground animate-fade-in" key={phase}>
-        {phaseLabel[phase]}
-      </p>
-      <p className="text-[10px] text-muted-foreground mt-1">
-        Cycle {Math.min(cycle + 1, totalCycles)} of {totalCycles}
-      </p>
+      <button
+        type="button"
+        onClick={tap}
+        className="w-full py-5 rounded-2xl bg-sky-500/10 border border-sky-500/25 active:scale-[0.98] transition-transform"
+      >
+        <p className="text-sm font-black text-foreground">{ACTIONS[step]}</p>
+        <p className="text-[10px] text-muted-foreground mt-1">{phase === "calm" ? "Tap now" : "Hold your pace"}</p>
+      </button>
+      <div className="flex items-center justify-between mt-3 text-[10px]">
+        <p className="text-muted-foreground">Good timings: <span className="font-black text-foreground">{hits}</span></p>
+        <p className="text-muted-foreground">Time: <span className="font-black text-foreground">{timeLeft}s</span></p>
+      </div>
+      <p className="text-[10px] text-sky-300 mt-1">Last: {lastAction} · Pressure Calm boost chance on strong rhythm</p>
     </div>
   );
 }
 
 /* ── Fan Arena: Hype Meter Tap ─────────────────────────────────────────── */
 function FanArenaActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const [meter, setMeter] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(5);
-  const [taps, setTaps] = useState(0);
-  const target = 15;
+  const [holder] = useState("Ultra Fans Union");
+  const [you, setYou] = useState(45);
+  const [them, setThem] = useState(55);
+  const [timeLeft, setTimeLeft] = useState(10);
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
-    if (timeLeft <= 0) { onComplete(taps); return; }
+    if (resolved) return;
+    if (timeLeft <= 0) {
+      setResolved(true);
+      onComplete(you >= them ? 6 : 3);
+      return;
+    }
     const t = setTimeout(() => setTimeLeft((s) => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [timeLeft, taps, onComplete]);
+  }, [timeLeft, resolved, you, them, onComplete]);
 
-  useEffect(() => {
-    // decay
-    if (timeLeft <= 0) return;
-    const d = setInterval(() => setMeter((m) => Math.max(0, m - 2)), 300);
-    return () => clearInterval(d);
-  }, [timeLeft]);
-
-  const handleTap = () => {
-    if (timeLeft <= 0) return;
-    setTaps((t) => t + 1);
-    setMeter((m) => Math.min(100, m + 8));
+  const push = () => {
+    if (resolved) return;
+    setYou((v) => Math.min(100, v + 7));
+    setThem((v) => Math.max(0, v - 5));
   };
-
-  const pct = Math.min(100, meter);
-  const filled = pct >= 80;
 
   return (
     <div className="py-4">
-      <div className="flex items-center justify-between mb-3 px-1">
-        <p className="text-xs font-black text-foreground">Tap fast to hype the crowd!</p>
-        <div className="flex items-center gap-1.5">
-          <Timer className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className={`text-sm font-black ${timeLeft <= 2 ? "text-destructive" : "text-foreground"}`}>
-            {timeLeft}s
-          </span>
-        </div>
+      <p className="text-xs font-black text-foreground">Zone Control Battle</p>
+      <p className="text-[10px] text-muted-foreground mb-3">Current holder: {holder}</p>
+      <div className="h-4 bg-muted rounded-full overflow-hidden mb-3 flex">
+        <div className="h-full bg-orange-500/80 transition-all" style={{ width: `${you}%` }} />
+        <div className="h-full bg-zinc-500/80 transition-all" style={{ width: `${them}%` }} />
       </div>
-
-      {/* Hype meter */}
-      <div className="h-4 bg-muted rounded-full overflow-hidden mb-4">
-        <div
-          className={`h-full rounded-full transition-all duration-150 ${
-            filled ? "bg-gradient-to-r from-amber-400 to-orange-500 animate-pulse" : "bg-gradient-to-r from-amber-500/60 to-orange-400/60"
-          }`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-
       <button
         type="button"
-        onClick={handleTap}
-        disabled={timeLeft <= 0}
-        className={`w-full aspect-[2/1] rounded-2xl flex flex-col items-center justify-center gap-2 transition-all select-none active:scale-95 ${
-          filled
-            ? "bg-gradient-to-br from-amber-500/20 to-orange-600/20 border-2 border-amber-400/40"
-            : "bg-amber-500/5 border border-amber-500/10"
-        }`}
+        onClick={push}
+        disabled={resolved}
+        className="w-full py-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 active:scale-[0.98] transition-transform"
       >
-        <span className="text-4xl">{filled ? "🔥" : "📣"}</span>
-        <p className="text-sm font-black text-foreground">{taps} taps</p>
-        {filled && <p className="text-[10px] text-amber-400 font-bold animate-pulse">MAX HYPE!</p>}
+        <p className="text-sm font-black text-foreground">Challenge Holder</p>
+        <p className="text-[10px] text-muted-foreground mt-1">{resolved ? "Zone resolved" : "Push fan momentum"}</p>
       </button>
-
-      <p className="text-[10px] text-muted-foreground text-center mt-2">
-        {taps >= target ? "🎉 Target reached!" : `Target: ${target} taps`}
+      <p className="text-[10px] text-muted-foreground mt-2">
+        Your control: {you}% · Rival: {them}% · Time: {timeLeft}s
+      </p>
+      <p className="text-[10px] text-amber-300 mt-1">
+        {resolved && you >= them ? "Zone captured: passive Fan Bond enabled (mock)." : "Regional points + streak bonus can apply."}
       </p>
     </div>
   );
@@ -793,18 +768,92 @@ function FanArenaActivity({ onComplete }: { onComplete: (score: number) => void 
 function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => void }) {
   const { activePlayer, playersById } = useGameProgress();
   const [selectedRival, setSelectedRival] = useState<number | null>(null);
+  const [moves, setMoves] = useState<Array<"Press" | "Dribble" | "Shoot" | "Defend" | "Counter" | "Hold Possession">>([]);
+  const [resolved, setResolved] = useState<null | "win" | "lose" | "draw">(null);
   const rivals = mockRivals.slice(0, 3);
 
-  if (selectedRival !== null) {
+  const movePool: Array<"Press" | "Dribble" | "Shoot" | "Defend" | "Counter" | "Hold Possession"> = [
+    "Press", "Dribble", "Shoot", "Defend", "Counter", "Hold Possession",
+  ];
+
+  const beats = (a: typeof movePool[number], b: typeof movePool[number]) => {
+    if (a === "Dribble" && b === "Press") return 1;
+    if (a === "Press" && b === "Hold Possession") return 1;
+    if (a === "Counter" && b === "Press") return 1;
+    if (a === "Defend" && b === "Shoot") return 1;
+    if (a === b) return 0;
+    return -1;
+  };
+
+  const resolve = () => {
+    if (selectedRival === null || moves.length < 3) return;
+    const rivalMoves = [0, 1, 2].map(() => movePool[Math.floor(Math.random() * movePool.length)]!);
+    let score = 0;
+    for (let i = 0; i < 3; i += 1) {
+      score += beats(moves[i]!, rivalMoves[i]!);
+    }
+    const conf = activePlayer.attributes.confidence;
+    const form = activePlayer.attributes.form;
+    const morale = activePlayer.attributes.morale;
+    const fanBond = activePlayer.attributes.fanBond;
+    // Lightweight attribute influence on duel resolution
+    score += (form + conf) >= 140 ? 1 : 0; // better execution for Shoot phases
+    score += morale >= 70 && moves.includes("Hold Possession") ? 1 : 0;
+    score += fanBond >= 70 ? 1 : 0;
+    const outcome: "win" | "lose" | "draw" = score >= 2 ? "win" : score <= -1 ? "lose" : "draw";
+    setResolved(outcome);
+    onComplete(outcome === "win" ? 6 : outcome === "draw" ? 4 : 2);
+  };
+
+  if (selectedRival !== null && resolved === null && moves.length >= 3) {
+    return (
+      <div className="py-3 space-y-3">
+        <p className="text-xs font-black text-foreground">3-Move Tactical Duel</p>
+        <p className="text-[10px] text-muted-foreground">Moves locked: {moves.join(" · ")}</p>
+        <button
+          type="button"
+          onClick={resolve}
+          className="w-full py-3 rounded-2xl bg-red-500/15 border border-red-500/30 text-xs font-black text-foreground"
+        >
+          Resolve Duel
+        </button>
+      </div>
+    );
+  }
+
+  if (selectedRival !== null && resolved !== null) {
+    return (
+      <div className="py-4 text-center">
+        <p className="text-sm font-black text-foreground mb-1">
+          {resolved === "win" ? "Duel Won" : resolved === "draw" ? "Duel Draw" : "Duel Lost"}
+        </p>
+        <p className="text-[10px] text-muted-foreground">Confidence + XP + points resolved (mock leaderboard impact).</p>
+      </div>
+    );
+  }
+
+  if (selectedRival !== null && moves.length < 3) {
     const rival = rivals[selectedRival];
     const rivalPlayer = playersById[rival.signaturePlayerId] ?? getPlayerById(rival.signaturePlayerId);
     if (rivalPlayer) {
       return (
-        <ChallengeFlow
-          rival={rival}
-          rivalPlayer={rivalPlayer}
-          onClose={() => { onComplete(1); }}
-        />
+        <div className="py-3 space-y-2">
+          <p className="text-xs font-black text-foreground">Pick 3 moves vs @{rival.name}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {movePool.map((m) => (
+              <button
+                key={m}
+                type="button"
+                disabled={moves.length >= 3}
+                onClick={() => setMoves((prev) => [...prev, m])}
+                className="p-2 rounded-xl bg-red-500/5 border border-red-500/10 text-[10px] font-bold text-foreground active:scale-[0.98]"
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground">Selected: {moves.join(" · ") || "None yet"}</p>
+        </div>
       );
     }
   }
@@ -839,95 +888,54 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
 
 /* ── Pressure Zone: Reaction Speed Test ────────────────────────────────── */
 function PressureActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const [state, setState] = useState<"wait" | "ready" | "go" | "done">("wait");
-  const [round, setRound] = useState(0);
-  const [times, setTimes] = useState<number[]>([]);
-  const goTime = useRef(0);
-  const totalRounds = 3;
+  const scenarios = [
+    "Final penalty",
+    "Last-minute counterattack",
+    "Must-win header",
+    "Mistake recovery",
+    "Final defensive stand",
+    "Calm the crowd after a bad touch",
+  ];
+  const options = ["Go aggressive", "Stay composed", "Play safe", "Trust instinct"] as const;
+  const [scenario] = useState(scenarios[Math.floor(Math.random() * scenarios.length)]!);
+  const [picked, setPicked] = useState<string | null>(null);
+  const { activePlayer } = useGameProgress();
 
-  const startRound = useCallback(() => {
-    setState("ready");
-    const delay = 1500 + Math.random() * 2000;
-    const t = setTimeout(() => {
-      goTime.current = Date.now();
-      setState("go");
-    }, delay);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    if (round >= totalRounds) {
-      onComplete(times.length);
-      return;
-    }
-    if (state === "wait") {
-      const t = setTimeout(() => startRound(), 500);
-      return () => clearTimeout(t);
-    }
-  }, [round, state, totalRounds, times.length, onComplete, startRound]);
-
-  const handleTap = () => {
-    if (state === "ready") {
-      // too early
-      setState("wait");
-      setRound((r) => r + 1);
-    } else if (state === "go") {
-      const rt = Date.now() - goTime.current;
-      setTimes((t) => [...t, rt]);
-      setState("wait");
-      setRound((r) => r + 1);
-    }
+  const choose = (choice: string) => {
+    if (picked) return;
+    setPicked(choice);
+    const conf = activePlayer.attributes.confidence;
+    const form = activePlayer.attributes.form;
+    const morale = activePlayer.attributes.morale;
+    const base =
+      choice === "Stay composed" ? morale :
+      choice === "Go aggressive" ? conf :
+      choice === "Trust instinct" ? Math.round((conf + form) / 2) :
+      Math.round((morale + form) / 2);
+    onComplete(base >= 75 ? 6 : base >= 60 ? 4 : 2);
   };
-
-  const bgClass =
-    state === "ready" ? "bg-violet-900/30 border-violet-500/20" :
-    state === "go" ? "bg-violet-500/20 border-violet-400/40" :
-    "bg-violet-500/5 border-violet-500/10";
 
   return (
     <div className="py-4">
-      <div className="flex items-center justify-between mb-3 px-1">
-        <p className="text-xs font-black text-foreground">Reaction Test</p>
-        <div className="flex gap-1.5">
-          {Array.from({ length: totalRounds }).map((_, i) => (
-            <div key={i} className={`w-2.5 h-2.5 rounded-full transition-colors ${
-              i < times.length ? "bg-violet-400" :
-              i < round ? "bg-destructive/40" : "bg-muted"
-            }`} />
-          ))}
-        </div>
+      <p className="text-xs font-black text-foreground">Clutch Moment Challenge</p>
+      <p className="text-[10px] text-muted-foreground mb-3">Scenario: {scenario}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((o) => (
+          <button
+            key={o}
+            type="button"
+            disabled={Boolean(picked)}
+            onClick={() => choose(o)}
+            className="p-2.5 rounded-xl border border-violet-500/20 bg-violet-500/10 text-[10px] font-bold text-foreground active:scale-[0.98]"
+          >
+            {o}
+          </button>
+        ))}
       </div>
-      <button
-        type="button"
-        onClick={handleTap}
-        disabled={state === "wait" || state === "done"}
-        className={`w-full aspect-[3/2] rounded-2xl border flex flex-col items-center justify-center gap-3 transition-all select-none active:scale-[0.97] ${bgClass}`}
-      >
-        {state === "wait" && <p className="text-xs text-muted-foreground animate-pulse">Get ready…</p>}
-        {state === "ready" && (
-          <>
-            <div className="w-10 h-10 rounded-full bg-violet-500/30 flex items-center justify-center">
-              <Flame className="w-5 h-5 text-violet-400" />
-            </div>
-            <p className="text-xs font-bold text-violet-300">Wait for it…</p>
-          </>
-        )}
-        {state === "go" && (
-          <>
-            <div className="w-14 h-14 rounded-full bg-violet-400/30 flex items-center justify-center animate-scale-in">
-              <Zap className="w-7 h-7 text-violet-300" />
-            </div>
-            <p className="text-lg font-black text-violet-200 animate-pulse">TAP NOW!</p>
-          </>
-        )}
-      </button>
-      {times.length > 0 && (
-        <div className="flex gap-2 mt-3 justify-center">
-          {times.map((t, i) => (
-            <div key={i} className="px-2.5 py-1 rounded-lg bg-violet-500/10 text-center">
-              <p className="text-xs font-black text-foreground">{t}ms</p>
-            </div>
-          ))}
+      {picked && (
+        <div className="mt-3 p-2 rounded-xl bg-violet-500/10 border border-violet-500/20">
+          <p className="text-[10px] text-foreground font-bold">Chosen: {picked}</p>
+          <p className="text-[10px] text-muted-foreground">Confidence + XP + FP resolved.</p>
         </div>
       )}
     </div>
@@ -936,56 +944,52 @@ function PressureActivity({ onComplete }: { onComplete: (score: number) => void 
 
 /* ── Stadium Zone: Event Collect ───────────────────────────────────────── */
 function StadiumActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const [collected, setCollected] = useState<number[]>([]);
-  const events = [
-    { id: 0, emoji: "⚡", label: "Energy Surge", desc: "+XP Boost", color: "amber" },
-    { id: 1, emoji: "🎯", label: "Scout Bonus", desc: "+Encounter Chance", color: "yellow" },
-    { id: 2, emoji: "🛡️", label: "Shield Buff", desc: "+Morale Guard", color: "amber" },
-    { id: 3, emoji: "🌟", label: "Star Moment", desc: "+All Stats", color: "yellow" },
-  ];
+  const { ownedPlayers, activePlayer } = useGameProgress();
+  const [captainId, setCaptainId] = useState<string>(activePlayer.id);
+  const [attackerId, setAttackerId] = useState<string>(ownedPlayers[1]?.id ?? activePlayer.id);
+  const [defenderId, setDefenderId] = useState<string>(ownedPlayers[2]?.id ?? activePlayer.id);
+  const [resolved, setResolved] = useState(false);
+  const roster = ownedPlayers.slice(0, 8);
 
-  useEffect(() => {
-    if (collected.length >= events.length) {
-      const t = setTimeout(() => onComplete(collected.length), 500);
-      return () => clearTimeout(t);
-    }
-  }, [collected, events.length, onComplete]);
-
-  const handleCollect = (id: number) => {
-    if (collected.includes(id)) return;
-    setCollected((c) => [...c, id]);
+  const resolve = () => {
+    if (resolved) return;
+    const pick = (id: string) => roster.find((p) => p.id === id) ?? activePlayer;
+    const c = pick(captainId);
+    const a = pick(attackerId);
+    const d = pick(defenderId);
+    const avgOverall = Math.round((c.stats.overall + a.stats.overall + d.stats.overall) / 3);
+    const rarityBoost = [c, a, d].filter((p) => p.rarity === "legendary").length * 4;
+    const evoBoost = c.evolutionStage + a.evolutionStage + d.evolutionStage;
+    const score = avgOverall + rarityBoost + evoBoost;
+    setResolved(true);
+    onComplete(score >= 88 ? 6 : score >= 75 ? 4 : 2);
   };
 
   return (
     <div className="py-4">
-      <p className="text-xs font-black text-foreground mb-1">Stadium Event Rewards</p>
-      <p className="text-[10px] text-muted-foreground mb-3">Tap each reward to collect</p>
-      <div className="grid grid-cols-2 gap-2">
-        {events.map((ev) => {
-          const done = collected.includes(ev.id);
-          return (
-            <button
-              key={ev.id}
-              type="button"
-              onClick={() => handleCollect(ev.id)}
-              disabled={done}
-              className={`p-4 rounded-2xl border flex flex-col items-center gap-2 transition-all select-none active:scale-95 ${
-                done
-                  ? "bg-yellow-500/10 border-yellow-500/20 opacity-60"
-                  : "bg-yellow-500/5 border-yellow-500/10 hover:bg-yellow-500/10"
-              }`}
-            >
-              <span className={`text-2xl ${done ? "" : "animate-pulse"}`}>
-                {done ? "✅" : ev.emoji}
-              </span>
-              <p className="text-[11px] font-black text-foreground">{ev.label}</p>
-              <p className="text-[9px] text-muted-foreground">{ev.desc}</p>
-            </button>
-          );
-        })}
+      <p className="text-xs font-black text-foreground mb-1">Squad Power Clash</p>
+      <p className="text-[10px] text-muted-foreground mb-3">Opening Pressure · Key Duel · Final Moment</p>
+      <div className="space-y-2">
+        <select value={captainId} onChange={(e) => setCaptainId(e.target.value)} className="w-full p-2 rounded-xl bg-background/40 border border-border/30 text-xs">
+          {roster.map((p) => <option key={`c-${p.id}`} value={p.id}>Captain: {p.name}</option>)}
+        </select>
+        <select value={attackerId} onChange={(e) => setAttackerId(e.target.value)} className="w-full p-2 rounded-xl bg-background/40 border border-border/30 text-xs">
+          {roster.map((p) => <option key={`a-${p.id}`} value={p.id}>Attacker: {p.name}</option>)}
+        </select>
+        <select value={defenderId} onChange={(e) => setDefenderId(e.target.value)} className="w-full p-2 rounded-xl bg-background/40 border border-border/30 text-xs">
+          {roster.map((p) => <option key={`d-${p.id}`} value={p.id}>Defender: {p.name}</option>)}
+        </select>
       </div>
-      <p className="text-[10px] text-muted-foreground text-center mt-3">
-        {collected.length}/{events.length} collected
+      <button
+        type="button"
+        onClick={resolve}
+        disabled={resolved}
+        className="w-full mt-3 py-3 rounded-2xl bg-yellow-500/15 border border-yellow-500/30 text-xs font-black text-foreground active:scale-[0.98]"
+      >
+        Resolve Squad Clash
+      </button>
+      <p className="text-[10px] text-muted-foreground mt-2">
+        Rewards: event points + XP + stat gain {resolved ? "· rare encounter chance checked (mock)." : ""}
       </p>
     </div>
   );
