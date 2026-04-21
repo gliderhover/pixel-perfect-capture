@@ -788,13 +788,17 @@ const ExploreScreen = () => {
       try {
         const result = await fetchZones();
         if (!cancelled) {
-          if (result.data.length > 0) {
-            setZones(result.data.map(mapZoneFromApi));
-            setUsingMockZones(false);
-          } else {
-            setZones([]);
-            setUsingMockZones(false);
+          const apiZones = result.data.map(mapZoneFromApi);
+          // Keep mock zones as a stable, preloaded baseline on the map.
+          // API zones are additive so local curated zones (e.g. New Haven set)
+          // never disappear or "jump" after async loading.
+          const merged = [...mockZones];
+          const existingIds = new Set(merged.map((z) => z.id));
+          for (const z of apiZones) {
+            if (!existingIds.has(z.id)) merged.push(z);
           }
+          setZones(merged);
+          setUsingMockZones(apiZones.length === 0);
         }
       } catch (error) {
         if (!cancelled) {
