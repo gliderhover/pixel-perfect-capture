@@ -1067,7 +1067,13 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
     <div className="fixed inset-0 z-[1350] flex items-end justify-center bg-background/50 backdrop-blur-sm" onClick={onClose}>
       <div
         className="w-full max-w-lg animate-slide-up rounded-t-3xl bg-background/95 backdrop-blur-xl border-t border-border/20 overflow-hidden"
-        style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))", maxHeight: "90dvh" }}
+        style={{
+          paddingBottom: isRival
+            ? "calc(env(safe-area-inset-bottom) + 24px)"
+            : "max(1.5rem, env(safe-area-inset-bottom))",
+          maxHeight: isRival ? "calc(100dvh - 96px)" : "90dvh",
+          overflowY: isRival ? "auto" : undefined,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Drag handle */}
@@ -1093,7 +1099,10 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
         </div>
 
         {/* Scrollable content */}
-        <div className="px-5 pb-4 overflow-y-auto" style={{ maxHeight: "calc(85dvh - 5rem)" }}>
+        <div
+          className="px-5 pb-4 overflow-y-auto"
+          style={{ maxHeight: isRival ? "calc(100dvh - 96px - 5rem)" : "calc(85dvh - 5rem)" }}
+        >
           {/* ── INTRO ── */}
           {step === "intro" && !isRival && (
             <div className="animate-fade-in">
