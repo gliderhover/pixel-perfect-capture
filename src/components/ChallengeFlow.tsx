@@ -97,8 +97,19 @@ const ChallengeFlow = ({ rival, rivalPlayer, onClose }: ChallengeFlowProps) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[1350] flex items-center justify-center bg-background/70 backdrop-blur-xl p-4" onClick={onClose}>
-      <div className="glass-card-strong w-full max-w-sm rounded-3xl overflow-hidden animate-encounter-reveal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[1350] flex items-end justify-center bg-background/70 backdrop-blur-xl p-3 sm:items-center sm:p-4"
+      style={{
+        paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+        paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="glass-card-strong w-full max-w-sm rounded-3xl overflow-y-auto animate-encounter-reveal"
+        style={{ maxHeight: "min(92dvh, 44rem)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Close */}
         <button type="button" onClick={onClose}
           className="absolute top-4 right-4 z-50 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60">
