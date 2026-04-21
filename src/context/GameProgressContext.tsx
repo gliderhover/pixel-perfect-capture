@@ -86,6 +86,8 @@ type GameProgressContextValue = {
   playersLoading: boolean;
   playersError: string | null;
   usingMockPlayers: boolean;
+  coachName: string;
+  setCoachName: (name: string) => void;
 };
 
 const GameProgressContext = createContext<GameProgressContextValue | null>(null);
@@ -93,7 +95,8 @@ const GameProgressContext = createContext<GameProgressContextValue | null>(null)
 export function GameProgressProvider({ children }: { children: ReactNode }) {
   const [catalogPlayersById, setCatalogPlayersById] = useState<Record<string, Player>>(() => cloneInitialRoster());
   const [ownedPlayersById, setOwnedPlayersById] = useState<Record<string, ApiUserPlayer>>({});
-  const [activePlayerId, setActivePlayerIdState] = useState(mockPlayers[0]?.id ?? "1");
+  // Start with null; snapped to first owned player once ownedPlayersById loads
+  const [activePlayerId, setActivePlayerIdState] = useState<string | null>(null);
   const [explorationZoneType, setExplorationZoneType] = useState<MapZone["type"] | null>(null);
   const [matchPhase, setMatchPhase] = useState<MatchPhase>("prematch");
   const [livePulse, setLivePulse] = useState<LivePulse>("neutral");
@@ -101,12 +104,34 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [usingMockPlayers, setUsingMockPlayers] = useState(true);
-  const userId = import.meta.env.VITE_DEMO_USER_ID?.trim() || "demo-user";
+  // Generate a stable unique ID per device so each new user starts with a clean
+  // squad instead of sharing the seeded demo-user data.
+  const userId = useMemo(() => {
+    const envId = import.meta.env.VITE_DEMO_USER_ID?.trim();
+    if (envId) return envId; // override kept for dev/testing
+    try {
+      const stored = localStorage.getItem("ppl-user-id");
+      if (stored) return stored;
+      const id = `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem("ppl-user-id", id);
+      return id;
+    } catch {
+      return "demo-user";
+    }
+  }, []);
   const [focusPoints, setFocusPoints] = useState(() => {
     try { const v = localStorage.getItem("ppc-focus-points"); return v ? Number(v) : 10; } catch { return 10; }
   });
 
   useEffect(() => { localStorage.setItem("ppc-focus-points", String(focusPoints)); }, [focusPoints]);
+
+  const [coachName, setCoachNameState] = useState<string>(() => {
+    try { return localStorage.getItem("ppl-coach-name") ?? ""; } catch { return ""; }
+  });
+  const setCoachName = useCallback((name: string) => {
+    setCoachNameState(name.trim());
+    try { localStorage.setItem("ppl-coach-name", name.trim()); } catch {}
+  }, []);
 
   const spendFocusPoints = useCallback((n: number) => {
     if (focusPoints < n) return false;
@@ -117,6 +142,17 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   const addFocusPoints = useCallback((n: number) => {
     setFocusPoints((p) => p + n);
   }, []);
+
+  // Auto-select the first owned player whenever the owned list changes and
+  // no valid active player is set yet (or the current one is no longer owned).
+  useEffect(() => {
+    const ownedIds = Object.keys(ownedPlayersById);
+    if (ownedIds.length === 0) return;
+    setActivePlayerIdState((prev) => {
+      if (prev && ownedPlayersById[prev]) return prev; // keep current if still owned
+      return ownedIds[0] ?? prev;
+    });
+  }, [ownedPlayersById]);
 
   const refreshOwnedPlayers = useCallback(async () => {
     const result = await fetchUserPlayers(userId);
@@ -191,9 +227,18 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
   }, [catalogPlayersById, ownedPlayersById]);
 
   const activePlayer = useMemo(() => {
-    const p = playersById[activePlayerId] ?? playersById[mockPlayers[0].id];
-    return p ? normalizePlayer(p) : normalizePlayer({ ...mockPlayers[0] });
-  }, [playersById, activePlayerId]);
+    // Prefer the explicitly selected player; fall back to first owned; never show
+    // an unowned placeholder — callers must handle the null/empty-squad case.
+    if (activePlayerId && playersById[activePlayerId]) {
+      return normalizePlayer(playersById[activePlayerId]!);
+    }
+    const firstOwnedId = Object.keys(ownedPlayersById)[0];
+    if (firstOwnedId && playersById[firstOwnedId]) {
+      return normalizePlayer(playersById[firstOwnedId]!);
+    }
+    // No owned players yet — return a sentinel with empty name so UI can detect it
+    return normalizePlayer({ ...mockPlayers[0], name: "" });
+  }, [playersById, activePlayerId, ownedPlayersById]);
 
   const setActivePlayerId = useCallback((id: string) => {
     if (getPlayerById(id)) setActivePlayerIdState(id);
@@ -321,6 +366,8 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       focusPoints,
       spendFocusPoints,
       addFocusPoints,
+      coachName,
+      setCoachName,
       addXp,
       addBond,
       addShards,
@@ -347,6 +394,8 @@ export function GameProgressProvider({ children }: { children: ReactNode }) {
       focusPoints,
       spendFocusPoints,
       addFocusPoints,
+      coachName,
+      setCoachName,
       addXp,
       addBond,
       addShards,

@@ -299,6 +299,7 @@ export async function sendPlayerChat(input: {
     recentTrainingOutcome?: "strong" | "average" | "weak" | "none";
     injuryState?: "none" | "minor" | "recovering";
     justRecruited?: boolean;
+    coachName?: string;
   };
 }) {
   return postJson<{

@@ -1,7 +1,7 @@
 {
-  "name": "Pixel Perfect Capture",
-  "short_name": "PixelCapture",
-  "description": "Pixel Perfect Capture",
+  "name": "Pocket Pitch Legends",
+  "short_name": "Pocket Pitch",
+  "description": "Pokémon Go meets football. Explore your city, collect World Cup legends, train through AI chat, and compete with rivals.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

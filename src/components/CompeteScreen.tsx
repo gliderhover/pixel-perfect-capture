@@ -7,7 +7,8 @@ import ChallengeFlow from "./ChallengeFlow";
 
 const CompeteScreen = () => {
   const [challengeTarget, setChallengeTarget] = useState<number | null>(null);
-  const { activePlayer, playersById } = useGameProgress();
+  const { activePlayer, playersById, ownedPlayersById } = useGameProgress();
+  const hasOwnedPlayers = Object.keys(ownedPlayersById).length > 0;
 
   const challengeRival = challengeTarget !== null ? mockRivals[challengeTarget] : null;
   const challengeRivalPlayer = challengeRival
@@ -52,6 +53,16 @@ const CompeteScreen = () => {
       </div>
 
       <h2 className="text-xs font-black text-foreground uppercase tracking-wider mb-3">Nearby Rivals</h2>
+
+      {!hasOwnedPlayers ? (
+        <div className="glass-card-strong rounded-2xl p-6 text-center mt-2">
+          <div className="text-4xl mb-3">⚔️</div>
+          <p className="text-sm font-black text-foreground mb-1">Recruit a player first</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Head to the Explore map, win a penalty duel, and your recruited player will appear here ready to compete.
+          </p>
+        </div>
+      ) : (
       <div className="space-y-2.5">
         {mockRivals.map((rival, i) => {
           const rivalPlayer =
@@ -69,8 +80,8 @@ const CompeteScreen = () => {
               <div className="flex items-start gap-2 mb-3">
                 <div className="flex flex-1 min-w-0 flex-col items-center gap-1">
                   <AnimatedPortrait player={activePlayer} size="sm" />
-                  <p className="text-[10px] font-black text-foreground truncate w-full text-center">{activePlayer.name}</p>
-                  <p className="text-[9px] text-muted-foreground truncate w-full text-center">
+                  <p className="text-[10px] font-black text-foreground break-words leading-tight w-full text-center">{activePlayer.name}</p>
+                  <p className="text-[9px] text-muted-foreground w-full text-center">
                     {activePlayer.position} · {activePlayer.representedCountry}
                   </p>
                 </div>
@@ -80,14 +91,14 @@ const CompeteScreen = () => {
                 </div>
                 <div className="flex flex-1 min-w-0 flex-col items-center gap-1">
                   <AnimatedPortrait player={rivalPlayer} size="sm" />
-                  <p className="text-[10px] font-black text-foreground truncate w-full text-center">{rivalPlayer.name}</p>
-                  <p className="text-[9px] text-muted-foreground truncate w-full text-center">
+                  <p className="text-[10px] font-black text-foreground break-words leading-tight w-full text-center">{rivalPlayer.name}</p>
+                  <p className="text-[9px] text-muted-foreground w-full text-center">
                     {rivalPlayer.position} · {rivalPlayer.representedCountry}
                   </p>
                 </div>
               </div>
 
-              <p className="text-[9px] text-center text-muted-foreground mb-2 truncate px-1">
+              <p className="text-[9px] text-center text-muted-foreground mb-2 px-1">
                 @{rival.name} · Lvl {rival.level}
               </p>
 
@@ -110,7 +121,7 @@ const CompeteScreen = () => {
                 </div>
                 <div className="text-center min-w-[2.5rem]">
                   <p className="text-lg font-black text-foreground">{themOvr}</p>
-                  <p className="text-[9px] text-muted-foreground truncate">{rivalPlayer.name.split(" ").pop()}</p>
+                  <p className="text-[9px] text-muted-foreground break-words leading-tight text-center">{rivalPlayer.name}</p>
                 </div>
               </div>
 
@@ -131,6 +142,7 @@ const CompeteScreen = () => {
           );
         })}
       </div>
+      )}
 
       {challengeRival && challengeRivalPlayer && (
         <ChallengeFlow

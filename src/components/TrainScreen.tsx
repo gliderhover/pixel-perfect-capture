@@ -67,6 +67,8 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
     livePulse,
     competitiveStreak,
     refreshOwnedPlayers,
+    coachName,
+    setCoachName,
   } = useGameProgress();
 
   const chatRef = useRef<HTMLDivElement>(null);
@@ -78,6 +80,8 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
   const [isPending, setIsPending] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [zoneFlavorText, setZoneFlavorText] = useState<string | null>(null);
+  const [showNamePrompt, setShowNamePrompt] = useState(() => !coachName);
+  const [nameInput, setNameInput] = useState("");
   const [aiMoodLabelByPlayerId, setAiMoodLabelByPlayerId] = useState<TextByPlayerState>({});
   const [contextualSuggestedByPlayerId, setContextualSuggestedByPlayerId] = useState<SuggestionsByPlayerState>({});
   const zoneName = explorationZoneType ? zoneFlavor[explorationZoneType] : null;
@@ -151,6 +155,16 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
       : "";
     const streakHint = competitiveStreak >= 3 ? " Love the run we're on." : "";
     const aiHint = zoneFlavorText ? ` ${zoneFlavorText}` : "";
+    const firstName = activeChatPlayer.name.split(" ")[0] ?? activeChatPlayer.name;
+    const coachAddress = coachName ? coachName : "Coach";
+    const humanOpeners = [
+      `${coachAddress}! It's ${firstName}. ${matchCopy[matchPhase] ?? matchCopy.idle}.`,
+      `Hey ${coachAddress} — ${firstName} checking in. ${matchCopy[matchPhase] ?? matchCopy.idle}.`,
+      `${firstName} here. ${matchCopy[matchPhase] ?? matchCopy.idle}.`,
+      `Good to talk, ${coachAddress}. ${firstName} — ${matchCopy[matchPhase] ?? matchCopy.idle}.`,
+    ];
+    const openerIndex = activeChatPlayer.id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % humanOpeners.length;
+    const opener = humanOpeners[openerIndex] ?? humanOpeners[0];
     setMessagesByPlayerId((prev) => {
       if (prev[currentPlayerId]?.length) return prev;
       return {
@@ -159,7 +173,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
           {
             id: 1,
             from: "player",
-            text: `Coach — ${activeChatPlayer.name} here. ${matchCopy[matchPhase] ?? matchCopy.idle}.${zoneHint}${streakHint}${aiHint}`,
+            text: `${opener}${zoneHint}${streakHint}${aiHint}`,
             chips: [{ label: "Tip", val: "use quick actions", positive: true }],
           },
         ],
@@ -170,11 +184,13 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
   }, [
     currentPlayerId,
     activeChatPlayer.name,
+    activeChatPlayer.id,
     matchPhase,
     explorationZoneType,
     zoneName,
     competitiveStreak,
     zoneFlavorText,
+    coachName,
   ]);
 
   useEffect(() => {
@@ -250,29 +266,29 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
     if (kind === "motivate") {
       void trainViaApi(
         "balanced",
-        "Motivate me for the next step.",
+        "Pump me up — what's the mindset?",
         z === "rival"
-          ? "I'm hunting that win — give me the next duel."
-          : "You believing in me flips a switch. Let's go."
+          ? "We're going after that duel and we're taking it. Simple. No second thoughts."
+          : "Right now I'm locked in. When the belief is there between us, the whole game feels different."
       );
       return;
     }
     if (kind === "tactics") {
       void trainViaApi(
         "form",
-        "Talk tactics — what should I fix?",
+        "What should I be working on right now?",
         z === "training"
-          ? "Patterns and presses — sharpen the first touch under pressure."
-          : "Shape, timing, runs — keep the plan clean."
+          ? "First touch under pressure — that's the one to sharpen. Everything flows from there."
+          : "Timing the runs and staying compact in shape. Get those two right and the rest follows."
       );
       return;
     }
     void trainViaApi(
       "bond",
-      "Recovery first.",
+      "How are you feeling?",
       z === "recovery"
-        ? "Body's talking — rest, hydrate, mindset follows."
-        : "Smart. We reload so the next sprint hits harder."
+        ? "Honestly? Legs are feeling it. But I'm managing. Rest and mindset — that's the reset."
+        : "I'm alright. Could be sharper, but I'm focused. The body's telling me to look after it today."
     );
   };
 
@@ -314,6 +330,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
             recentTrainingOutcome: explorationZoneType === "training" ? "average" : "none",
             injuryState: explorationZoneType === "recovery" ? "recovering" : "none",
             justRecruited: false,
+            coachName: coachName || undefined,
           },
         });
         await applyCultivation({
@@ -372,13 +389,14 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] flex-col safe-page-bottom with-sidebar-pad pt-5 pr-4">
+      {!hasNoHiredPlayers && (
       <div className="mb-2 px-0">
         <div className="glass-card-strong rounded-2xl p-3 mb-2">
           <div className="flex items-center gap-3">
             <AnimatedPortrait player={activeChatPlayer} size="md" showMood />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <p className="text-sm font-black text-foreground truncate">{activeChatPlayer.name}</p>
+                <p className="text-sm font-black text-foreground leading-tight">{activeChatPlayer.name}</p>
                 <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[9px] font-black text-primary shrink-0">Lv {activeChatPlayer.level}</span>
               </div>
               <p className="text-[10px] text-muted-foreground truncate">{activeChatPlayer.position}</p>
@@ -391,6 +409,20 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
                   <div className="h-full rounded-full bg-gradient-to-r from-accent/80 to-accent" style={{ width: `${bondPct}%` }} />
                 </div>
                 {streakCount > 0 && <span className="text-[9px] text-accent font-bold shrink-0">🔥 {streakCount}d</span>}
+              </div>
+              {/* Live attribute badges */}
+              <div className="mt-1.5 flex gap-1.5 flex-wrap">
+                {[
+                  { label: "Conf", val: activeChatPlayer.attributes.confidence, color: "text-amber-400" },
+                  { label: "Form", val: activeChatPlayer.attributes.form, color: "text-emerald-400" },
+                  { label: "Morale", val: activeChatPlayer.attributes.morale, color: "text-sky-400" },
+                  { label: "Bond", val: activeChatPlayer.attributes.fanBond, color: "text-pink-400" },
+                ].map(({ label, val, color }) => (
+                  <span key={label} className="text-[9px] font-black rounded-md bg-muted/50 px-1.5 py-0.5">
+                    <span className="text-muted-foreground">{label} </span>
+                    <span className={color}>{val}</span>
+                  </span>
+                ))}
               </div>
             </div>
           </div>
@@ -407,21 +439,40 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
             </div>
           )}
         </div>
-        {/* Action buttons - 3 only */}
-        <div className="flex gap-2">
-          {([
-            ["motivate", "🔥 Pump me up!"],
-            ["tactics", "💡 What should I improve?"],
-            ["recovery", "💬 How are you feeling?"],
-          ] as const).map(([key, label]) => (
-            <button key={key} type="button" onClick={() => sendTrainingChoice(key)}
-              className="flex-1 py-3 rounded-xl border border-border/40 bg-card/50 text-[10px] font-bold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10">
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="text-[9px] text-muted-foreground text-center mt-1">Tap to send instantly</p>
+        <></>
       </div>
+      )}
+
+      {showNamePrompt && (
+        <div
+          className="fixed z-[300] flex items-end justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+          style={{ top: 0, bottom: 0, left: "var(--game-sidebar-width, 56px)", right: 0 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowNamePrompt(false); }}>
+          <div className="w-full max-w-md glass-card-strong rounded-t-3xl px-5 pt-4 animate-fade-in-up"
+            style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}>
+            {/* drag handle */}
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/30 mx-auto mb-4" />
+            <p className="text-sm font-black text-foreground">What should I call you, Coach?</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5 mb-4">Optional — tap Skip to continue</p>
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { if (nameInput.trim()) setCoachName(nameInput.trim()); setShowNamePrompt(false); } }}
+              placeholder="Your name…"
+              maxLength={20}
+              autoFocus
+              style={{ fontSize: "16px" }}
+              className="w-full bg-muted/40 rounded-2xl px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground border border-border/30 mb-3"
+            />
+            <button type="button"
+              onClick={() => { if (nameInput.trim()) setCoachName(nameInput.trim()); setShowNamePrompt(false); }}
+              className="w-full py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-black active:scale-95 transition-transform">
+              {nameInput.trim() ? "Got it 👍" : "Skip for now"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {trainingBanner && (
         <div className="glass-card-strong rounded-2xl p-3 mb-2 border border-primary/30 animate-fade-in-up">
@@ -497,17 +548,27 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
       </div>
       )}
 
-      <div className="py-2">
+      <div className="py-1.5">
         {!inputFocused && !isPending && (
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {visibleSuggested.map((prompt, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => sendMessage(prompt)}
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
+            {/* Quick action chips */}
+            {([
+              ["motivate", "🔥 Pump me up"],
+              ["tactics", "💡 What to work on?"],
+              ["recovery", "💬 How are you feeling?"],
+            ] as const).map(([key, label]) => (
+              <button key={key} type="button" onClick={() => sendTrainingChoice(key)}
                 disabled={hasNoHiredPlayers}
-                className="shrink-0 rounded-xl border border-border/30 bg-card/40 px-3 py-2 text-xs font-semibold text-foreground/90 transition-all hover:border-primary/35 active:scale-95"
-              >
+                className="shrink-0 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-[10px] font-bold text-primary transition-all hover:bg-primary/15 active:scale-95 whitespace-nowrap">
+                {label}
+              </button>
+            ))}
+            {/* Divider dot */}
+            <span className="text-muted-foreground/40 self-center text-[10px] shrink-0">·</span>
+            {/* Contextual suggestion chips */}
+            {visibleSuggested.map((prompt, i) => (
+              <button key={i} type="button" onClick={() => sendMessage(prompt)} disabled={hasNoHiredPlayers}
+                className="shrink-0 rounded-xl border border-border/30 bg-card/40 px-3 py-2 text-[10px] font-semibold text-foreground/90 transition-all hover:border-primary/35 active:scale-95 whitespace-nowrap">
                 {prompt}
               </button>
             ))}
@@ -526,6 +587,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
             onBlur={() => setInputFocused(false)}
             placeholder={hasNoHiredPlayers ? "Recruit a player to start chat..." : "Message your player..."}
             disabled={hasNoHiredPlayers}
+            style={{ fontSize: "16px" }}
             className="flex-1 bg-transparent px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
           <button

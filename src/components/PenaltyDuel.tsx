@@ -53,6 +53,9 @@ const PenaltyDuel = ({
   const [preLine, setPreLine] = useState(() => getPreDuelLine(player));
   const [postSaveLine, setPostSaveLine] = useState(() => getPostSaveLine(player));
   const [postGoalLine, setPostGoalLine] = useState(() => getPostGoalLine(player));
+  const [powerPct, setPowerPct] = useState(0);
+  const [capturedPower, setCapturedPower] = useState<number | null>(null);
+  const powerDirRef = useRef(1);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const chosenRef = useRef<Direction>("center");
   const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
@@ -159,6 +162,7 @@ const PenaltyDuel = ({
 
   const executeDive = useCallback((dir: Direction) => {
     if (phase !== "shoot" && phase !== "runup") return;
+    setCapturedPower(powerPct);
     setDiveDir(dir);
     setPhase("dive");
     clearTimeout(timerRef.current);
@@ -192,6 +196,21 @@ const PenaltyDuel = ({
     else dir = dx < 0 ? "left" : "right";
     executeDive(dir);
   }, [phase, executeDive]);
+
+  // Oscillating power bar during shoot phase
+  useEffect(() => {
+    if (phase !== "shoot") { setPowerPct(0); return; }
+    setPowerPct(20);
+    const tick = setInterval(() => {
+      setPowerPct((prev) => {
+        const next = prev + powerDirRef.current * 4;
+        if (next >= 100) { powerDirRef.current = -1; return 100; }
+        if (next <= 0)   { powerDirRef.current =  1; return 0;   }
+        return next;
+      });
+    }, 40);
+    return () => clearInterval(tick);
+  }, [phase]);
 
   // Auto-transition only on goal — save now has explicit buttons
   useEffect(() => {
@@ -312,7 +331,7 @@ const PenaltyDuel = ({
 
           <p className="relative z-20 text-sm font-black text-foreground mb-0.5">{player.name}</p>
           <p className="relative z-20 text-[9px] text-muted-foreground mb-4">
-            {player.position} · {player.clubTeam}
+            {player.position} · {player.nationalTeam}
           </p>
 
           {/* ─── GOAL FRAME ─── */}
@@ -392,13 +411,16 @@ const PenaltyDuel = ({
           </div>
 
           {/* ─── PHASE MESSAGES ─── */}
-          <div className="relative z-20 mt-6 text-center min-h-[4.5rem] flex flex-col items-center justify-center">
+          <div className="relative z-20 mt-4 text-center min-h-0 flex-1 overflow-y-auto flex flex-col items-center justify-center px-4">
             {phase === "ready" && (
               <div className="animate-fade-in-up">
                 <p className="text-sm text-foreground/80 italic max-w-[260px] leading-relaxed">
                   "{preLine}"
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
+                {gloveName && gloveName !== "Basic Gloves" && (
+                  <p className="text-[10px] text-emerald-400 mt-2 font-bold">🧤 {gloveName} active — wider save window</p>
+                )}
               </div>
             )}
             {phase === "runup" && (
@@ -410,11 +432,33 @@ const PenaltyDuel = ({
               </div>
             )}
             {phase === "shoot" && (
-              <div className="animate-fade-in">
-                <p className="text-2xl font-black text-foreground tracking-tight animate-bounce">
+              <div className="animate-fade-in w-full max-w-[280px]">
+                <p className="text-2xl font-black text-foreground tracking-tight animate-bounce mb-3">
                   DIVE NOW!
                 </p>
-                <p className="text-[10px] text-foreground/30 mt-0.5">← Swipe left · Tap center · Swipe right →</p>
+                {/* Power bar */}
+                <div className="relative h-5 rounded-full overflow-hidden mb-1" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}>
+                  {/* Sweet spot zone (35-70%) */}
+                  <div className="absolute top-0 bottom-0 rounded-full" style={{ left: "35%", width: "35%", background: "rgba(34,197,94,0.25)" }} />
+                  {/* Moving bar */}
+                  <div className="absolute top-0 bottom-0 w-3 rounded-full transition-none"
+                    style={{
+                      left: `${Math.max(0, powerPct - 2)}%`,
+                      background: powerPct >= 35 && powerPct <= 70
+                        ? "linear-gradient(90deg,#22c55e,#86efac)"
+                        : powerPct > 85
+                        ? "linear-gradient(90deg,#ef4444,#fca5a5)"
+                        : "linear-gradient(90deg,#f59e0b,#fcd34d)",
+                      boxShadow: powerPct >= 35 && powerPct <= 70 ? "0 0 8px rgba(34,197,94,0.8)" : "none",
+                    }}
+                  />
+                  {/* Labels */}
+                  <span className="absolute left-[35%] top-0 bottom-0 flex items-center justify-center text-[7px] font-black text-emerald-400/80 pointer-events-none w-[35%]">SWEET SPOT</span>
+                </div>
+                <div className="flex justify-between text-[8px] text-foreground/30 mb-2">
+                  <span>Weak</span><span>Perfect</span><span>Wild</span>
+                </div>
+                <p className="text-[10px] text-foreground/30">← Swipe left · Tap center · Swipe right →</p>
               </div>
             )}
             {phase === "dive" && (
@@ -424,10 +468,15 @@ const PenaltyDuel = ({
               <div className="animate-duel-result-slam text-center">
                 <p className="text-5xl font-black text-primary mb-2 tracking-tighter">SAVE!</p>
                 {diveDir && shotDir && (
-                  <div className="flex items-center justify-center gap-2 mb-2">
+                  <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
                     <span className="text-[10px] px-2.5 py-1 rounded-full font-black bg-primary/20 text-primary">
                       Dived {diveDir} · Ball {shotDir} ✓
                     </span>
+                    {capturedPower !== null && (
+                      <span className={`text-[10px] px-2.5 py-1 rounded-full font-black ${capturedPower >= 35 && capturedPower <= 70 ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"}`}>
+                        {capturedPower >= 35 && capturedPower <= 70 ? "⚡ Perfect timing!" : capturedPower > 85 ? "🔥 Wild shot!" : "💨 Weak shot"}
+                      </span>
+                    )}
                   </div>
                 )}
                 <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postSaveLine}"</p>
@@ -437,15 +486,17 @@ const PenaltyDuel = ({
             {phase === "goal" && (
               <div className="animate-duel-result-slam text-center">
                 <p className="text-5xl font-black text-destructive mb-2 tracking-tighter">GOAL</p>
-                {diveDir && shotDir && diveDir !== shotDir && (
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <span className="text-[10px] px-2.5 py-1 rounded-full font-black bg-destructive/20 text-destructive">
-                      Dived {diveDir} · Ball {shotDir}
-                    </span>
-                  </div>
-                )}
                 <p className="text-sm text-foreground/80 italic max-w-[250px]">"{postGoalLine}"</p>
                 <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
+                {/* Coaching tip */}
+                <p className="text-[11px] text-amber-400 mt-3 max-w-[260px] leading-relaxed font-semibold">
+                  💡{" "}
+                  {!diveDir
+                    ? "You didn't dive in time! Commit to a direction the moment the player starts their run-up."
+                    : diveDir !== shotDir
+                    ? `You dived ${diveDir} but the ball went ${shotDir}. Watch the player's planted foot and hips — they reveal the direction.`
+                    : "Close! Stay composed and react to the body shape, not the feint."}
+                </p>
               </div>
             )}
           </div>
@@ -516,14 +567,18 @@ const PenaltyDuel = ({
             <div className="flex flex-col gap-2 animate-fade-in-up">
               <div className="text-center py-3 rounded-2xl font-bold text-sm"
                 style={{ background: "hsl(var(--destructive) / 0.1)", color: "hsl(var(--destructive))" }}>
-                The player escaped…
+                {!diveDir
+                  ? "⏱️ Too slow — you didn't dive!"
+                  : diveDir !== shotDir
+                  ? `Wrong side — ${player.name.split(" ")[0]} went ${shotDir}`
+                  : "They found the corner — unlucky!"}
               </div>
               <button
                 type="button"
                 onClick={onGoal}
                 className="w-full py-3.5 rounded-2xl glass-card-strong text-foreground font-black text-sm active:scale-[0.97] transition-transform"
               >
-                Continue →
+                🗺️ Scout another player →
               </button>
             </div>
           )}

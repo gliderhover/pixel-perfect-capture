@@ -33,6 +33,7 @@ type ChatGameState = {
   recentTrainingOutcome?: "strong" | "average" | "weak" | "none";
   injuryState?: "none" | "minor" | "recovering";
   justRecruited?: boolean;
+  coachName?: string;
   playerState?: PlayerState;
 };
 
@@ -101,7 +102,8 @@ export function buildChatPrompt(input: {
       ? `Attributes: confidence=${gameState.playerState.confidence}, form=${gameState.playerState.form}, morale=${gameState.playerState.morale}, fanBond=${gameState.playerState.fanBond}.`
       : "Attributes: unknown.",
     `Mood tendency now: ${moodHint}.`,
-  ].join("\n");
+    gameState.coachName ? `The coach's name is "${gameState.coachName}". They are managing this player.` : "",
+  ].filter(Boolean).join("\n");
 
   const flavorLayer = [
     `Flavor pack id=${flavorPack.id}.`,
@@ -135,9 +137,12 @@ export function buildChatPrompt(input: {
     "Use football-specific language: runs, pressing, timing, shape, final third, set pieces — whatever fits your position.",
     "Target around 45 to 110 words unless the user asks for a brief answer.",
     "Vary your openers. Never start with 'Yeah', 'Look', or 'Coach' twice in a row.",
+    gameState.coachName
+      ? `The coach's name is "${gameState.coachName}". Use it naturally 1 time MAX per reply — only when it feels completely organic (e.g. "Yeah, ${gameState.coachName}, that's..." or "What do you think, ${gameState.coachName}?"). Never start every message with it.`
+      : "",
     "Avoid robotic motivational clichés. Do not sound like a coach, analyst, or textbook.",
     "Keep premium, in-character, safe.",
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 
   const playerFirstName = identity.playerName.split(" ")[0] ?? identity.playerName;
 

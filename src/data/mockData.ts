@@ -1081,6 +1081,62 @@ export const mockZones: MapZone[] = [
   { id: "z-mon-stad", type: "stadium", name: "Olympic Stadium Surge", lat: 45.5581, lng: -73.5519, benefit: "Live Bonus" },
   { id: "z-mon-rival", type: "rival", name: "Plateau Rival Alley", lat: 45.5242, lng: -73.581, benefit: "Battle" },
   { id: "z-mon-mis", type: "mission", name: "Old Port Night Lens Op", lat: 45.507, lng: -73.551, benefit: "Camera XP" },
+  // Chicago
+  { id: "z-chi-train", type: "training", name: "Chicago Elite Pitch", lat: 41.8781, lng: -87.6298, benefit: "+Form" },
+  { id: "z-chi-rival", type: "rival", name: "Soldier Field Clash", lat: 41.8623, lng: -87.6167, benefit: "Battle" },
+  { id: "z-chi-stadium", type: "stadium", name: "Wrigley Football Ground", lat: 41.9484, lng: -87.6553, benefit: "+XP Boost" },
+  // Los Angeles (additional)
+  { id: "z-la-fan2", type: "fan-arena", name: "Hollywood Fan Zone", lat: 34.0928, lng: -118.3287, benefit: "+Fan Bond" },
+  { id: "z-la-rival2", type: "rival", name: "Rose Bowl Duel", lat: 34.1614, lng: -118.1676, benefit: "Battle" },
+  // Miami (additional)
+  { id: "z-mia-recover2", type: "recovery", name: "Coconut Grove Recovery", lat: 25.7296, lng: -80.2407, benefit: "+Morale" },
+  { id: "z-mia-pressure", type: "pressure", name: "South Beach Press Zone", lat: 25.7895, lng: -80.1300, benefit: "+Confidence" },
+  // Houston
+  { id: "z-hou-train", type: "training", name: "Houston Dynamo Grounds", lat: 29.7604, lng: -95.3698, benefit: "+Form" },
+  { id: "z-hou-rival", type: "rival", name: "NRG Pitch Rival", lat: 29.6848, lng: -95.4108, benefit: "Battle" },
+  // Dallas (additional)
+  { id: "z-dal-fan2", type: "fan-arena", name: "Deep Ellum Fan Zone", lat: 32.7842, lng: -96.7791, benefit: "+Fan Bond" },
+  // Phoenix
+  { id: "z-phx-train", type: "training", name: "Desert Sun Training Base", lat: 33.4484, lng: -112.0740, benefit: "+Form" },
+  { id: "z-phx-stadium", type: "stadium", name: "State Farm Stadium Surge", lat: 33.5276, lng: -112.2626, benefit: "+XP Boost" },
+  { id: "z-phx-pressure", type: "pressure", name: "Valley Pressure Pit", lat: 33.4372, lng: -112.0797, benefit: "+Confidence" },
+  // Seattle (additional)
+  { id: "z-sea-fan2", type: "fan-arena", name: "Pacific Northwest Fan Zone", lat: 47.6062, lng: -122.3321, benefit: "+Fan Bond" },
+  // Boston
+  { id: "z-bos-train", type: "training", name: "Gillette Training Grid", lat: 42.0909, lng: -71.2643, benefit: "+Form" },
+  { id: "z-bos-rival", type: "rival", name: "Fenway Football Clash", lat: 42.3467, lng: -71.0972, benefit: "Battle" },
+  { id: "z-bos-recovery", type: "recovery", name: "Charles River Recovery Path", lat: 42.3601, lng: -71.0942, benefit: "+Morale" },
+  // Atlanta (additional)
+  { id: "z-atl-pressure", type: "pressure", name: "ATL Championship Pressure Zone", lat: 33.7550, lng: -84.3900, benefit: "+Confidence" },
+  // Denver
+  { id: "z-den-train", type: "training", name: "Mile High Training Complex", lat: 39.7392, lng: -104.9903, benefit: "+Form" },
+  { id: "z-den-fan", type: "fan-arena", name: "Empower Fan Fest", lat: 39.7439, lng: -105.0200, benefit: "+Fan Bond" },
+  { id: "z-den-rival", type: "rival", name: "Rocky Mountain Rival Cage", lat: 39.7554, lng: -104.9942, benefit: "Battle" },
+  // Portland
+  { id: "z-por-train", type: "training", name: "Providence Park Training", lat: 45.5215, lng: -122.6916, benefit: "+Form" },
+  { id: "z-por-recovery", type: "recovery", name: "Forest Park Recovery Trail", lat: 45.5420, lng: -122.7490, benefit: "+Morale" },
+  // Las Vegas
+  { id: "z-lv-stadium", type: "stadium", name: "Allegiant Stadium Surge", lat: 36.0909, lng: -115.1833, benefit: "+XP Boost" },
+  { id: "z-lv-pressure", type: "pressure", name: "Strip Pressure Zone", lat: 36.1126, lng: -115.1729, benefit: "+Confidence" },
+  { id: "z-lv-fan", type: "fan-arena", name: "Vegas Fan Arena", lat: 36.1026, lng: -115.1702, benefit: "+Fan Bond" },
+  // Toronto (additional)
+  { id: "z-tor-stadium2", type: "stadium", name: "Scotiabank Arena Pitch", lat: 43.6435, lng: -79.3791, benefit: "+XP Boost" },
+  // Montreal (additional)
+  { id: "z-mtl-recover", type: "recovery", name: "Montreal Recovery Lodge", lat: 45.5017, lng: -73.5673, benefit: "+Morale" },
+  { id: "z-mtl-pressure", type: "pressure", name: "Old Port Pressure Test", lat: 45.5048, lng: -73.5546, benefit: "+Confidence" },
+  // Vancouver (additional)
+  { id: "z-van-fan2", type: "fan-arena", name: "BC Place Fan Fest", lat: 49.2769, lng: -123.1118, benefit: "+Fan Bond" },
+  { id: "z-van-train2", type: "training", name: "Whitecaps Training Centre", lat: 49.2604, lng: -123.0638, benefit: "+Form" },
+  // Guadalajara (additional)
+  { id: "z-gdl-rival2", type: "rival", name: "Chivas Rival Ground", lat: 20.6597, lng: -103.3496, benefit: "Battle" },
+  { id: "z-gdl-stadium2", type: "stadium", name: "Estadio Akron", lat: 20.6706, lng: -103.4817, benefit: "+XP Boost" },
+  // Monterrey (additional)
+  { id: "z-mty-train2", type: "training", name: "BBVA Bancomer Grounds", lat: 25.6866, lng: -100.3161, benefit: "+Form" },
+  { id: "z-mty-fan", type: "fan-arena", name: "Monterrey Fan Arena", lat: 25.6751, lng: -100.3318, benefit: "+Fan Bond" },
+  // Puebla
+  { id: "z-pue-train", type: "training", name: "Cuauhtémoc Training Grounds", lat: 19.0414, lng: -98.2063, benefit: "+Form" },
+  { id: "z-pue-stadium", type: "stadium", name: "Estadio Cuauhtémoc Surge", lat: 19.0482, lng: -98.2019, benefit: "+XP Boost" },
+  { id: "z-pue-rival", type: "rival", name: "Puebla Rival Pitch", lat: 19.0400, lng: -98.1980, benefit: "Battle" },
 ];
 
 /** Player encounters spread across all 12 host-corridor metros (40+ markers for 40 players) */
@@ -1192,4 +1248,7 @@ export const zoneIcons: Record<string, string> = {
   pressure:    "🔥",
   stadium:     "🌟",
   mission:     "📸",
+  autograph:   "✍️",
+  media:       "📰",
+  "warm-up":   "🏃",
 };

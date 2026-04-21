@@ -144,6 +144,253 @@ const zoneConfig: Record<
   },
 };
 
+/* ── Fallback trivia bank (used when Gemini API is unavailable) ─────────── */
+const FALLBACK_TRIVIA_QUESTIONS: ApiTrainingTriviaQuestion[] = [
+  // EASY
+  {
+    id: "fb-01",
+    question: "How many teams will compete in the 2026 FIFA World Cup?",
+    options: ["48", "32", "40", "36"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "FIFA expanded the World Cup to 48 teams starting with the 2026 edition.",
+  },
+  {
+    id: "fb-02",
+    question: "Which trio of countries is hosting the 2026 FIFA World Cup?",
+    options: ["USA, Canada & Mexico", "Brazil, Argentina & Chile", "Germany, France & Spain", "England, Italy & Portugal"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "The 2026 World Cup is co-hosted by the United States, Canada, and Mexico.",
+  },
+  {
+    id: "fb-03",
+    question: "Who won the 2022 FIFA World Cup in Qatar?",
+    options: ["Argentina", "France", "Brazil", "Germany"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "Argentina beat France on penalties in the final in Lusail.",
+  },
+  {
+    id: "fb-04",
+    question: "How many players are on the field for each team in football?",
+    options: ["11", "10", "12", "9"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "Each team fields 11 players, including the goalkeeper.",
+  },
+  {
+    id: "fb-05",
+    question: "What colour card means a player is sent off in football?",
+    options: ["Red", "Yellow", "Blue", "Orange"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "A red card results in immediate dismissal from the match.",
+  },
+  {
+    id: "fb-06",
+    question: "Which country has won the most FIFA World Cup titles?",
+    options: ["Brazil", "Germany", "Italy", "Argentina"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "Brazil has won five World Cups: 1958, 1962, 1970, 1994, and 2002.",
+  },
+  {
+    id: "fb-07",
+    question: "What does a 'hat-trick' mean in football?",
+    options: ["Three goals by one player in a single match", "Three yellow cards in a tournament", "Winning three matches in a row", "Scoring from three different positions"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "A hat-trick is when a single player scores three goals in one game.",
+  },
+  {
+    id: "fb-08",
+    question: "How long is a standard football match (excluding extra time)?",
+    options: ["90 minutes", "80 minutes", "100 minutes", "120 minutes"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "A standard match consists of two 45-minute halves.",
+  },
+  {
+    id: "fb-09",
+    question: "What shape is a standard football (soccer ball)?",
+    options: ["Spherical", "Oval", "Cylindrical", "Hexagonal"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "A football is a sphere, typically made with 32 panels.",
+  },
+  {
+    id: "fb-10",
+    question: "In which city will the 2026 World Cup final be held?",
+    options: ["New York / New Jersey", "Los Angeles", "Dallas", "Mexico City"],
+    answerIndex: 0,
+    difficulty: "easy",
+    explanation: "MetLife Stadium in East Rutherford, NJ (serving the New York area) is slated to host the final.",
+  },
+  // MEDIUM
+  {
+    id: "fb-11",
+    question: "Which player has scored the most goals in FIFA World Cup history?",
+    options: ["Miroslav Klose", "Ronaldo (Brazil)", "Gerd Müller", "Just Fontaine"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "Miroslav Klose scored 16 goals across four World Cups (2002–2014).",
+  },
+  {
+    id: "fb-12",
+    question: "Who scored the famous 'Hand of God' goal at the 1986 World Cup?",
+    options: ["Diego Maradona", "Pelé", "Ronaldo", "Zinedine Zidane"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "Maradona scored with his hand against England in the 1986 quarter-final.",
+  },
+  {
+    id: "fb-13",
+    question: "What is the maximum distance from which a penalty kick is taken?",
+    options: ["12 yards (11 m)", "10 yards (9 m)", "15 yards (13.7 m)", "18 yards (16.5 m)"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "The penalty spot is 12 yards (11 metres) from the goal line.",
+  },
+  {
+    id: "fb-14",
+    question: "Which nation won the very first FIFA World Cup in 1930?",
+    options: ["Uruguay", "Argentina", "Brazil", "Italy"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "Uruguay hosted and won the inaugural World Cup, beating Argentina 4–2 in the final.",
+  },
+  {
+    id: "fb-15",
+    question: "How many goals did France's Kylian Mbappé score at the 2022 World Cup final?",
+    options: ["3", "2", "1", "4"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "Mbappé scored a hat-trick in the final but France lost on penalties.",
+  },
+  {
+    id: "fb-16",
+    question: "Which goalkeeper made the famous 'saves' to help Argentina win the 2022 World Cup final shoot-out?",
+    options: ["Emiliano Martínez", "David de Gea", "Hugo Lloris", "Alisson Becker"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "Emiliano 'Dibu' Martínez saved two penalties in the shoot-out against France.",
+  },
+  {
+    id: "fb-17",
+    question: "What is the term for when a team wins without conceding any goals throughout a tournament?",
+    options: ["Clean sheet run", "Whitewash", "Golden glove run", "Perfect defence"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "Keeping a 'clean sheet' in every game is considered a 'clean sheet run'.",
+  },
+  {
+    id: "fb-18",
+    question: "Which country won the 2018 FIFA World Cup in Russia?",
+    options: ["France", "Croatia", "Belgium", "England"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "France beat Croatia 4–2 in the final held at Luzhniki Stadium, Moscow.",
+  },
+  {
+    id: "fb-19",
+    question: "Which player won the Golden Ball (best player) at the 2022 World Cup?",
+    options: ["Lionel Messi", "Kylian Mbappé", "Luka Modrić", "Enzo Fernández"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "Lionel Messi won the Golden Ball for the second time, having also won it in 2014.",
+  },
+  {
+    id: "fb-20",
+    question: "How many World Cup titles has Germany (including West Germany) won?",
+    options: ["4", "3", "5", "2"],
+    answerIndex: 0,
+    difficulty: "medium",
+    explanation: "Germany won in 1954, 1974, 1990, and 2014.",
+  },
+  // HARD
+  {
+    id: "fb-21",
+    question: "Just Fontaine set the record for most goals in a single World Cup. How many did he score in 1958?",
+    options: ["13", "11", "9", "15"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "Just Fontaine scored 13 goals for France at the 1958 World Cup in Sweden — a record that still stands.",
+  },
+  {
+    id: "fb-22",
+    question: "Which stadium will host the most matches at the 2026 World Cup?",
+    options: ["MetLife Stadium (New York/NJ)", "AT&T Stadium (Dallas)", "SoFi Stadium (LA)", "Azteca Stadium (Mexico City)"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "MetLife Stadium is the largest venue selected and is set to host the final plus the most group and knockout games.",
+  },
+  {
+    id: "fb-23",
+    question: "In what year did FIFA introduce goal-line technology at the World Cup for the first time?",
+    options: ["2014", "2010", "2018", "2006"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "Goal-line technology (GoalControl-4D) was used for the first time at the 2014 World Cup in Brazil.",
+  },
+  {
+    id: "fb-24",
+    question: "Which player scored the fastest goal in World Cup history (11 seconds)?",
+    options: ["Hakan Şükür", "Robbie Rensenbrink", "Bernard Lacombe", "Emile Veinante"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "Hakan Şükür of Turkey scored after just 11 seconds vs South Korea in the 2002 third-place play-off.",
+  },
+  {
+    id: "fb-25",
+    question: "What was the highest-scoring World Cup match in history (combined goals)?",
+    options: ["Austria 7–5 Switzerland (1954)", "Hungary 10–1 El Salvador (1982)", "Brazil 5–2 Sweden (1958)", "West Germany 8–0 Mexico (1978)"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "Austria beat Switzerland 7–5 in 1954, totalling 12 goals — the most in a single World Cup match.",
+  },
+  {
+    id: "fb-26",
+    question: "VAR (Video Assistant Referee) was first used at which World Cup?",
+    options: ["2018 (Russia)", "2014 (Brazil)", "2022 (Qatar)", "2010 (South Africa)"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "VAR made its World Cup debut at Russia 2018, becoming a turning point in officiating.",
+  },
+  {
+    id: "fb-27",
+    question: "Which country has appeared in the most World Cup finals without winning?",
+    options: ["Netherlands", "Czechoslovakia", "Hungary", "Sweden"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "The Netherlands have played in three World Cup finals (1974, 1978, 2010) and lost all of them.",
+  },
+  {
+    id: "fb-28",
+    question: "How many African nations will qualify for the 2026 FIFA World Cup?",
+    options: ["9", "5", "6", "8"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "With 48 teams, Africa receives 9 guaranteed slots (up from 5 in previous editions).",
+  },
+  {
+    id: "fb-29",
+    question: "Which team suffered the biggest ever World Cup defeat, losing 8–0 in 2022?",
+    options: ["El Salvador vs Hungary (1982)", "Kuwait vs Czechoslovakia (1982)", "Zaire vs Yugoslavia (1974)", "Bolivia vs Uruguay (1950)"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "El Salvador lost 10–1 to Hungary in 1982 — the largest single-match defeat in World Cup history.",
+  },
+  {
+    id: "fb-30",
+    question: "What is the name of the official match ball used at the 2022 FIFA World Cup?",
+    options: ["Al Rihla", "Brazuca", "Jabulani", "Telstar 18"],
+    answerIndex: 0,
+    difficulty: "hard",
+    explanation: "'Al Rihla' means 'the journey' in Arabic and was the official ball of Qatar 2022.",
+  },
+];
+
 /* ── Training Ground: Soccer Trivia Blitz ─────────────────────────────── */
 function TrainingActivity({
   onComplete,
@@ -212,10 +459,25 @@ function TrainingActivity({
       setLoading(true);
       setError(null);
       try {
-        const result = await fetchTrainingTriviaSession(10, `${Date.now()}-${Math.random()}`);
+        // Race against a 5-second timeout so the fallback triggers even if the
+        // API hangs and never rejects.
+        const result = await Promise.race([
+          fetchTrainingTriviaSession(10, `${Date.now()}-${Math.random()}`),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("trivia-timeout")), 5000)
+          ),
+        ]);
         if (cancelled) return;
         if (!result.data.length) {
-          setError("No trivia available right now.");
+          const fallback = FALLBACK_TRIVIA_QUESTIONS.sort(() => Math.random() - 0.5).slice(0, 10);
+          const easy = fallback.filter((q) => q.difficulty === "easy");
+          const medium = fallback.filter((q) => q.difficulty === "medium");
+          const hard = fallback.filter((q) => q.difficulty === "hard");
+          orderedQuestions.current = [...easy, ...medium, ...hard];
+          if (!orderedQuestions.current.length) orderedQuestions.current = fallback;
+          setQuestionTimeLimit(8);
+          setPassScore(6);
+          setTimeLeft(8);
           setLoading(false);
           return;
         }
@@ -236,9 +498,17 @@ function TrainingActivity({
         setQuestionTimeLimit(result.config.questionTimeLimitSec);
         setPassScore(result.config.passScore);
         setTimeLeft(result.config.questionTimeLimitSec);
-      } catch (err) {
+      } catch {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load trivia");
+        const fallback = FALLBACK_TRIVIA_QUESTIONS.sort(() => Math.random() - 0.5).slice(0, 10);
+        const easy = fallback.filter((q) => q.difficulty === "easy");
+        const medium = fallback.filter((q) => q.difficulty === "medium");
+        const hard = fallback.filter((q) => q.difficulty === "hard");
+        orderedQuestions.current = [...easy, ...medium, ...hard];
+        if (!orderedQuestions.current.length) orderedQuestions.current = fallback;
+        setQuestionTimeLimit(8);
+        setPassScore(6);
+        setTimeLeft(8);
       } finally {
         if (!cancelled) setLoading(false);
       }
