@@ -429,11 +429,124 @@ const ExploreScreen = () => {
   const lastCoordsRefreshRef = useRef<{ lat: number; lng: number } | null>(null);
   const lastDiscoveryFetchRef = useRef(0);
   const [activeLocalEncounterId, setActiveLocalEncounterId] = useState<string | null>(null);
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
+  const [juggleScore, setJuggleScore] = useState(0);
+  const [juggleBest, setJuggleBest] = useState(0);
+  const [ballY, setBallY] = useState(180);
+  const [ballV, setBallV] = useState(-340);
+  const [ballDropped, setBallDropped] = useState(false);
+  const [loadingLinePct, setLoadingLinePct] = useState(0.12);
+  const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
+  const loadingStartedAtRef = useRef(Date.now());
+  const loadingGameWrapRef = useRef<HTMLDivElement | null>(null);
+  const loadingPhysicsRef = useRef<{ y: number; v: number; lastTs: number }>({ y: 180, v: -340, lastTs: 0 });
 
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const handleMapInstance = useCallback((m: L.Map) => setMapInstance(m), []);
 
   const handleMapReady = useCallback(() => setMapReady(true), []);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    const elapsed = Date.now() - loadingStartedAtRef.current;
+    const minimumVisibleMs = 1200;
+    const waitMs = Math.max(0, minimumVisibleMs - elapsed);
+    const t = window.setTimeout(() => setShowLoadingOverlay(false), waitMs);
+    return () => window.clearTimeout(t);
+  }, [mapReady]);
+
+  useEffect(() => {
+    if (!showLoadingOverlay) return;
+    const msgs = [
+      "Warming up the pitch...",
+      "Scouting nearby players...",
+      "Preparing zone battles...",
+      "Loading your squad...",
+      "Finding hidden prospects...",
+    ];
+    const t = window.setInterval(() => {
+      setLoadingMsgIdx((i) => (i + 1) % msgs.length);
+    }, 1800);
+    return () => window.clearInterval(t);
+  }, [showLoadingOverlay]);
+
+  useEffect(() => {
+    if (!showLoadingOverlay) return;
+    const t = window.setInterval(() => {
+      setLoadingLinePct((p) => {
+        if (mapReady) return 1;
+        const next = p + 0.035;
+        return next > 0.92 ? 0.18 : next;
+      });
+    }, 180);
+    return () => window.clearInterval(t);
+  }, [showLoadingOverlay, mapReady]);
+
+  useEffect(() => {
+    if (!showLoadingOverlay) return;
+    const gravity = 1500; // px/s^2
+    const top = 28;
+    const ground = 182;
+    let raf = 0;
+    const frame = (ts: number) => {
+      const ph = loadingPhysicsRef.current;
+      if (!ph.lastTs) ph.lastTs = ts;
+      const dt = Math.min(0.033, (ts - ph.lastTs) / 1000);
+      ph.lastTs = ts;
+      ph.v += gravity * dt;
+      ph.y += ph.v * dt;
+      if (ph.y <= top) {
+        ph.y = top;
+        ph.v = Math.max(180, Math.abs(ph.v) * 0.4);
+      }
+      if (ph.y >= ground) {
+        ph.y = ground;
+        ph.v = 0;
+        if (!ballDropped) {
+          setBallDropped(true);
+          setJuggleScore(0);
+        }
+      }
+      setBallY(ph.y);
+      setBallV(ph.v);
+      raf = window.requestAnimationFrame(frame);
+    };
+    raf = window.requestAnimationFrame(frame);
+    return () => window.cancelAnimationFrame(raf);
+  }, [showLoadingOverlay, ballDropped]);
+
+  const resetBall = useCallback(() => {
+    loadingPhysicsRef.current = { y: 170, v: -600, lastTs: 0 };
+    setBallDropped(false);
+    setBallY(170);
+    setBallV(-600);
+  }, []);
+
+  const handleJuggleTap = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!showLoadingOverlay) return;
+    const wrap = loadingGameWrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const ballX = rect.width / 2;
+    const ballCenterY = ballY + 24;
+    const dx = x - ballX;
+    const dy = y - ballCenterY;
+    const hitRadius = 38;
+    const isHit = (dx * dx + dy * dy) <= hitRadius * hitRadius;
+    if (!isHit) return;
+    if (ballDropped) {
+      resetBall();
+      return;
+    }
+    setJuggleScore((s) => {
+      const next = s + 1;
+      setJuggleBest((b) => Math.max(b, next));
+      return next;
+    });
+    loadingPhysicsRef.current.v = -640 + Math.max(-70, Math.min(90, ballV * 0.08));
+  }, [showLoadingOverlay, ballY, ballV, ballDropped, resetBall]);
 
   // Drive the scouting progress bar: 0 → ~85% during fetch, snap 100% on completion
   useEffect(() => {
@@ -1085,14 +1198,51 @@ const ExploreScreen = () => {
         </div>
       )}
 
-      {!mapReady && (
-        <div className="absolute inset-0 z-[1300] bg-background flex flex-col items-center justify-center gap-4 pointer-events-none">
-          <div className="text-5xl" style={{ animation: "bounce 1s infinite" }}>⚽</div>
-          <p className="text-sm text-primary font-black tracking-widest uppercase" style={{ animation: "pulse 2s infinite" }}>
-            Scouting the pitch…
-          </p>
-          <div className="h-1 w-32 rounded-full bg-muted overflow-hidden">
-            <div className="h-full bg-primary rounded-full" style={{ width: "60%", animation: "pulse 1.5s ease-in-out infinite" }} />
+      {showLoadingOverlay && (
+        <div
+          className="absolute inset-0 z-[1300] bg-background flex flex-col items-center justify-center px-5"
+          style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+        >
+          <div
+            ref={loadingGameWrapRef}
+            onPointerDown={handleJuggleTap}
+            className="w-full max-w-sm rounded-3xl border border-border/20 bg-background/70 backdrop-blur-xl px-4 pt-4 pb-3 select-none touch-manipulation"
+            style={{ minHeight: 290 }}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-black text-foreground">Keepie-Uppies Warmup</p>
+              <p className="text-[10px] text-muted-foreground">Juggles: <span className="font-black text-foreground">{juggleScore}</span></p>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">Keep it up while we load your world</p>
+
+            <div className="relative mt-3 h-[220px] rounded-2xl overflow-hidden border border-border/20 bg-[radial-gradient(ellipse_at_top,rgba(56,189,248,0.14),transparent_70%),linear-gradient(180deg,rgba(17,24,39,0.92),rgba(2,6,23,0.96))]">
+              <div className="absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-white/10 to-transparent" />
+              <div
+                className="absolute left-1/2 -translate-x-1/2 w-12 h-12 rounded-full flex items-center justify-center text-2xl"
+                style={{
+                  top: `${ballY}px`,
+                  filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.45))",
+                  background: "radial-gradient(circle at 35% 30%, rgba(255,255,255,0.95), rgba(226,232,240,0.9) 58%, rgba(148,163,184,0.9) 100%)",
+                }}
+              >
+                ⚽
+              </div>
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-40 h-1 rounded-full bg-white/10" />
+              {ballDropped && (
+                <div className="absolute inset-x-0 bottom-10 flex flex-col items-center gap-1">
+                  <p className="text-[10px] text-rose-300 font-bold">Ball dropped. Tap the ball to retry.</p>
+                  <p className="text-[10px] text-muted-foreground">Best: {juggleBest}</p>
+                </div>
+              )}
+            </div>
+
+            <p className="mt-3 text-[10px] text-primary font-bold">{["Warming up the pitch...", "Scouting nearby players...", "Preparing zone battles...", "Loading your squad...", "Finding hidden prospects..."][loadingMsgIdx]}</p>
+            <div className="mt-2 h-[2px] w-full rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-150"
+                style={{ width: `${Math.round(loadingLinePct * 100)}%` }}
+              />
+            </div>
           </div>
         </div>
       )}
