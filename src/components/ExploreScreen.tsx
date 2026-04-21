@@ -612,22 +612,28 @@ const ExploreScreen = () => {
     const loadNearbyDiscovery = async () => {
       if (!userCoords) return;
       const now = Date.now();
-      if (now - lastDiscoveryFetchRef.current < 6000) return;
+      if (now - lastDiscoveryFetchRef.current < 2000) return;
       lastDiscoveryFetchRef.current = now;
       setDiscoveryError(null);
       setTalentsLoading(true);
       try {
         const radiusKm = LOCAL_TALENT_RUNTIME_CONFIG.distanceFromUserByZoomKm(mapZoom);
         const spawnLimit = LOCAL_TALENT_RUNTIME_CONFIG.maxNearbyByZoom(mapZoom);
-        const [talentResult, placesResult] = await Promise.all([
-          fetchNearbyLocalTalents(userCoords.lat, userCoords.lng, {
-            radiusKm,
-            zoom: Math.round(mapZoom),
-            limit: spawnLimit,
-            seedKey: spawnSeedKey,
-          }),
-          fetchNearbyFootballPlaces(userCoords.lat, userCoords.lng, Math.max(4, Math.min(8, radiusKm + 1))),
-        ]);
+        // Prioritize talent markers first so "players nearby" appears quickly.
+        // Nearby places load in parallel but must not block talent rendering.
+        const talentResultPromise = fetchNearbyLocalTalents(userCoords.lat, userCoords.lng, {
+          radiusKm,
+          zoom: Math.round(mapZoom),
+          limit: spawnLimit,
+          seedKey: spawnSeedKey,
+        });
+        const placesResultPromise = fetchNearbyFootballPlaces(
+          userCoords.lat,
+          userCoords.lng,
+          Math.max(4, Math.min(8, radiusKm + 1))
+        );
+
+        const talentResult = await talentResultPromise;
         if (cancelled) return;
         setLocalTalents((prev) => {
           const prevById = new Map(prev.map((item) => [item.id, item]));
@@ -663,7 +669,10 @@ const ExploreScreen = () => {
           }
           return merged;
         });
-        setNearbyPlaces(placesResult.data);
+        const placesResult = await placesResultPromise.catch(() => null);
+        if (!cancelled && placesResult) {
+          setNearbyPlaces(placesResult.data);
+        }
       } catch (error) {
         if (!cancelled) {
           setDiscoveryError(error instanceof Error ? error.message : "Nearby discovery unavailable");

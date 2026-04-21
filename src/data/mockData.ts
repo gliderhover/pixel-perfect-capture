@@ -1005,6 +1005,14 @@ export function getPlayerById(id: string): Player | undefined {
 
 /** Curated World Cup 2026-style activity across US, Canada, and Mexico only */
 export const mockZones: MapZone[] = [
+  // New Haven
+  { id: "z-nhv-train", type: "training", name: "Yale Athletic Training Grid", lat: 41.3112, lng: -72.9266, benefit: "+Form" },
+  { id: "z-nhv-rival", type: "rival", name: "Wooster Square Rival Pitch", lat: 41.3078, lng: -72.9129, benefit: "Battle" },
+  { id: "z-nhv-fan", type: "fan-arena", name: "New Haven Green Fan Arena", lat: 41.3084, lng: -72.9279, benefit: "+Fan Bond" },
+  { id: "z-nhv-stad", type: "stadium", name: "Yale Bowl Match Pulse", lat: 41.3127, lng: -72.9617, benefit: "Live Bonus" },
+  { id: "z-nhv-rec", type: "recovery", name: "East Rock Recovery Loop", lat: 41.3277, lng: -72.9056, benefit: "+Morale" },
+  { id: "z-nhv-mis", type: "mission", name: "Long Wharf Lens Op", lat: 41.2909, lng: -72.9140, benefit: "Camera XP" },
+  { id: "z-nhv-pre", type: "pressure", name: "Downtown Pressure Ring", lat: 41.3056, lng: -72.9292, benefit: "+Confidence" },
   // New York metro
   { id: "z-nyc-train", type: "training", name: "Hudson Elite Ground", lat: 40.7558, lng: -74.0024, benefit: "+Form" },
   { id: "z-nyc-rival", type: "rival", name: "Brooklyn Street Pitch", lat: 40.6782, lng: -73.9442, benefit: "Battle" },
