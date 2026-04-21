@@ -16,14 +16,10 @@ const PRECACHE_URLS = [
 ];
 
 // ─── Starter city tile prefetch ───────────────────────────────────────────────
-// All 5 WC2026 host cities. Tiles are baked into the SW cache so the map
-// renders with zero black tiles on first open — no network round-trip needed.
+// Primary city prefetch (New Haven). Keeping this focused makes first-load
+// much faster while still eliminating the black-map flash in the default view.
 const PREFETCH_CITIES = [
-  { lat: 40.7549,  lng: -73.9840,  zoom: 14 }, // Manhattan, New York
-  { lat: 34.0522,  lng: -118.2437, zoom: 14 }, // Downtown Los Angeles
-  { lat: 19.4326,  lng: -99.1332,  zoom: 14 }, // Mexico City Centro
-  { lat: 43.6532,  lng: -79.3832,  zoom: 14 }, // Downtown Toronto
-  { lat: 25.7617,  lng: -80.1918,  zoom: 14 }, // South Beach, Miami
+  { lat: 41.3083,  lng: -72.9279,  zoom: 14 }, // Downtown New Haven
 ];
 
 // Generous grid: 9 wide × 14 tall covers any phone in portrait or landscape,

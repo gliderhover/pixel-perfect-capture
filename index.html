@@ -35,6 +35,7 @@
     <script>
       (function () {
         var CITIES = [
+          { lat: 41.3083, lng: -72.9279,  z: 14 }, // New Haven
           { lat: 40.7549, lng: -73.984,   z: 14 }, // Manhattan
           { lat: 34.0522, lng: -118.2437, z: 14 }, // LA
           { lat: 19.4326, lng: -99.1332,  z: 14 }, // Mexico City
@@ -42,16 +43,11 @@
           { lat: 25.7617, lng: -80.1918,  z: 14 }, // Miami
         ];
         var SUBS = ["a", "b", "c", "d"];
-        // Pick stable city for this session — must match ExploreScreen.tsx logic
+        // Fixed primary city — must match ExploreScreen.tsx logic
         var idx;
         try {
-          var stored = sessionStorage.getItem("ppl-starter-city-idx");
-          if (stored !== null) {
-            idx = parseInt(stored, 10) % CITIES.length;
-          } else {
-            idx = Math.floor(Math.random() * CITIES.length);
-            sessionStorage.setItem("ppl-starter-city-idx", String(idx));
-          }
+          idx = 0;
+          sessionStorage.setItem("ppl-starter-city-idx", "0");
         } catch (e) { idx = 0; }
         var city = CITIES[idx];
         function tileX(lng, z) { return Math.floor(((lng + 180) / 360) * Math.pow(2, z)); }

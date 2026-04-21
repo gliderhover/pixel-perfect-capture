@@ -146,6 +146,7 @@ const NA_MAX_BOUNDS: [[number, number], [number, number]] = [[14, -170], [72, -5
 // at street level with a real neighbourhood instead of a blank continent view.
 // Tiles are cached by the browser after the first visit — subsequent opens are instant.
 const STARTER_CITIES = [
+  { label: "Downtown New Haven",    lat: 41.3083,  lng: -72.9279,  zoom: 14 },
   { label: "Manhattan, New York",   lat: 40.7549,  lng: -73.9840,  zoom: 14 },
   { label: "Downtown Los Angeles",  lat: 34.0522,  lng: -118.2437, zoom: 14 },
   { label: "Mexico City Centro",    lat: 19.4326,  lng: -99.1332,  zoom: 14 },
@@ -153,14 +154,11 @@ const STARTER_CITIES = [
   { label: "South Beach, Miami",    lat: 25.7617,  lng: -80.1918,  zoom: 14 },
 ] as const;
 
-// Stable for the whole session; rotates to a new city on each fresh app open.
+// Fixed primary starter city for fast, deterministic first-load prewarm.
 const _storedCityIdx = (() => {
   try {
-    const stored = sessionStorage.getItem("ppl-starter-city-idx");
-    if (stored !== null) return parseInt(stored, 10) % STARTER_CITIES.length;
-    const idx = Math.floor(Math.random() * STARTER_CITIES.length);
-    sessionStorage.setItem("ppl-starter-city-idx", String(idx));
-    return idx;
+    sessionStorage.setItem("ppl-starter-city-idx", "0");
+    return 0;
   } catch { return 0; }
 })();
 const STARTER_CITY = STARTER_CITIES[_storedCityIdx]!;
