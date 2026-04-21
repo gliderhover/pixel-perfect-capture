@@ -250,30 +250,47 @@ const LOCAL_TALENT_RUNTIME_CONFIG = {
   distanceFromUserByZoomKm: spawnRadiusByZoom,
 };
 
+// Captures the Leaflet map instance into a ref so controls can be rendered
+// OUTSIDE MapContainer (avoids Leaflet's overflow:hidden clipping the buttons).
+const MapInstanceCapture = ({ onMap }: { onMap: (m: L.Map) => void }) => {
+  const map = useMap();
+  useEffect(() => { onMap(map); }, [map, onMap]);
+  return null;
+};
+
+// Rendered outside <MapContainer> — receives the map instance as a prop.
 const MapControls = ({
+  mapInstance,
   onLocationResolved,
   onLocationDenied,
   onLocationUnavailable,
   onLocatingChange,
 }: {
+  mapInstance: L.Map | null;
   onLocationResolved: (lat: number, lng: number) => void;
   onLocationDenied: () => void;
   onLocationUnavailable: (message: string) => void;
   onLocatingChange: (locating: boolean) => void;
 }) => {
-  const map = useMap();
+  if (!mapInstance) return null;
   return (
-    <div className="absolute z-[1210] flex flex-col gap-1.5" style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 64px)", right: "calc(env(safe-area-inset-right, 0px) + 12px)" }}>
+    <div
+      className="absolute z-[1210] flex flex-col gap-1.5"
+      style={{
+        bottom: "calc(var(--explore-fab-bottom, 80px) + 8px)",
+        right: "calc(env(safe-area-inset-right, 0px) + 12px)",
+      }}
+    >
       <button
         type="button"
-        onClick={() => map.zoomIn()}
+        onClick={() => mapInstance.zoomIn()}
         className="w-9 h-9 rounded-xl glass-card-strong flex items-center justify-center active:scale-90 transition-transform"
       >
         <ZoomIn className="w-4 h-4 text-foreground" />
       </button>
       <button
         type="button"
-        onClick={() => map.zoomOut()}
+        onClick={() => mapInstance.zoomOut()}
         className="w-9 h-9 rounded-xl glass-card-strong flex items-center justify-center active:scale-90 transition-transform"
       >
         <ZoomOut className="w-4 h-4 text-foreground" />
@@ -291,7 +308,7 @@ const MapControls = ({
               onLocatingChange(false);
               const { latitude: lat, longitude: lng } = pos.coords;
               onLocationResolved(lat, lng);
-              map.flyTo([lat, lng], 15, { duration: 1.1 });
+              mapInstance.flyTo([lat, lng], 15, { duration: 1.1 });
             },
             (error) => {
               onLocatingChange(false);
@@ -302,7 +319,7 @@ const MapControls = ({
               } else {
                 onLocationUnavailable("Location request timed out. Try again.");
               }
-              map.flyTo(NA_FALLBACK_CENTER, STARTER_CITY.zoom, { duration: 1.2 });
+              mapInstance.flyTo(NA_FALLBACK_CENTER, STARTER_CITY.zoom, { duration: 1.2 });
             },
             { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 }
           );
@@ -415,6 +432,9 @@ const ExploreScreen = () => {
   const lastDiscoveryFetchRef = useRef(0);
   const [activeLocalEncounterId, setActiveLocalEncounterId] = useState<string | null>(null);
 
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+  const handleMapInstance = useCallback((m: L.Map) => setMapInstance(m), []);
+
   const handleMapReady = useCallback(() => setMapReady(true), []);
 
   // Drive the scouting progress bar: 0 → ~85% during fetch, snap 100% on completion
@@ -468,6 +488,30 @@ const ExploreScreen = () => {
       if (mapSettleTimerRef.current) clearTimeout(mapSettleTimerRef.current);
     };
   }, [userCoords]);
+
+  // Auto-scan animation the first time the map is ready — shows the bar even
+  // before the user grants location, so it never looks broken on first open.
+  const autoScanFiredRef = useRef(false);
+  useEffect(() => {
+    if (!mapReady || autoScanFiredRef.current) return;
+    autoScanFiredRef.current = true;
+    // Only fire if no real talent load is already in flight
+    if (wasScoutingRef.current) return;
+    wasScoutingRef.current = true;
+    setScoutProgress(0);
+    setScoutDone(false);
+    const clearAll = () => { scoutTimersRef.current.forEach(clearTimeout); scoutTimersRef.current = []; };
+    clearAll();
+    scoutTimersRef.current = [
+      setTimeout(() => setScoutProgress(22),  200),
+      setTimeout(() => setScoutProgress(55),  700),
+      setTimeout(() => setScoutProgress(80), 1300),
+      setTimeout(() => setScoutProgress(96), 1900),
+      setTimeout(() => { setScoutProgress(100); setScoutDone(true); }, 2300),
+      setTimeout(() => { setScoutDone(false); setScoutProgress(0); wasScoutingRef.current = false; }, 3900),
+    ];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady]);
 
   // Hard fallback: if Leaflet somehow doesn't mount within 3 s, unblock UI
   useEffect(() => {
@@ -788,21 +832,7 @@ const ExploreScreen = () => {
           updateWhenIdle={true}
           keepBuffer={4}
         />
-        <MapControls
-          onLocationResolved={(lat, lng) => {
-            setUserCoords({ lat, lng });
-            lastCoordsRefreshRef.current = { lat, lng };
-            setSpawnSeedKey(String(Math.floor(Date.now() / LOCAL_TALENT_RUNTIME_CONFIG.respawnIntervalMs)));
-            setLocationNotice("Centered on your current location.");
-          }}
-          onLocationDenied={() => {
-            setLocationNotice("Location permission denied. You can still explore default zones.");
-          }}
-          onLocationUnavailable={(message) => {
-            setLocationNotice(message);
-          }}
-          onLocatingChange={setLocating}
-        />
+        <MapInstanceCapture onMap={handleMapInstance} />
         <MapViewWatcher onViewChanged={handleMapViewChanged} />
         <MapReadyWatcher onReady={handleMapReady} />
 
@@ -921,6 +951,24 @@ const ExploreScreen = () => {
         ))}
       </MapContainer>
 
+      {/* Map controls — rendered OUTSIDE MapContainer to avoid Leaflet overflow:hidden clipping */}
+      <MapControls
+        mapInstance={mapInstance}
+        onLocationResolved={(lat, lng) => {
+          setUserCoords({ lat, lng });
+          lastCoordsRefreshRef.current = { lat, lng };
+          setSpawnSeedKey(String(Math.floor(Date.now() / LOCAL_TALENT_RUNTIME_CONFIG.respawnIntervalMs)));
+          setLocationNotice("Centered on your current location.");
+        }}
+        onLocationDenied={() => {
+          setLocationNotice("Location permission denied. You can still explore default zones.");
+        }}
+        onLocationUnavailable={(message) => {
+          setLocationNotice(message);
+        }}
+        onLocatingChange={setLocating}
+      />
+
       {/* Starter city badge — centred over the MAP area only (right of sidebar) */}
       {mapReady && !userCoords && !locating && (
         <div
@@ -957,9 +1005,16 @@ const ExploreScreen = () => {
       )}
 
       {/* Scouting progress bar — real animated progress, snaps to 100% on completion */}
-      {mapReady && userCoords && (talentsLoading || scoutDone) && !encounterPlayer && !showCamera && !activeZone && (
-        <div className="absolute left-1/2 -translate-x-1/2 z-[1250] pointer-events-none"
-          style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 72px)" }}>
+      {mapReady && (talentsLoading || scoutDone || scoutProgress > 0) && !encounterPlayer && !showCamera && !activeZone && (
+        <div
+          className="absolute z-[1250] pointer-events-none"
+          style={{
+            bottom: "calc(var(--explore-fab-bottom, 80px) + 80px)",
+            // Centre over the map area (right of sidebar), not the full viewport
+            left: "calc(var(--game-sidebar-width, 56px) + (100% - var(--game-sidebar-width, 56px)) / 2)",
+            transform: "translateX(-50%)",
+          }}
+        >
           <div className="glass-card-strong px-4 py-2.5 rounded-2xl min-w-[230px] shadow-lg">
             <div className="flex items-center gap-2 mb-1.5">
               {scoutDone
@@ -991,9 +1046,15 @@ const ExploreScreen = () => {
       )}
 
       {/* Nudge — only after loading + done animation finishes, and no players at all (local or mock) */}
-      {mapReady && userCoords && !talentsLoading && !scoutDone && localTalents.length === 0 && mockPlayerMarkers.length === 0 && !encounterPlayer && !showCamera && !activeZone && (
-        <div className="absolute left-1/2 -translate-x-1/2 z-[1250] pointer-events-none"
-          style={{ bottom: "calc(var(--explore-fab-bottom, 80px) + 72px)" }}>
+      {mapReady && userCoords && !talentsLoading && !scoutDone && scoutProgress === 0 && localTalents.length === 0 && mockPlayerMarkers.length === 0 && !encounterPlayer && !showCamera && !activeZone && (
+        <div
+          className="absolute z-[1250] pointer-events-none"
+          style={{
+            bottom: "calc(var(--explore-fab-bottom, 80px) + 80px)",
+            left: "calc(var(--game-sidebar-width, 56px) + (100% - var(--game-sidebar-width, 56px)) / 2)",
+            transform: "translateX(-50%)",
+          }}
+        >
           <div className="flex items-center gap-2.5 glass-card-strong px-4 py-3 rounded-2xl max-w-[270px] shadow-lg">
             <span className="text-xl shrink-0">🚶</span>
             <div>
