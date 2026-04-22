@@ -8,8 +8,23 @@ type Direction = "left" | "center" | "right";
 type GoalZone = "tl" | "tc" | "tr" | "bl" | "bc" | "br";
 type ShotType = "high" | "curve" | "speed";
 type RoleMode = "kick" | "defend";
-type Phase = "intro" | "ready" | "role" | "setup" | "runup" | "shoot" | "dive" | "result";
+type Phase = "intro" | "ready" | "role" | "loadout" | "setup" | "runup" | "shoot" | "dive" | "result";
 type DuelOutcome = "goal" | "save" | "missed" | "woodwork" | "deflected" | "close-miss";
+type BallEndKey = GoalZone | "miss-left" | "miss-right" | "miss-high" | "woodwork-left" | "woodwork-right" | "woodwork-cross";
+type BallPathType = "direct" | "arc-high" | "curve" | "fast";
+type RoleAddon = "power-boost" | "curve-boost" | "accuracy-boost" | "confidence-boost" | "glove-reflex" | "reach-boost" | "dive-boost" | "focus-boost";
+type ResolvedAnimPayload = {
+  mode: RoleMode;
+  selectedZone: GoalZone;
+  actualShotZone: GoalZone;
+  defendedZone: GoalZone;
+  powerLevel: "low" | "mid" | "high";
+  shotType: ShotType;
+  outcome: DuelOutcome;
+  ballPathType: BallPathType;
+  gloveTarget: Direction;
+  ballEnd: BallEndKey;
+};
 
 interface PenaltyDuelProps {
   player: Player;
@@ -23,22 +38,12 @@ interface PenaltyDuelProps {
   onGoal: () => void;
 }
 
-function positionDifficultyMod(position: string): number {
-  const p = position.toLowerCase();
-  if (p.includes("st") || p.includes("cf") || p.includes("striker") || p.includes("forward")) return -120;
-  if (p.includes("rw") || p.includes("lw") || p.includes("wing")) return -80;
-  if (p.includes("cam") || p.includes("am")) return -50;
-  if (p.includes("def") || p.includes("cb") || p.includes("rb") || p.includes("lb")) return 150;
-  if (p.includes("gk") || p.includes("keeper")) return 200;
-  return 0;
-}
-
 const PenaltyDuel = ({
   player,
   gloveTimingBonus = 0,
   diveForgiveness = false,
   slowShot = false,
-  hintDirection = false,
+  hintDirection: _hintDirection = false,
   focusPoints,
   gloveName,
   onSave,
@@ -53,6 +58,9 @@ const PenaltyDuel = ({
   const [predictedShotType, setPredictedShotType] = useState<ShotType | null>(null);
   const [actualShotType, setActualShotType] = useState<ShotType | null>(null);
   const [outcome, setOutcome] = useState<DuelOutcome | null>(null);
+  const [selectedAddon, setSelectedAddon] = useState<RoleAddon | null>(null);
+  const [resolvedAnim, setResolvedAnim] = useState<ResolvedAnimPayload | null>(null);
+  const [animBallEnd, setAnimBallEnd] = useState<BallEndKey | null>(null);
   const [resultTitle, setResultTitle] = useState("");
   const [resultExplain, setResultExplain] = useState("");
   const [preLine, setPreLine] = useState(() => getPreDuelLine(player));
@@ -68,8 +76,6 @@ const PenaltyDuel = ({
   const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
 
   const diff = rarityDifficulty[player.rarity] ?? rarityDifficulty.common;
-  const posMod = positionDifficultyMod(player.position);
-  const effectiveWindow = Math.max(400, diff.windowMs + gloveTimingBonus + posMod);
   const shotSpeed = slowShot ? diff.shotSpeedMs * 1.35 : diff.shotSpeedMs;
   const diffLabel = player.rarity === "legendary" ? "Extreme" : player.rarity === "epic" ? "Hard" : player.rarity === "rare" ? "Medium" : "Easy";
 
@@ -143,13 +149,17 @@ const PenaltyDuel = ({
     setDiveDir(null);
     setCapturedPower(null);
     setOutcome(null);
+    setSelectedAddon(null);
+    setResolvedAnim(null);
+    setAnimBallEnd(null);
     setResultTitle("");
     setResultExplain("");
     setPhase("role");
   }, []);
 
-  const enterSetup = useCallback((mode: RoleMode) => {
+  const enterLoadout = useCallback((mode: RoleMode) => {
     setRoleMode(mode);
+    setSelectedAddon(mode === "kick" ? "accuracy-boost" : "glove-reflex");
     setSelectedKickZone(null);
     setSelectedDefendZone(null);
     setPredictedShotType(mode === "defend" ? "speed" : null);
@@ -157,11 +167,18 @@ const PenaltyDuel = ({
     setDiveDir(null);
     setCapturedPower(null);
     setOutcome(null);
+    setResolvedAnim(null);
+    setAnimBallEnd(null);
     setResultTitle("");
     setResultExplain("");
     setPowerPct(20);
-    setPhase("setup");
+    setPhase("loadout");
   }, []);
+
+  const continueFromLoadout = useCallback(() => {
+    if (!roleMode) return;
+    setPhase("setup");
+  }, [roleMode]);
 
   const startKickRun = useCallback(() => {
     if (!selectedKickZone) return;
@@ -177,26 +194,37 @@ const PenaltyDuel = ({
       confidence: conf,
       form,
       keeperGuess: keeperGuessRef.current,
+      addon: selectedAddon,
     });
 
     outcomeRef.current = kickResult.outcome;
     setResultTitle(kickResult.title);
     setResultExplain(kickResult.explain);
     setOutcome(kickResult.outcome);
+    const kickShotType: ShotType = captured > 80 ? "speed" : captured < 30 ? "curve" : "high";
+    const kickAnim = buildKickAnimPayload({
+      selectedZone: selectedKickZone,
+      keeperGuess: keeperGuessRef.current,
+      outcome: kickResult.outcome,
+      shotType: kickShotType,
+      powerPct: captured,
+    });
+    setResolvedAnim(kickAnim);
+    setAnimBallEnd(kickAnim.ballEnd);
 
     setPhase("runup");
-    setDiveDir(zoneToDirection(keeperGuessRef.current));
+    setDiveDir(kickAnim.gloveTarget);
     const runupMs = 500 + Math.random() * 280;
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      setShotZone(selectedKickZone);
+      setShotZone(kickAnim.actualShotZone);
       setPhase("shoot");
       timerRef.current = setTimeout(() => {
         setPhase("dive");
         timerRef.current = setTimeout(() => setPhase("result"), Math.min(shotSpeed, 420));
       }, 280);
     }, runupMs);
-  }, [selectedKickZone, powerPct, pickZone, overall, conf, form, shotSpeed]);
+  }, [selectedKickZone, powerPct, pickZone, overall, conf, form, selectedAddon, shotSpeed]);
 
   const startDefendRun = useCallback(() => {
     if (!selectedDefendZone || !predictedShotType) return;
@@ -218,16 +246,25 @@ const PenaltyDuel = ({
       diveForgiveness,
       focusPoints,
       overall,
+      addon: selectedAddon,
     });
     outcomeRef.current = defendResult.outcome;
     setOutcome(defendResult.outcome);
     setResultTitle(defendResult.title);
     setResultExplain(defendResult.explain);
+    const defendAnim = buildDefendAnimPayload({
+      defendedZone: selectedDefendZone,
+      actualZone,
+      shotType: actualType,
+      outcome: defendResult.outcome,
+    });
+    setResolvedAnim(defendAnim);
+    setAnimBallEnd(defendAnim.ballEnd);
 
     const runupMs = 620 + Math.random() * 360;
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      setShotZone(actualZone);
+      setShotZone(defendAnim.actualShotZone);
       setPhase("shoot");
       timerRef.current = setTimeout(() => {
         setPhase("dive");
@@ -242,6 +279,7 @@ const PenaltyDuel = ({
     diveForgiveness,
     focusPoints,
     overall,
+    selectedAddon,
     shotSpeed,
   ]);
 
@@ -293,14 +331,6 @@ const PenaltyDuel = ({
   }[player.rarity];
   const isResultSuccess = isSuccessOutcome(outcome ?? "goal", roleMode);
   const showKickMotion = roleMode === "kick" && (phase === "runup" || phase === "shoot");
-  const keeperShiftClass =
-    diveDir === "left"
-      ? "-translate-x-[120%]"
-      : diveDir === "right"
-        ? "translate-x-[20%]"
-        : diveDir === "center"
-          ? "-translate-x-1/2"
-          : "-translate-x-1/2";
 
   // ========================= RENDER =========================
   return (
@@ -424,35 +454,35 @@ const PenaltyDuel = ({
               )}
 
               {/* Ball */}
-              {shotZone && (phase === "shoot" || phase === "dive" || phase === "result") && (
+              {animBallEnd && (phase === "shoot" || phase === "dive" || phase === "result") && (
                 <div
                   className="absolute w-9 h-9 flex items-center justify-center text-2xl animate-duel-ball-flight z-10"
                   style={{
-                    left: ballTargetPos[shotZone].left,
-                    top: ballTargetPos[shotZone].top,
+                    left: ballEndPos[animBallEnd].left,
+                    top: ballEndPos[animBallEnd].top,
                     transform: "translate(-50%, -50%)",
                   }}
                 >
                   <span className="drop-shadow-lg">⚽</span>
                 </div>
               )}
-              {shotZone && (phase === "shoot" || phase === "dive") && (
+              {animBallEnd && (phase === "shoot" || phase === "dive") && (
                 <div
                   className={`absolute w-20 h-2 rounded-full pointer-events-none ${
                     actualShotType === "curve" ? "animate-pulse" : ""
                   }`}
                   style={{
-                    left: ballTargetPos[shotZone].left,
-                    top: ballTargetPos[shotZone].top,
-                    transform: actualShotType === "curve"
+                    left: ballEndPos[animBallEnd].left,
+                    top: ballEndPos[animBallEnd].top,
+                    transform: (resolvedAnim?.ballPathType ?? "direct") === "curve"
                       ? "translate(-60%, -50%) rotate(-18deg)"
-                      : actualShotType === "high"
+                      : (resolvedAnim?.ballPathType ?? "direct") === "arc-high"
                         ? "translate(-50%, -110%) rotate(-8deg)"
                         : "translate(-50%, -50%)",
-                    background: actualShotType === "speed"
+                    background: (resolvedAnim?.ballPathType ?? "direct") === "fast"
                       ? "linear-gradient(90deg, transparent, rgba(248,250,252,0.95), transparent)"
                       : "linear-gradient(90deg, transparent, rgba(125,211,252,0.8), transparent)",
-                    opacity: 0.65,
+                    opacity: 0.75,
                   }}
                 />
               )}
@@ -467,21 +497,6 @@ const PenaltyDuel = ({
                 🧤
               </div>
 
-              {/* Goalkeeper character (explicit in-scene) */}
-              <div
-                className={`absolute bottom-4 left-1/2 z-[18] transition-all duration-300 ${keeperShiftClass}`}
-                style={{ filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.45))" }}
-              >
-                <div
-                  className={`h-8 w-8 rounded-full border-2 flex items-center justify-center text-[10px] font-black ${
-                    phase === "dive"
-                      ? "border-primary bg-primary/25 text-primary"
-                      : "border-foreground/30 bg-background/70 text-foreground/80"
-                  }`}
-                >
-                  GK
-                </div>
-              </div>
 
               {/* Save burst effect */}
               {phase === "result" && (outcome === "save" || outcome === "deflected") && (
@@ -503,22 +518,6 @@ const PenaltyDuel = ({
 
             {/* Penalty spot */}
             <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-foreground/15" />
-
-            {/* Kicker character + idle/run-up near penalty spot */}
-            <div
-              className={`absolute -bottom-11 left-1/2 z-20 transition-all duration-300 ${
-                showKickMotion ? "-translate-x-[35%] -translate-y-[6px]" : "-translate-x-1/2"
-              }`}
-              style={{ filter: "drop-shadow(0 5px 10px rgba(0,0,0,0.45))" }}
-            >
-              <div className={`h-9 w-9 rounded-full border-2 flex items-center justify-center text-xs font-black ${
-                showKickMotion
-                  ? "border-amber-300/70 bg-amber-500/20 text-amber-200"
-                  : "border-foreground/30 bg-background/70 text-foreground/80"
-              }`}>
-                ST
-              </div>
-            </div>
 
             {/* Ball on spot before strike for clearer setup scene */}
             {(phase === "setup" || phase === "runup") && (
@@ -552,7 +551,7 @@ const PenaltyDuel = ({
                 <p className="text-xs font-black tracking-wider text-foreground/80 uppercase">Choose your role</p>
                 <button
                   type="button"
-                  onClick={() => enterSetup("kick")}
+                  onClick={() => enterLoadout("kick")}
                   className={`w-full rounded-2xl p-3 text-left border transition-all ${
                     roleMode === "kick" ? "border-primary bg-primary/15" : "border-border/40 bg-background/40"
                   }`}
@@ -562,7 +561,7 @@ const PenaltyDuel = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => enterSetup("defend")}
+                  onClick={() => enterLoadout("defend")}
                   className={`w-full rounded-2xl p-3 text-left border transition-all ${
                     roleMode === "defend" ? "border-primary bg-primary/15" : "border-border/40 bg-background/40"
                   }`}
@@ -570,6 +569,43 @@ const PenaltyDuel = ({
                   <p className="text-sm font-black text-foreground">Defend</p>
                   <p className="text-[10px] text-muted-foreground mt-1">Read the shot. Cover the right zone.</p>
                 </button>
+              </div>
+            )}
+            {phase === "loadout" && roleMode && (
+              <div className="animate-fade-in w-full max-w-[320px]">
+                <p className="text-xs font-black text-foreground mb-1.5">
+                  {roleMode === "kick" ? "Kicker add-on" : "Goalkeeper add-on"}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(roleMode === "kick"
+                    ? [
+                        { id: "power-boost", label: "Power Boost" },
+                        { id: "curve-boost", label: "Curve Boost" },
+                        { id: "accuracy-boost", label: "Accuracy Boost" },
+                        { id: "confidence-boost", label: "Confidence Boost" },
+                      ]
+                    : [
+                        { id: "glove-reflex", label: "Reflex Gloves" },
+                        { id: "reach-boost", label: "Reach Boost" },
+                        { id: "dive-boost", label: "Dive Boost" },
+                        { id: "focus-boost", label: "Focus Boost" },
+                      ]
+                  ).map((o) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setSelectedAddon(o.id as RoleAddon)}
+                      className={`rounded-xl py-2 px-2 text-[10px] font-black border transition-all ${
+                        selectedAddon === o.id
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border/40 bg-background/40 text-foreground/80"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-2">Only role-relevant add-ons are shown here.</p>
               </div>
             )}
             {phase === "setup" && roleMode === "kick" && (
@@ -645,7 +681,7 @@ const PenaltyDuel = ({
             )}
             {phase === "dive" && (
               <p className="text-sm font-bold text-primary animate-fade-in">
-                {roleMode === "kick" ? `Keeper dives ${diveDir}…` : `Diving ${diveDir}…`}
+                Glove dives {diveDir}…
               </p>
             )}
             {phase === "result" && (
@@ -708,6 +744,28 @@ const PenaltyDuel = ({
               Back
             </button>
           )}
+          {phase === "loadout" && (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={continueFromLoadout}
+                className="w-full py-4 rounded-2xl font-black text-sm active:scale-[0.97] transition-transform"
+                style={{
+                  background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8))",
+                  color: "hsl(var(--primary-foreground))",
+                }}
+              >
+                Continue
+              </button>
+              <button
+                type="button"
+                onClick={() => setPhase("role")}
+                className="w-full py-3 rounded-2xl glass-card-strong text-foreground font-bold text-sm active:scale-[0.97] transition-transform"
+              >
+                Back to role
+              </button>
+            </div>
+          )}
           {phase === "setup" && roleMode === "kick" && (
             <div className="flex flex-col gap-2">
               <button
@@ -724,8 +782,8 @@ const PenaltyDuel = ({
               >
                 Kick
               </button>
-              <button type="button" onClick={() => setPhase("role")} className="w-full py-3 rounded-2xl glass-card-strong text-foreground font-bold text-sm active:scale-[0.97] transition-transform">
-                Change role
+              <button type="button" onClick={() => setPhase("loadout")} className="w-full py-3 rounded-2xl glass-card-strong text-foreground font-bold text-sm active:scale-[0.97] transition-transform">
+                Change add-on
               </button>
             </div>
           )}
@@ -745,8 +803,8 @@ const PenaltyDuel = ({
               >
                 Dive / Defend
               </button>
-              <button type="button" onClick={() => setPhase("role")} className="w-full py-3 rounded-2xl glass-card-strong text-foreground font-bold text-sm active:scale-[0.97] transition-transform">
-                Change role
+              <button type="button" onClick={() => setPhase("loadout")} className="w-full py-3 rounded-2xl glass-card-strong text-foreground font-bold text-sm active:scale-[0.97] transition-transform">
+                Change add-on
               </button>
             </div>
           )}
@@ -820,6 +878,15 @@ const ballTargetPos: Record<GoalZone, { left: string; top: string }> = {
   bc: { left: "50%", top: "54%" },
   br: { left: "84%", top: "58%" },
 };
+const ballEndPos: Record<BallEndKey, { left: string; top: string }> = {
+  ...ballTargetPos,
+  "miss-left": { left: "-6%", top: "46%" },
+  "miss-right": { left: "106%", top: "46%" },
+  "miss-high": { left: "50%", top: "-8%" },
+  "woodwork-left": { left: "12%", top: "12%" },
+  "woodwork-right": { left: "88%", top: "12%" },
+  "woodwork-cross": { left: "50%", top: "9%" },
+};
 
 function zoneToDirection(zone: GoalZone): Direction {
   if (zone.endsWith("l")) return "left";
@@ -866,13 +933,17 @@ function resolveKickResult(input: {
   confidence: number;
   form: number;
   keeperGuess: GoalZone;
+  addon: RoleAddon | null;
 }): { outcome: DuelOutcome; title: string; explain: string } {
-  const { targetZone, powerPct, overall, confidence, form, keeperGuess } = input;
+  const { targetZone, powerPct, overall, confidence, form, keeperGuess, addon } = input;
   const isTop = targetZone.startsWith("t");
   const midPower = powerPct >= 34 && powerPct <= 68;
   const highPower = powerPct > 68;
   const skillBoost = ((overall - 70) * 0.0035) + ((confidence - 50) * 0.001) + ((form - 50) * 0.001);
   let goalChance = 0.58 + skillBoost;
+  if (addon === "accuracy-boost") goalChance += 0.06;
+  if (addon === "confidence-boost") goalChance += 0.03;
+  if (addon === "power-boost" && highPower) goalChance += 0.05;
   if (midPower) goalChance += 0.1;
   if (highPower) goalChance += 0.02;
   if (!midPower && !highPower) goalChance -= 0.08;
@@ -880,6 +951,8 @@ function resolveKickResult(input: {
   else if (sameSide(keeperGuess, targetZone)) goalChance -= 0.12;
 
   let missChance = 0.04;
+  if (addon === "curve-boost" && powerPct < 34) missChance -= 0.02;
+  if (addon === "power-boost" && highPower) missChance += 0.03;
   if (highPower) missChance += isTop ? 0.18 : 0.1;
   if (!midPower && !highPower) missChance += 0.01;
   if (powerPct > 88 && isTop) missChance += 0.08;
@@ -912,8 +985,9 @@ function resolveDefendResult(input: {
   diveForgiveness: boolean;
   focusPoints: number;
   overall: number;
+  addon: RoleAddon | null;
 }): { outcome: DuelOutcome; title: string; explain: string } {
-  const { defendedZone, actualZone, guessedType, actualType, gloveTimingBonus, diveForgiveness, focusPoints, overall } = input;
+  const { defendedZone, actualZone, guessedType, actualType, gloveTimingBonus, diveForgiveness, focusPoints, overall, addon } = input;
   const exact = defendedZone === actualZone;
   const sideMatch = sameSide(defendedZone, actualZone);
   const heightMatch = sameHeight(defendedZone, actualZone);
@@ -927,6 +1001,10 @@ function resolveDefendResult(input: {
   saveChance += Math.min(0.08, focusPoints * 0.004);
   saveChance += Math.max(-0.03, Math.min(0.08, (overall - 70) * 0.002));
   if (diveForgiveness && (sideMatch || heightMatch)) saveChance += 0.05;
+  if (addon === "glove-reflex") saveChance += 0.04;
+  if (addon === "reach-boost" && (sideMatch || heightMatch)) saveChance += 0.05;
+  if (addon === "dive-boost" && actualType === "speed") saveChance += 0.04;
+  if (addon === "focus-boost") saveChance += 0.03;
   saveChance = Math.max(0.05, Math.min(0.9, saveChance));
 
   const r = Math.random();
@@ -940,6 +1018,64 @@ function resolveDefendResult(input: {
     return { outcome: "close-miss", title: "Close Miss", explain: "You read part of it, but not enough to stop the shot." };
   }
   return { outcome: "goal", title: "Goal", explain: guessedType === actualType ? "Right shot type, wrong zone." : "Wrong read. The finish beat you." };
+}
+
+function buildKickAnimPayload(input: {
+  selectedZone: GoalZone;
+  keeperGuess: GoalZone;
+  outcome: DuelOutcome;
+  shotType: ShotType;
+  powerPct: number;
+}): ResolvedAnimPayload {
+  const { selectedZone, keeperGuess, outcome, shotType, powerPct } = input;
+  const powerLevel = powerPct < 34 ? "low" : powerPct <= 68 ? "mid" : "high";
+  const ballPathType: BallPathType =
+    shotType === "curve" ? "curve" : shotType === "high" ? "arc-high" : shotType === "speed" ? "fast" : "direct";
+  let ballEnd: BallEndKey = selectedZone;
+  let gloveTarget = zoneToDirection(keeperGuess);
+  if (outcome === "save") {
+    gloveTarget = zoneToDirection(selectedZone);
+    ballEnd = selectedZone;
+  }
+  if (outcome === "missed") {
+    ballEnd = selectedZone === "tl" || selectedZone === "bl" ? "miss-left" : selectedZone === "tr" || selectedZone === "br" ? "miss-right" : "miss-high";
+  }
+  if (outcome === "woodwork") {
+    ballEnd = selectedZone === "tl" || selectedZone === "bl" ? "woodwork-left" : selectedZone === "tr" || selectedZone === "br" ? "woodwork-right" : "woodwork-cross";
+  }
+  return {
+    mode: "kick",
+    selectedZone,
+    actualShotZone: selectedZone,
+    defendedZone: keeperGuess,
+    powerLevel,
+    shotType,
+    outcome,
+    ballPathType,
+    gloveTarget,
+    ballEnd,
+  };
+}
+
+function buildDefendAnimPayload(input: {
+  defendedZone: GoalZone;
+  actualZone: GoalZone;
+  shotType: ShotType;
+  outcome: DuelOutcome;
+}): ResolvedAnimPayload {
+  const { defendedZone, actualZone, shotType, outcome } = input;
+  return {
+    mode: "defend",
+    selectedZone: defendedZone,
+    actualShotZone: actualZone,
+    defendedZone,
+    powerLevel: "mid",
+    shotType,
+    outcome,
+    ballPathType: shotType === "curve" ? "curve" : shotType === "high" ? "arc-high" : shotType === "speed" ? "fast" : "direct",
+    gloveTarget: zoneToDirection(defendedZone),
+    ballEnd: actualZone,
+  };
 }
 
 function isSuccessOutcome(outcome: DuelOutcome, mode: RoleMode | null): boolean {
