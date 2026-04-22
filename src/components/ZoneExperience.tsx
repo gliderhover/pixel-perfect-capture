@@ -863,6 +863,11 @@ type RecentPvPRow = {
   atMs: number;
 };
 
+const PVP_TURN_TIMER_SEC = 6;
+const PVP_AI_LOCK_MIN_MS = 250;
+const PVP_AI_LOCK_JITTER_MS = 350;
+const PVP_REVEAL_MS = 450;
+
 const PVP_BALL_POS: Record<PvPGoalZone | "miss-left" | "miss-right" | "miss-high", { left: string; top: string }> = {
   tl: { left: "17%", top: "20%" },
   tc: { left: "50%", top: "15%" },
@@ -1017,7 +1022,7 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
   const [duelTargetId, setDuelTargetId] = useState<string | null>(null);
   const [duelTurnIndex, setDuelTurnIndex] = useState(0);
   const [turnPhase, setTurnPhase] = useState<DuelTurnPhase>("pick");
-  const [turnTimer, setTurnTimer] = useState(8);
+  const [turnTimer, setTurnTimer] = useState(PVP_TURN_TIMER_SEC);
   const [youScore, setYouScore] = useState(0);
   const [themScore, setThemScore] = useState(0);
   const [yourDecision, setYourDecision] = useState<TurnDecision | null>(null);
@@ -1072,7 +1077,7 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
 
   useEffect(() => {
     if (!duelTargetId || matchDone) return;
-    setTurnTimer(8);
+    setTurnTimer(PVP_TURN_TIMER_SEC);
     setLockedYou(false);
     setLockedThem(false);
     setYourDecision(null);
@@ -1100,7 +1105,7 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
 
   useEffect(() => {
     if (!duelTargetId || turnPhase !== "pick" || matchDone || lockedThem) return;
-    const aiLockDelay = 900 + Math.random() * 1500;
+    const aiLockDelay = PVP_AI_LOCK_MIN_MS + Math.random() * PVP_AI_LOCK_JITTER_MS;
     const t = window.setTimeout(() => {
       const ai: TurnDecision = {
         zone: randomPvPZone(),
@@ -1179,7 +1184,7 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
         return;
       }
       setDuelTurnIndex(nextIdx);
-    }, 1400);
+    }, PVP_REVEAL_MS);
     return () => window.clearTimeout(nextT);
   }, [
     duelTargetId,
