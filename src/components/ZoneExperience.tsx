@@ -980,18 +980,31 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
   const localSessionId = "local-session-alpha";
   const [tab, setTab] = useState<PvPTab>("local");
   const [challengers, setChallengers] = useState<PvPChallenger[]>(() =>
-    mockRivals.map((r, i) => ({
-      id: r.id,
-      userName: r.name,
-      level: r.level,
-      playerId: r.signaturePlayerId,
-      wins: 8 + i * 2,
-      losses: 4 + i,
-      status: i === 2 ? "cooldown" : "available",
-      localSessionId: i === 1 ? "local-session-beta" : "local-session-alpha",
-      region: "New Haven",
-      cooldownUntilMs: i === 2 ? Date.now() + 18000 : undefined,
-    }))
+    [
+      {
+        id: "pvp-good-bunny",
+        userName: "Good Bunny",
+        level: 9,
+        playerId: "2",
+        wins: 6,
+        losses: 3,
+        status: "available" as const,
+        localSessionId: "local-session-alpha",
+        region: "New Haven",
+      },
+      ...mockRivals.map((r, i) => ({
+        id: r.id,
+        userName: r.name,
+        level: r.level,
+        playerId: r.signaturePlayerId,
+        wins: 8 + i * 2,
+        losses: 4 + i,
+        status: i === 2 ? "cooldown" : "available",
+        localSessionId: i === 1 ? "local-session-beta" : "local-session-alpha",
+        region: "New Haven",
+        cooldownUntilMs: i === 2 ? Date.now() + 18000 : undefined,
+      })),
+    ]
   );
   const [recentRows, setRecentRows] = useState<RecentPvPRow[]>([
     { id: "rp1", challenger: "Daniel", opponent: "Alex", score: "3-2", result: "Daniel beat Alex", atMs: Date.now() - 2 * 60 * 1000 },
