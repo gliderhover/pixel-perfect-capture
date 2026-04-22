@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type PointerEvent } from "react";
 import {
   X, Dumbbell, Swords, Flame, Trophy,
   ChevronRight, Check, Zap, Timer,
@@ -37,10 +37,115 @@ type PressureClockReward = {
   fp: number;
 };
 
-type ActivityCompleteMeta = TrainingTriviaMeta | { pressureClock: PressureClockReward };
+/** Passing Triangle — fixed rewards (stadium zone) */
+type PassingTriangleReward = {
+  tierLabel: string;
+  won: boolean;
+  interceptElapsedSec: number | null;
+  xp: number;
+  form: number;
+  confidence: number;
+  eventPoints: number;
+};
+
+type ActivityCompleteMeta =
+  | TrainingTriviaMeta
+  | { pressureClock: PressureClockReward }
+  | { passingTriangle: PassingTriangleReward };
 
 function isPressureClockMeta(m: ActivityCompleteMeta | undefined): m is { pressureClock: PressureClockReward } {
   return Boolean(m && typeof m === "object" && "pressureClock" in m);
+}
+
+function isPassingTriangleMeta(m: ActivityCompleteMeta | undefined): m is { passingTriangle: PassingTriangleReward } {
+  return Boolean(m && typeof m === "object" && "passingTriangle" in m);
+}
+
+function distPointToSegment(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-6) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const qx = x1 + t * dx;
+  const qy = y1 + t * dy;
+  return Math.hypot(px - qx, py - qy);
+}
+
+function clampToDisk(px: number, py: number, cx: number, cy: number, r: number) {
+  const dx = px - cx;
+  const dy = py - cy;
+  const d = Math.hypot(dx, dy);
+  if (d <= r || d < 1e-6) return { x: px, y: py };
+  return { x: cx + (dx / d) * r, y: cy + (dy / d) * r };
+}
+
+function passingTriangleDifficulty(playedSec: number) {
+  if (playedSec < 10) {
+    return { passGapMin: 800, passGapMax: 1100, ballMin: 600, ballMax: 750, interceptR: 34, laneCutR: 22 };
+  }
+  if (playedSec < 20) {
+    return { passGapMin: 1200, passGapMax: 1600, ballMin: 850, ballMax: 1000, interceptR: 38, laneCutR: 26 };
+  }
+  return { passGapMin: 1800, passGapMax: 2200, ballMin: 1100, ballMax: 1300, interceptR: 42, laneCutR: 30 };
+}
+
+function randRange(a: number, b: number) {
+  return a + Math.random() * (b - a);
+}
+
+function passingTriangleTierForIntercept(t: number): PassingTriangleReward {
+  if (t < 10) {
+    return {
+      tierLabel: "Clutch Interception",
+      won: true,
+      interceptElapsedSec: t,
+      xp: 30,
+      form: 8,
+      confidence: 8,
+      eventPoints: 15,
+    };
+  }
+  if (t < 20) {
+    return {
+      tierLabel: "Sharp Read",
+      won: true,
+      interceptElapsedSec: t,
+      xp: 22,
+      form: 6,
+      confidence: 5,
+      eventPoints: 10,
+    };
+  }
+  return {
+    tierLabel: "Patient Steal",
+    won: true,
+    interceptElapsedSec: t,
+    xp: 15,
+    form: 4,
+    confidence: 3,
+    eventPoints: 8,
+  };
+}
+
+function missedPassingTriangleReward(): PassingTriangleReward {
+  return {
+    tierLabel: "Missed Lane",
+    won: false,
+    interceptElapsedSec: null,
+    xp: 5,
+    form: 1,
+    confidence: 0,
+    eventPoints: 2,
+  };
 }
 
 /* ── Zone identity config ──────────────────────────────────────────────── */
@@ -106,9 +211,9 @@ const zoneConfig: Record<
   stadium: {
     icon: Trophy,
     emoji: "🏟️",
-    purpose: "Squad Power Clash: assign Captain/Attacker/Defender and resolve 3 key phases.",
-    cta: "Start Squad Clash",
-    rewardLabel: "+All Stats",
+    purpose: "Passing Triangle: stay inside the circle, read the passes, and steal the ball before time runs out.",
+    cta: "Start Passing Triangle",
+    rewardLabel: "+Form · +Confidence",
     attribute: "morale",
     xp: 35,
     attrGain: 2,
@@ -933,55 +1038,353 @@ function PressureActivity({
   );
 }
 
-/* ── Stadium Zone: Event Collect ───────────────────────────────────────── */
-function StadiumActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const { ownedPlayers, activePlayer } = useGameProgress();
-  const [captainId, setCaptainId] = useState<string>(activePlayer.id);
-  const [attackerId, setAttackerId] = useState<string>(ownedPlayers[1]?.id ?? activePlayer.id);
-  const [defenderId, setDefenderId] = useState<string>(ownedPlayers[2]?.id ?? activePlayer.id);
-  const [resolved, setResolved] = useState(false);
-  const roster = ownedPlayers.slice(0, 8);
+/* ── Stadium Zone: Passing Triangle ───────────────────────────────────── */
+const PT_FIELD = 260;
+const PT_CX = PT_FIELD / 2;
+const PT_CY = PT_FIELD / 2;
+const PT_R_MOVE = 70;
+const PT_R_BOT = 104;
+const PT_BOT_ANGLES = [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6] as const;
 
-  const resolve = () => {
-    if (resolved) return;
-    const pick = (id: string) => roster.find((p) => p.id === id) ?? activePlayer;
-    const c = pick(captainId);
-    const a = pick(attackerId);
-    const d = pick(defenderId);
-    const avgOverall = Math.round((c.stats.overall + a.stats.overall + d.stats.overall) / 3);
-    const rarityBoost = [c, a, d].filter((p) => p.rarity === "legendary").length * 4;
-    const evoBoost = c.evolutionStage + a.evolutionStage + d.evolutionStage;
-    const score = avgOverall + rarityBoost + evoBoost;
-    setResolved(true);
-    onComplete(score >= 88 ? 6 : score >= 75 ? 4 : 2);
+function StadiumActivity({
+  onComplete,
+}: {
+  onComplete: (score: number, meta?: ActivityCompleteMeta) => void;
+}) {
+  const { activePlayer } = useGameProgress();
+  type PtPhase = "ready" | "playing" | "result";
+  const botPts = useMemo(
+    () => PT_BOT_ANGLES.map((a) => ({ x: PT_CX + PT_R_BOT * Math.cos(a), y: PT_CY + PT_R_BOT * Math.sin(a) })),
+    []
+  );
+
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<PtPhase>("ready");
+  const [readyN, setReadyN] = useState(3);
+  const [remaining, setRemaining] = useState(30);
+  const [urgency, setUrgency] = useState<"high" | "mid" | "low">("high");
+  const [, setRender] = useState(0);
+  const [passVisual, setPassVisual] = useState<{ from: number; to: number } | null>(null);
+  const [resultPayload, setResultPayload] = useState<PassingTriangleReward | null>(null);
+
+  const defenderRef = useRef({ x: PT_CX, y: PT_CY });
+  const targetRef = useRef({ x: PT_CX, y: PT_CY });
+  const ballRef = useRef({ x: botPts[0]!.x, y: botPts[0]!.y });
+  const playStartRef = useRef(0);
+  const holderRef = useRef(0);
+  const legRef = useRef<{ from: number; to: number; start: number; dur: number } | null>(null);
+  const gapEndRef = useRef(0);
+  const endedRef = useRef(false);
+  const rafRef = useRef<number>(0);
+
+  const resetRun = useCallback(() => {
+    endedRef.current = false;
+    defenderRef.current = { x: PT_CX, y: PT_CY };
+    targetRef.current = { x: PT_CX, y: PT_CY };
+    ballRef.current = { x: botPts[0]!.x, y: botPts[0]!.y };
+    holderRef.current = 0;
+    legRef.current = null;
+    gapEndRef.current = 0;
+    playStartRef.current = 0;
+    setPassVisual(null);
+    setResultPayload(null);
+    setRemaining(30);
+    setUrgency("high");
+    setReadyN(3);
+    setPhase("ready");
+  }, [botPts]);
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    if (readyN < 0) return;
+    if (readyN === 0) {
+      playStartRef.current = performance.now();
+      gapEndRef.current = 0;
+      holderRef.current = 0;
+      legRef.current = null;
+      setPhase("playing");
+      return;
+    }
+    const id = window.setTimeout(() => setReadyN((n) => n - 1), 1000);
+    return () => window.clearTimeout(id);
+  }, [phase, readyN]);
+
+  useEffect(() => {
+    if (phase !== "playing") return;
+    endedRef.current = false;
+    let last = performance.now();
+
+    const tick = (now: number) => {
+      if (endedRef.current) return;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const played = (now - playStartRef.current) / 1000;
+      if (played >= 30) {
+        endedRef.current = true;
+        setResultPayload(missedPassingTriangleReward());
+        setPhase("result");
+        return;
+      }
+      setRemaining(Math.max(0, 30 - played));
+      setUrgency(played < 10 ? "high" : played < 20 ? "mid" : "low");
+      const diff = passingTriangleDifficulty(played);
+
+      if (legRef.current === null) {
+        if (now >= gapEndRef.current) {
+          const from = holderRef.current;
+          const others = [0, 1, 2].filter((i) => i !== from) as [number, number];
+          const to = others[Math.floor(Math.random() * 2)]!;
+          legRef.current = { from, to, start: now, dur: randRange(diff.ballMin, diff.ballMax) };
+          setPassVisual({ from, to });
+        }
+      } else {
+        const leg = legRef.current;
+        const u = Math.min(1, (now - leg.start) / leg.dur);
+        const fx = botPts[leg.from]!.x;
+        const fy = botPts[leg.from]!.y;
+        const tx = botPts[leg.to]!.x;
+        const ty = botPts[leg.to]!.y;
+        const bx = fx + (tx - fx) * u;
+        const by = fy + (ty - fy) * u;
+        ballRef.current = { x: bx, y: by };
+
+        const dr = defenderRef.current;
+        const dBall = Math.hypot(dr.x - bx, dr.y - by);
+        const laneD = distPointToSegment(dr.x, dr.y, fx, fy, tx, ty);
+        if (dBall < diff.interceptR || (laneD < diff.laneCutR && dBall < diff.interceptR + 14)) {
+          endedRef.current = true;
+          setResultPayload(passingTriangleTierForIntercept(played));
+          setPhase("result");
+          return;
+        }
+
+        if (u >= 1) {
+          holderRef.current = leg.to;
+          legRef.current = null;
+          gapEndRef.current = now + randRange(diff.passGapMin, diff.passGapMax);
+          setPassVisual(null);
+        }
+      }
+
+      const tgt = targetRef.current;
+      const d = defenderRef.current;
+      const vx = tgt.x - d.x;
+      const vy = tgt.y - d.y;
+      const len = Math.hypot(vx, vy);
+      const speed = 125;
+      if (len > 0.5) {
+        const step = Math.min(len, speed * dt);
+        const nx = d.x + (vx / len) * step;
+        const ny = d.y + (vy / len) * step;
+        const cl = clampToDisk(nx, ny, PT_CX, PT_CY, PT_R_MOVE);
+        defenderRef.current = cl;
+      }
+
+      setRender((x) => x + 1);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [phase, botPts]);
+
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  const toField = (clientX: number, clientY: number) => {
+    const el = fieldRef.current;
+    if (!el) return { x: PT_CX, y: PT_CY };
+    const r = el.getBoundingClientRect();
+    const x = ((clientX - r.left) / r.width) * PT_FIELD;
+    const y = ((clientY - r.top) / r.height) * PT_FIELD;
+    return clampToDisk(x, y, PT_CX, PT_CY, PT_R_MOVE);
   };
 
+  const onFieldPointer = (e: PointerEvent<HTMLDivElement>) => {
+    if (phase !== "playing" || endedRef.current) return;
+    const p = toField(e.clientX, e.clientY);
+    targetRef.current = p;
+  };
+
+  const handleClaim = () => {
+    if (!resultPayload) return;
+    const t = resultPayload.interceptElapsedSec ?? 0;
+    onComplete(Math.round(t * 10), { passingTriangle: resultPayload });
+  };
+
+  const d = defenderRef.current;
+  const b = ballRef.current;
+
   return (
-    <div className="py-4">
-      <p className="text-xs font-black text-foreground mb-1">Squad Power Clash</p>
-      <p className="text-[10px] text-muted-foreground mb-3">Opening Pressure · Key Duel · Final Moment</p>
-      <div className="space-y-2">
-        <select value={captainId} onChange={(e) => setCaptainId(e.target.value)} className="w-full p-2 rounded-xl bg-background/40 border border-border/30 text-xs">
-          {roster.map((p) => <option key={`c-${p.id}`} value={p.id}>Captain: {p.name}</option>)}
-        </select>
-        <select value={attackerId} onChange={(e) => setAttackerId(e.target.value)} className="w-full p-2 rounded-xl bg-background/40 border border-border/30 text-xs">
-          {roster.map((p) => <option key={`a-${p.id}`} value={p.id}>Attacker: {p.name}</option>)}
-        </select>
-        <select value={defenderId} onChange={(e) => setDefenderId(e.target.value)} className="w-full p-2 rounded-xl bg-background/40 border border-border/30 text-xs">
-          {roster.map((p) => <option key={`d-${p.id}`} value={p.id}>Defender: {p.name}</option>)}
-        </select>
-      </div>
-      <button
-        type="button"
-        onClick={resolve}
-        disabled={resolved}
-        className="w-full mt-3 py-3 rounded-2xl bg-yellow-500/15 border border-yellow-500/30 text-xs font-black text-foreground active:scale-[0.98]"
+    <div
+      className="py-2 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] select-none"
+      style={{ touchAction: phase === "playing" ? "none" : "manipulation" }}
+    >
+      <p className="text-xs font-black text-foreground tracking-tight">Passing Triangle</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5">Monkey in the middle — cut the lane.</p>
+
+      <div
+        ref={fieldRef}
+        className="relative mx-auto mt-3 rounded-2xl border border-yellow-500/25 bg-gradient-to-b from-emerald-950/50 via-background/90 to-background overflow-hidden"
+        style={{ width: "min(100%, 300px)", aspectRatio: "1" }}
+        onPointerDown={onFieldPointer}
       >
-        Resolve Squad Clash
-      </button>
-      <p className="text-[10px] text-muted-foreground mt-2">
-        Rewards: event points + XP + stat gain {resolved ? "· rare encounter chance checked (mock)." : ""}
-      </p>
+        <svg
+          viewBox={`0 0 ${PT_FIELD} ${PT_FIELD}`}
+          className="absolute inset-0 h-full w-full"
+          aria-hidden
+        >
+          <defs>
+            <radialGradient id="ptPitch" cx="50%" cy="40%" r="70%">
+              <stop offset="0%" stopColor="rgba(34,197,94,0.12)" />
+              <stop offset="100%" stopColor="rgba(0,0,0,0.35)" />
+            </radialGradient>
+          </defs>
+          <rect width={PT_FIELD} height={PT_FIELD} fill="url(#ptPitch)" />
+          <circle
+            cx={PT_CX}
+            cy={PT_CY}
+            r={PT_R_MOVE}
+            fill="none"
+            stroke={urgency === "high" ? "rgba(251,191,36,0.55)" : "rgba(148,163,184,0.45)"}
+            strokeWidth={urgency === "high" ? 3 : 2}
+            strokeDasharray={phase === "ready" ? "6 4" : "0"}
+          />
+          {passVisual && (
+            <line
+              x1={botPts[passVisual.from]!.x}
+              y1={botPts[passVisual.from]!.y}
+              x2={botPts[passVisual.to]!.x}
+              y2={botPts[passVisual.to]!.y}
+              stroke={urgency === "high" ? "rgba(251,113,133,0.55)" : "rgba(250,204,21,0.35)"}
+              strokeWidth="2"
+            />
+          )}
+        </svg>
+
+        {botPts.map((p, i) => (
+          <div
+            key={`bot-${i}`}
+            className="absolute flex flex-col items-center pointer-events-none"
+            style={{
+              left: `${(p.x / PT_FIELD) * 100}%`,
+              top: `${(p.y / PT_FIELD) * 100}%`,
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <div className="h-9 w-9 rounded-full border border-border/40 bg-muted/80 flex items-center justify-center text-[10px] font-black text-foreground">
+              {i + 1}
+            </div>
+            <span className="mt-0.5 max-w-[5rem] text-center text-[8px] font-bold text-muted-foreground leading-tight">
+              Bot Passer {i + 1}
+            </span>
+          </div>
+        ))}
+
+        <div
+          className="absolute rounded-full border-2 border-primary bg-primary/25 shadow-lg flex items-center justify-center pointer-events-none overflow-hidden"
+          style={{
+            left: `${(d.x / PT_FIELD) * 100}%`,
+            top: `${(d.y / PT_FIELD) * 100}%`,
+            width: "14%",
+            height: "14%",
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div className="scale-[0.65]">
+            <AnimatedPortrait player={activePlayer} size="sm" />
+          </div>
+        </div>
+
+        <div
+          className="absolute rounded-full bg-white border-2 border-amber-400 shadow-md pointer-events-none"
+          style={{
+            left: `${(b.x / PT_FIELD) * 100}%`,
+            top: `${(b.y / PT_FIELD) * 100}%`,
+            width: "7%",
+            height: "7%",
+            transform: "translate(-50%, -50%)",
+          }}
+        />
+
+        {phase === "ready" && readyN > 0 && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/55 backdrop-blur-[2px]">
+            <p className="text-5xl font-black text-foreground tabular-nums">{readyN}</p>
+          </div>
+        )}
+
+        {phase === "playing" && (
+          <div className="absolute left-2 right-2 top-2 flex items-center justify-between gap-2 pointer-events-none">
+            <div
+              className={`rounded-full px-2 py-1 text-[10px] font-black ${
+                urgency === "high"
+                  ? "bg-rose-600/90 text-white animate-pulse"
+                  : urgency === "mid"
+                    ? "bg-amber-500/85 text-black"
+                    : "bg-emerald-600/80 text-white"
+              }`}
+            >
+              {remaining.toFixed(1)}s
+            </div>
+            <div className="rounded-full bg-background/80 px-2 py-1 text-[9px] font-bold text-muted-foreground border border-border/30">
+              {urgency === "high" ? "Sharp passes" : urgency === "mid" ? "Readable" : "Tired legs"}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {phase === "ready" && (
+        <p className="text-[10px] text-muted-foreground mt-3 leading-relaxed px-1">
+          Stay inside the circle. Cut the passing lane before time runs out.
+        </p>
+      )}
+
+      {phase === "playing" && (
+        <p className="text-[10px] text-muted-foreground mt-2 px-1">
+          Tap inside the pitch to move your defender. Intercept the ball before 30s.
+        </p>
+      )}
+
+      {phase === "result" && resultPayload && (
+        <div className="mt-4 space-y-3">
+          <div className="rounded-2xl border border-yellow-500/25 bg-yellow-950/25 p-3 text-left space-y-1.5">
+            <p className="text-sm font-black text-foreground">{resultPayload.tierLabel}</p>
+            {resultPayload.won && resultPayload.interceptElapsedSec !== null && (
+              <p className="text-[10px] text-muted-foreground">
+                Intercept at{" "}
+                <span className="font-bold text-foreground">{resultPayload.interceptElapsedSec.toFixed(2)}s</span> game
+                time
+              </p>
+            )}
+            {!resultPayload.won && (
+              <p className="text-[10px] text-muted-foreground">30 seconds — no interception.</p>
+            )}
+            <p className="text-[10px] text-emerald-300/95 pt-1">
+              +{resultPayload.xp} XP · +{resultPayload.form} Form ·
+              {resultPayload.confidence > 0 ? ` +${resultPayload.confidence} Confidence ·` : ""} +
+              {resultPayload.eventPoints} Event Pts
+            </p>
+            <p className="text-[9px] text-muted-foreground/80">
+              Event Points apply as Focus Points in this client build.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleClaim}
+            className="w-full min-h-[50px] rounded-2xl bg-gradient-to-r from-yellow-500 to-amber-600 text-black font-black text-sm active:scale-[0.98] transition-transform"
+          >
+            Claim rewards
+          </button>
+          <button
+            type="button"
+            onClick={resetRun}
+            className="w-full min-h-[48px] rounded-2xl border border-border/40 bg-background/60 text-foreground font-bold text-sm active:scale-[0.98] transition-transform"
+          >
+            Retry
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -992,6 +1395,7 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
   const [activityScore, setActivityScore] = useState(0);
   const [trainingMeta, setTrainingMeta] = useState<TrainingTriviaMeta | null>(null);
   const [pressureClockResult, setPressureClockResult] = useState<PressureClockReward | null>(null);
+  const [passingTriangleResult, setPassingTriangleResult] = useState<PassingTriangleReward | null>(null);
   const { activePlayer, addXp, applyAttributeDelta, addFocusPoints } = useGameProgress();
   const config = zoneConfig[zone.type];
   const Icon = config.icon;
@@ -1001,6 +1405,7 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
     setActivityScore(0);
     setTrainingMeta(null);
     setPressureClockResult(null);
+    setPassingTriangleResult(null);
   }, [zone.id]);
 
   const handleActivityComplete = useCallback(
@@ -1013,6 +1418,18 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
         addXp(activePlayer.id, pc.xp);
         applyAttributeDelta(activePlayer.id, { confidence: pc.confidence });
         if (pc.fp > 0) addFocusPoints(pc.fp);
+        setStep("reward");
+        return;
+      }
+
+      if (isPassingTriangleMeta(meta)) {
+        const pt = meta.passingTriangle;
+        setPassingTriangleResult(pt);
+        addXp(activePlayer.id, pt.xp);
+        const attr: Partial<{ form: number; confidence: number }> = { form: pt.form };
+        if (pt.confidence > 0) attr.confidence = pt.confidence;
+        applyAttributeDelta(activePlayer.id, attr);
+        if (pt.eventPoints > 0) addFocusPoints(pt.eventPoints);
         setStep("reward");
         return;
       }
@@ -1062,7 +1479,11 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
       return `${pc.tierLabel} · target ${(pc.targetMs / 1000).toFixed(2)}s · stopped ${(pc.elapsedMs / 1000).toFixed(2)}s · Δ ${Math.round(pc.differenceMs)}ms`;
     }
     if (zone.type === "pressure") return "Pressure Clock";
-    if (zone.type === "stadium") return `${activityScore} event rewards`;
+    if (zone.type === "stadium" && passingTriangleResult) {
+      const pt = passingTriangleResult;
+      return `${pt.tierLabel}${pt.won && pt.interceptElapsedSec != null ? ` · ${pt.interceptElapsedSec.toFixed(2)}s` : ""}`;
+    }
+    if (zone.type === "stadium") return "Passing Triangle";
     if (zone.type === "rival") return "Challenge complete";
     return "Complete";
   };
@@ -1074,9 +1495,21 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
       : zone.type === "training"
         ? Math.max(0.5, Math.min(1.6, effectiveTrainingScore / 6))
         : Math.max(0.5, Math.min(1.5, activityScore / 3));
-  const finalXp = pressureClockResult ? pressureClockResult.xp : Math.round(config.xp * mult);
-  const finalAttr = pressureClockResult ? pressureClockResult.confidence : Math.max(1, Math.round(config.attrGain * mult));
-  const finalFp = pressureClockResult ? pressureClockResult.fp : config.fpGain;
+  const finalXp = pressureClockResult
+    ? pressureClockResult.xp
+    : passingTriangleResult
+      ? passingTriangleResult.xp
+      : Math.round(config.xp * mult);
+  const finalAttr = pressureClockResult
+    ? pressureClockResult.confidence
+    : passingTriangleResult
+      ? passingTriangleResult.form
+      : Math.max(1, Math.round(config.attrGain * mult));
+  const finalFp = pressureClockResult
+    ? pressureClockResult.fp
+    : passingTriangleResult
+      ? passingTriangleResult.eventPoints
+      : config.fpGain;
 
   return (
     <div className="fixed inset-0 z-[1350] flex items-end justify-center bg-background/50 backdrop-blur-sm" onClick={onClose}>
@@ -1190,18 +1623,39 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
               <p className="text-xs text-muted-foreground mb-1">{zone.name}</p>
               <p className="text-[10px] text-muted-foreground mb-4">{scoreLabel()}</p>
 
-              <div className="flex gap-2 justify-center mb-5">
-                {[
-                  { label: `+${finalAttr} ${config.attribute.charAt(0).toUpperCase() + config.attribute.slice(1)}`, icon: "📈" },
-                  { label: `+${finalXp} XP`, icon: "⭐" },
-                  { label: `+${finalFp} FP`, icon: "🎯" },
-                ].map((r) => (
-                  <div key={r.label} className={`px-3 py-2 rounded-xl ${config.bgAccent} ring-1 ${config.ringColor}`}>
-                    <span className="text-sm">{r.icon}</span>
-                    <p className="text-[10px] font-bold text-foreground mt-0.5">{r.label}</p>
-                  </div>
-                ))}
+              <div className="flex flex-wrap gap-2 justify-center mb-5">
+                {passingTriangleResult ? (
+                  [
+                    { label: `+${passingTriangleResult.form} Form`, icon: "📈" },
+                    ...(passingTriangleResult.confidence > 0
+                      ? [{ label: `+${passingTriangleResult.confidence} Confidence`, icon: "💪" }]
+                      : []),
+                    { label: `+${passingTriangleResult.xp} XP`, icon: "⭐" },
+                    { label: `+${passingTriangleResult.eventPoints} Event Pts`, icon: "🏟️" },
+                  ].map((r) => (
+                    <div key={r.label} className={`px-3 py-2 rounded-xl ${config.bgAccent} ring-1 ${config.ringColor}`}>
+                      <span className="text-sm">{r.icon}</span>
+                      <p className="text-[10px] font-bold text-foreground mt-0.5">{r.label}</p>
+                    </div>
+                  ))
+                ) : (
+                  [
+                    { label: `+${finalAttr} ${config.attribute.charAt(0).toUpperCase() + config.attribute.slice(1)}`, icon: "📈" },
+                    { label: `+${finalXp} XP`, icon: "⭐" },
+                    { label: `+${finalFp} FP`, icon: "🎯" },
+                  ].map((r) => (
+                    <div key={r.label} className={`px-3 py-2 rounded-xl ${config.bgAccent} ring-1 ${config.ringColor}`}>
+                      <span className="text-sm">{r.icon}</span>
+                      <p className="text-[10px] font-bold text-foreground mt-0.5">{r.label}</p>
+                    </div>
+                  ))
+                )}
               </div>
+              {passingTriangleResult && (
+                <p className="text-[9px] text-muted-foreground mb-4 -mt-2 px-2">
+                  Event Points are credited as Focus Points in this client build.
+                </p>
+              )}
 
               <button
                 type="button"
