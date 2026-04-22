@@ -24,9 +24,8 @@ const RARITY_COLOR: Record<string, string> = {
 const VENUES = [
   { name: "World Cup Stadium", type: "stadium", emoji: "🏟️", xp: 35, bonus: "+35 XP · +Morale", color: "#f59e0b", desc: "A legendary arena buzzing with World Cup energy. Soak it in." },
   { name: "Training Complex", type: "training", emoji: "⚽", xp: 26, bonus: "+26 XP · +Form", color: "#22c55e", desc: "Elite pitch. This is where champions are made every morning." },
-  { name: "Fan Zone HQ",      type: "fan-arena", emoji: "📣", xp: 20, bonus: "+20 XP · +Fan Bond", color: "#f97316", desc: "Thousands of fans. The atmosphere here is absolutely electric." },
-  { name: "Recovery Center",  type: "recovery",  emoji: "💆", xp: 15, bonus: "+15 XP · +Morale", color: "#38bdf8", desc: "Ice baths, physios, and silence. Your squad needs this." },
-  { name: "Rival Arena",      type: "rival",     emoji: "⚔️", xp: 25, bonus: "+25 XP · +Confidence", color: "#ef4444", desc: "Enemy territory. Scouts watching. Every touch gets judged." },
+  { name: "Pressure Tunnel", type: "pressure", emoji: "🔥", xp: 30, bonus: "+30 XP · +Confidence", color: "#a855f7", desc: "Closed walls, crowd noise bleeding through — every second counts." },
+  { name: "Rival Arena", type: "rival", emoji: "⚔️", xp: 25, bonus: "+25 XP · +Confidence", color: "#ef4444", desc: "Enemy territory. Scouts watching. Every touch gets judged." },
 ];
 
 const CameraMission = ({ onClose, nearestPlayer, onChallenge, activeZoneName, activeZoneType }: CameraMissionProps) => {
@@ -280,9 +279,8 @@ const CameraMission = ({ onClose, nearestPlayer, onChallenge, activeZoneName, ac
                 {activeZoneType === "stadium" ? "🌟 Stadium Zone" :
                  activeZoneType === "training" ? "⚽ Training Ground" :
                  activeZoneType === "rival" ? "⚔️ Rival Territory" :
-                 activeZoneType === "fan-arena" ? "📣 Fan Zone" :
-                 activeZoneType === "recovery" ? "💆 Recovery Zone" :
                  activeZoneType === "pressure" ? "🔥 Pressure Zone" :
+                 activeZoneType === "mission" ? "📸 Mission Zone" :
                  `📍 ${activeZoneType}`}
               </div>
             )}

@@ -26,7 +26,7 @@ const TAB_TIPS: Record<AppTab, Tip> = {
     id: "tip-train",
     emoji: "💬",
     title: "Train through conversation",
-    body: "Tap Motivate, Tactics, or Recovery — or type a message — to raise your player's stats each day.",
+    body: "Tap Motivate, Tactics, or Check-in — or type a message — to raise your player's stats each day.",
     cta: "Let's go!",
   },
   squad: {

@@ -35,7 +35,7 @@ export type LeaderboardEntryDoc = {
 };
 
 export type ZoneDoc = {
-  zoneType: "training" | "recovery" | "fan-arena" | "rival" | "pressure" | "stadium" | "mission";
+  zoneType: "training" | "rival" | "pressure" | "stadium" | "mission";
   name: string;
   latitude: number;
   longitude: number;

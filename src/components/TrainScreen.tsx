@@ -19,8 +19,6 @@ type SuggestionsByPlayerState = Record<string, string[]>;
 
 const zoneFlavor: Record<string, string> = {
   training: "Training Ground",
-  recovery: "Recovery Center",
-  "fan-arena": "Fan Arena",
   rival: "Rival Pitch",
   pressure: "Pressure Zone",
   stadium: "Stadium",
@@ -146,11 +144,15 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
       ? ` We're synced to ${zoneName} — ${
           explorationZoneType === "training"
             ? "drills on my mind."
-            : explorationZoneType === "recovery"
-              ? "legs are listening."
-              : explorationZoneType === "rival"
-                ? "I want this dub."
-                : "feeling the noise."
+            : explorationZoneType === "rival"
+              ? "I want this dub."
+              : explorationZoneType === "pressure"
+                ? "nerves are awake — good."
+                : explorationZoneType === "stadium"
+                  ? "matchday energy in my head."
+                  : explorationZoneType === "mission"
+                    ? "scouting mode on."
+                    : "feeling the noise."
         }`
       : "";
     const streakHint = competitiveStreak >= 3 ? " Love the run we're on." : "";
@@ -261,7 +263,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
     }
   };
 
-  const sendTrainingChoice = (kind: "motivate" | "tactics" | "recovery") => {
+  const sendTrainingChoice = (kind: "motivate" | "tactics" | "checkin") => {
     const z = explorationZoneType;
     if (kind === "motivate") {
       void trainViaApi(
@@ -286,7 +288,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
     void trainViaApi(
       "bond",
       "How are you feeling?",
-      z === "recovery"
+      z === "stadium"
         ? "Honestly? Legs are feeling it. But I'm managing. Rest and mindset — that's the reset."
         : "I'm alright. Could be sharper, but I'm focused. The body's telling me to look after it today."
     );
@@ -328,7 +330,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
             evolutionStage: activeChatPlayer.evolutionStage,
             recentDuelResult: livePulse === "goal" ? "goal" : "none",
             recentTrainingOutcome: explorationZoneType === "training" ? "average" : "none",
-            injuryState: explorationZoneType === "recovery" ? "recovering" : "none",
+            injuryState: "none",
             justRecruited: false,
             coachName: coachName || undefined,
           },
@@ -376,7 +378,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
 
   const suggested = useMemo(() => {
     const base = ["Check my confidence", "Prep for rivalry", "How's the body?"];
-    if (explorationZoneType === "recovery") return ["Recovery mindset", "Sleep & legs", ...base];
+    if (explorationZoneType === "stadium") return ["Matchday legs", "Sleep & reset", ...base];
     if (explorationZoneType === "rival") return ["Rivalry headspace", "Lock in mentally", ...base];
     if (matchPhase === "postloss") return ["Bounce-back plan", "What went wrong?", ...base];
     return base;
@@ -555,7 +557,7 @@ const TrainScreen = ({ onTrainingComplete, streakCount = 0 }: TrainScreenProps) 
             {([
               ["motivate", "🔥 Pump me up"],
               ["tactics", "💡 What to work on?"],
-              ["recovery", "💬 How are you feeling?"],
+              ["checkin", "💬 How are you feeling?"],
             ] as const).map(([key, label]) => (
               <button key={key} type="button" onClick={() => sendTrainingChoice(key)}
                 disabled={hasNoHiredPlayers}

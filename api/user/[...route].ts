@@ -32,7 +32,7 @@ const cameraRewardBodySchema = z.object({
   userId: z.string().min(1).default("demo-user"),
   playerId: z.string().min(1),
   zoneType: z
-    .enum(["training", "recovery", "fan-arena", "rival", "pressure", "stadium", "mission"])
+    .enum(["training", "rival", "pressure", "stadium", "mission"])
     .optional(),
   missionId: z.string().optional(),
 });
@@ -409,10 +409,10 @@ async function handleCameraReward(req: VercelRequest, res: VercelResponse) {
   const xpGain = 6;
   const shardGain = zoneType === "mission" ? 2 : 1;
   const statBoost = {
-    confidence: zoneType === "rival" ? 2 : 1,
+    confidence: zoneType === "rival" || zoneType === "pressure" ? 2 : 1,
     form: zoneType === "training" ? 2 : 1,
-    morale: zoneType === "recovery" ? 2 : 1,
-    fanBond: zoneType === "fan-arena" ? 2 : 1,
+    morale: zoneType === "stadium" ? 2 : 1,
+    fanBond: zoneType === "mission" ? 2 : 1,
   };
 
   let xp = doc.xp + xpGain;

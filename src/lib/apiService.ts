@@ -39,8 +39,6 @@ export type ApiLeaderboardEntry = {
 export type ApiZone = {
   zoneType:
     | "training"
-    | "recovery"
-    | "fan-arena"
     | "rival"
     | "pressure"
     | "stadium"
@@ -95,8 +93,6 @@ export type ApiNearbyPlace = {
   distanceKm: number;
   mappedZoneType:
     | "training"
-    | "recovery"
-    | "fan-arena"
     | "rival"
     | "pressure"
     | "stadium"

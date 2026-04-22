@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  X, Dumbbell, Heart, Users, Swords, Flame, Trophy,
-  ChevronRight, Check, Zap, Wind, Shield, Star, Timer,
+  X, Dumbbell, Swords, Flame, Trophy,
+  ChevronRight, Check, Zap, Timer,
 } from "lucide-react";
 import type { MapZone } from "@/data/mockData";
 import { mockRivals, getPlayerById } from "@/data/mockData";
@@ -74,34 +74,6 @@ const zoneConfig: Record<
     gradient: "from-emerald-500 to-green-600",
     bgAccent: "bg-emerald-500/10",
     ringColor: "ring-emerald-500/30",
-  },
-  recovery: {
-    icon: Heart,
-    emoji: "💆",
-    purpose: "Recovery Rhythm: time calm actions to restore match readiness fast.",
-    cta: "Start Recovery Rhythm",
-    rewardLabel: "+Morale",
-    attribute: "morale",
-    xp: 15,
-    attrGain: 4,
-    fpGain: 2,
-    gradient: "from-sky-400 to-blue-500",
-    bgAccent: "bg-sky-500/10",
-    ringColor: "ring-sky-500/30",
-  },
-  "fan-arena": {
-    icon: Users,
-    emoji: "📣",
-    purpose: "Zone Control Battle: challenge the current holder and claim fan-zone control.",
-    cta: "Start Zone Control",
-    rewardLabel: "+Fan Bond",
-    attribute: "fanBond",
-    xp: 15,
-    attrGain: 4,
-    fpGain: 1,
-    gradient: "from-orange-400 to-amber-500",
-    bgAccent: "bg-amber-500/10",
-    ringColor: "ring-amber-500/30",
   },
   rival: {
     icon: Swords,
@@ -670,117 +642,6 @@ function TrainingActivity({
   );
 }
 
-/* ── Recovery Center: Breathing / Calm Timer ───────────────────────────── */
-function RecoveryActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const ACTIONS = ["Breathe", "Hydrate", "Stretch", "Ice Bath", "Physio Reset"] as const;
-  const CONDITIONS = ["Tired", "Tense", "Sore", "Low morale"] as const;
-  const [step, setStep] = useState(0);
-  const [phase, setPhase] = useState<"calm" | "push">("push");
-  const [timeLeft, setTimeLeft] = useState(12);
-  const [hits, setHits] = useState(0);
-  const [lastAction, setLastAction] = useState<string>("Tap on calm");
-
-  useEffect(() => {
-    const toggle = window.setInterval(() => {
-      setPhase((p) => (p === "calm" ? "push" : "calm"));
-      setStep((s) => (s + 1) % ACTIONS.length);
-    }, 1200);
-    return () => window.clearInterval(toggle);
-  }, []);
-
-  useEffect(() => {
-    if (timeLeft <= 0) {
-      onComplete(Math.min(6, Math.max(1, Math.round((hits / 10) * 6))));
-      return;
-    }
-    const t = window.setTimeout(() => setTimeLeft((v) => v - 1), 1000);
-    return () => window.clearTimeout(t);
-  }, [timeLeft, hits, onComplete]);
-
-  const tap = () => {
-    setLastAction(ACTIONS[step] ?? "Recover");
-    if (phase === "calm") setHits((h) => h + 1);
-  };
-
-  return (
-    <div className="py-4">
-      <p className="text-xs font-black text-foreground">Recovery Rhythm</p>
-      <p className="text-[10px] text-muted-foreground mb-3">Condition: {CONDITIONS[(step + 1) % CONDITIONS.length]}</p>
-      <div className="h-3 rounded-full overflow-hidden bg-muted mb-3">
-        <div
-          className={`h-full transition-all duration-300 ${phase === "calm" ? "bg-sky-400" : "bg-rose-400/70"}`}
-          style={{ width: `${phase === "calm" ? 100 : 45}%` }}
-        />
-      </div>
-      <button
-        type="button"
-        onClick={tap}
-        className="w-full py-5 rounded-2xl bg-sky-500/10 border border-sky-500/25 active:scale-[0.98] transition-transform"
-      >
-        <p className="text-sm font-black text-foreground">{ACTIONS[step]}</p>
-        <p className="text-[10px] text-muted-foreground mt-1">{phase === "calm" ? "Tap now" : "Hold your pace"}</p>
-      </button>
-      <div className="flex items-center justify-between mt-3 text-[10px]">
-        <p className="text-muted-foreground">Good timings: <span className="font-black text-foreground">{hits}</span></p>
-        <p className="text-muted-foreground">Time: <span className="font-black text-foreground">{timeLeft}s</span></p>
-      </div>
-      <p className="text-[10px] text-sky-300 mt-1">Last: {lastAction} · Pressure Calm boost chance on strong rhythm</p>
-    </div>
-  );
-}
-
-/* ── Fan Arena: Hype Meter Tap ─────────────────────────────────────────── */
-function FanArenaActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const [holder] = useState("Ultra Fans Union");
-  const [you, setYou] = useState(45);
-  const [them, setThem] = useState(55);
-  const [timeLeft, setTimeLeft] = useState(10);
-  const [resolved, setResolved] = useState(false);
-
-  useEffect(() => {
-    if (resolved) return;
-    if (timeLeft <= 0) {
-      setResolved(true);
-      onComplete(you >= them ? 6 : 3);
-      return;
-    }
-    const t = setTimeout(() => setTimeLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [timeLeft, resolved, you, them, onComplete]);
-
-  const push = () => {
-    if (resolved) return;
-    setYou((v) => Math.min(100, v + 7));
-    setThem((v) => Math.max(0, v - 5));
-  };
-
-  return (
-    <div className="py-4">
-      <p className="text-xs font-black text-foreground">Zone Control Battle</p>
-      <p className="text-[10px] text-muted-foreground mb-3">Current holder: {holder}</p>
-      <div className="h-4 bg-muted rounded-full overflow-hidden mb-3 flex">
-        <div className="h-full bg-orange-500/80 transition-all" style={{ width: `${you}%` }} />
-        <div className="h-full bg-zinc-500/80 transition-all" style={{ width: `${them}%` }} />
-      </div>
-      <button
-        type="button"
-        onClick={push}
-        disabled={resolved}
-        className="w-full py-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 active:scale-[0.98] transition-transform"
-      >
-        <p className="text-sm font-black text-foreground">Challenge Holder</p>
-        <p className="text-[10px] text-muted-foreground mt-1">{resolved ? "Zone resolved" : "Push fan momentum"}</p>
-      </button>
-      <p className="text-[10px] text-muted-foreground mt-2">
-        Your control: {you}% · Rival: {them}% · Time: {timeLeft}s
-      </p>
-      <p className="text-[10px] text-amber-300 mt-1">
-        {resolved && you >= them ? "Zone captured: passive Fan Bond enabled (mock)." : "Regional points + streak bonus can apply."}
-      </p>
-    </div>
-  );
-}
-
 /* ── Rival Pitch: Launches Compete ChallengeFlow ───────────────────────── */
 function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => void }) {
   const { activePlayer, playersById } = useGameProgress();
@@ -1182,8 +1043,6 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
   const renderActivity = () => {
     switch (zone.type) {
       case "training": return <TrainingActivity onComplete={handleActivityComplete} />;
-      case "recovery": return <RecoveryActivity onComplete={handleActivityComplete} />;
-      case "fan-arena": return <FanArenaActivity onComplete={handleActivityComplete} />;
       case "rival": return <RivalPitchActivity onComplete={handleActivityComplete} />;
       case "pressure": return <PressureActivity onComplete={handleActivityComplete} />;
       case "stadium": return <StadiumActivity onComplete={handleActivityComplete} />;
@@ -1198,8 +1057,6 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
       const bestStreak = trainingMeta?.maxStreak ?? 0;
       return `${activityScore}/${total} correct · +${bonus} streak bonus · best streak ${bestStreak}`;
     }
-    if (zone.type === "recovery") return `${activityScore} breathing cycles`;
-    if (zone.type === "fan-arena") return `${activityScore} taps — ${activityScore >= 15 ? "Epic Hype!" : "Nice effort!"}`;
     if (zone.type === "pressure" && pressureClockResult) {
       const pc = pressureClockResult;
       return `${pc.tierLabel} · target ${(pc.targetMs / 1000).toFixed(2)}s · stopped ${(pc.elapsedMs / 1000).toFixed(2)}s · Δ ${Math.round(pc.differenceMs)}ms`;

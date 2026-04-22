@@ -39,7 +39,7 @@ create table public.leaderboard_entries (
 
 create table public.zones (
   "name" text primary key,
-  "zoneType" text not null check ("zoneType" in ('training', 'recovery', 'fan-arena', 'rival', 'pressure', 'stadium', 'mission')),
+  "zoneType" text not null check ("zoneType" in ('training', 'rival', 'pressure', 'stadium', 'mission')),
   "latitude" double precision not null,
   "longitude" double precision not null,
   "region" text not null,

@@ -119,8 +119,6 @@ function toArrayNumber(value: string | string[] | undefined): number | undefined
 function fallbackZoneFlavor(zoneType: string, zoneName: string) {
   const byType: Record<string, string> = {
     training: `${zoneName} sharpens first touch and tempo.`,
-    recovery: `${zoneName} helps legs reset and minds stay calm.`,
-    "fan-arena": `${zoneName} is buzzing with crowd energy.`,
     rival: `${zoneName} brings out hard duels and pride.`,
     pressure: `${zoneName} forces composure under stress.`,
     stadium: `${zoneName} feels like matchday under lights.`,

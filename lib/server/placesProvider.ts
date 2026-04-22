@@ -9,8 +9,6 @@ export type NearbyFootballPlace = {
   distanceKm: number;
   mappedZoneType:
     | "training"
-    | "recovery"
-    | "fan-arena"
     | "rival"
     | "pressure"
     | "stadium"
@@ -57,8 +55,8 @@ const PLACE_BLUEPRINTS: Array<{
   },
   {
     type: "gym",
-    mappedZoneType: "recovery",
-    mappedZoneLabel: "Recovery Center",
+    mappedZoneType: "stadium",
+    mappedZoneLabel: "Stadium Zone",
     names: ["Performance Gym", "Athlete Recovery Lab", "Strength Hub", "Core Conditioning Club"],
   },
   {
@@ -69,8 +67,8 @@ const PLACE_BLUEPRINTS: Array<{
   },
   {
     type: "sports-bar",
-    mappedZoneType: "fan-arena",
-    mappedZoneLabel: "Fan Arena",
+    mappedZoneType: "pressure",
+    mappedZoneLabel: "Pressure Zone",
     names: ["Matchday Lounge", "Offside Sports Bar", "Final Whistle Bar", "Ultra Fans Tavern"],
   },
 ];

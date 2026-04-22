@@ -88,11 +88,9 @@ const RulesPanel = ({ open, onClose }: RulesPanelProps) => {
             <div className="grid grid-cols-2 gap-2">
               {[
                 { icon: "⚽", name: "Training Ground", effect: "+Form" },
-                { icon: "💆", name: "Recovery Center", effect: "+Morale" },
-                { icon: "📣", name: "Fan Arena", effect: "+Fan Bond" },
                 { icon: "⚔️", name: "Rival Pitch", effect: "+Confidence" },
                 { icon: "🔥", name: "Pressure Zone", effect: "+Confidence" },
-                { icon: "🏟️", name: "Stadium Zone", effect: "Live Bonuses" },
+                { icon: "🏟️", name: "Stadium Zone", effect: "+Morale · live bonuses" },
               ].map((z) => (
                 <div key={z.name} className="glass-card p-2.5 rounded-xl">
                   <div className="flex items-center gap-1.5 mb-0.5">
@@ -192,8 +190,8 @@ const RulesPanel = ({ open, onClose }: RulesPanelProps) => {
               {[
                 { name: "Confidence", icon: "💪", desc: "From pressure zones & wins" },
                 { name: "Form", icon: "📈", desc: "From training drills" },
-                { name: "Morale", icon: "❤️", desc: "From recovery & chat" },
-                { name: "Fan Bond", icon: "📣", desc: "From fan arenas & camera" },
+                { name: "Morale", icon: "❤️", desc: "From stadium zones & chat" },
+                { name: "Fan Bond", icon: "📣", desc: "From camera missions & duels" },
               ].map((attr) => (
                 <div key={attr.name} className="glass-card p-2.5 rounded-xl">
                   <div className="flex items-center gap-1.5 mb-0.5">

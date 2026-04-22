@@ -40,8 +40,7 @@ const createZoneIcon = (type: string) => {
     type === "rival"   ? "rgba(239,68,68,0.55)" :
     type === "pressure"? "rgba(168,85,247,0.55)" :
     type === "training"? "rgba(34,197,94,0.4)" :
-    type === "recovery"? "rgba(56,189,248,0.4)" :
-    type === "fan-arena"? "rgba(251,146,60,0.4)" :
+    type === "mission" ? "rgba(56,189,248,0.4)" :
     "rgba(148,163,184,0.3)";
   const pulseAnim = big ? `animation:zone-pulse 2s ease-in-out infinite;` : "";
   return L.divIcon({

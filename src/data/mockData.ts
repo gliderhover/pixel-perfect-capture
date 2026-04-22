@@ -65,7 +65,7 @@ export function dicebearPortrait(seed: string): string {
 
 export interface MapZone {
   id: string;
-  type: "training" | "recovery" | "fan-arena" | "rival" | "pressure" | "stadium" | "mission";
+  type: "training" | "rival" | "pressure" | "stadium" | "mission";
   name: string;
   lat: number;
   lng: number;
@@ -1008,28 +1008,28 @@ export const mockZones: MapZone[] = [
   // New Haven
   { id: "z-nhv-train", type: "training", name: "Yale Athletic Training Grid", lat: 41.3112, lng: -72.9266, benefit: "+Form" },
   { id: "z-nhv-rival", type: "rival", name: "Wooster Square Rival Pitch", lat: 41.3078, lng: -72.9129, benefit: "Battle" },
-  { id: "z-nhv-fan", type: "fan-arena", name: "New Haven Green Fan Arena", lat: 41.3084, lng: -72.9279, benefit: "+Fan Bond" },
+  { id: "z-nhv-fan", type: "pressure", name: "New Haven Green Fan Arena", lat: 41.3084, lng: -72.9279, benefit: "+Confidence" },
   { id: "z-nhv-stad", type: "stadium", name: "Yale Bowl Match Pulse", lat: 41.3127, lng: -72.9617, benefit: "Live Bonus" },
-  { id: "z-nhv-rec", type: "recovery", name: "East Rock Recovery Loop", lat: 41.3277, lng: -72.9056, benefit: "+Morale" },
+  { id: "z-nhv-rec", type: "stadium", name: "East Rock Recovery Loop", lat: 41.3277, lng: -72.9056, benefit: "+Morale" },
   { id: "z-nhv-mis", type: "mission", name: "Long Wharf Lens Op", lat: 41.2909, lng: -72.9140, benefit: "Camera XP" },
   { id: "z-nhv-pre", type: "pressure", name: "Downtown Pressure Ring", lat: 41.3056, lng: -72.9292, benefit: "+Confidence" },
   // New Haven nearby-facility mirrors (from places provider)
   { id: "z-nhv-place-train", type: "training", name: "Community Pitch", lat: 41.3131, lng: -72.9226, benefit: "+Form" },
-  { id: "z-nhv-place-rec", type: "recovery", name: "Performance Gym", lat: 41.3049, lng: -72.9348, benefit: "+Morale" },
+  { id: "z-nhv-place-rec", type: "stadium", name: "Performance Gym", lat: 41.3049, lng: -72.9348, benefit: "+Morale" },
   { id: "z-nhv-place-rival", type: "rival", name: "United Training Club", lat: 41.3007, lng: -72.9185, benefit: "Battle" },
-  { id: "z-nhv-place-fan", type: "fan-arena", name: "Matchday Lounge", lat: 41.3098, lng: -72.9394, benefit: "+Fan Bond" },
+  { id: "z-nhv-place-fan", type: "pressure", name: "Matchday Lounge", lat: 41.3098, lng: -72.9394, benefit: "+Confidence" },
   // New Haven expanded facilities
-  { id: "z-nhv-hosp", type: "recovery", name: "YNHH Recovery Wing", lat: 41.3043, lng: -72.9353, benefit: "+Morale" },
-  { id: "z-nhv-hosp2", type: "recovery", name: "St. Raphael Recovery Unit", lat: 41.3072, lng: -72.9369, benefit: "+Morale" },
+  { id: "z-nhv-hosp", type: "stadium", name: "YNHH Recovery Wing", lat: 41.3043, lng: -72.9353, benefit: "+Morale" },
+  { id: "z-nhv-hosp2", type: "stadium", name: "St. Raphael Recovery Unit", lat: 41.3072, lng: -72.9369, benefit: "+Morale" },
   { id: "z-nhv-gym2", type: "training", name: "Downtown Strength Lab", lat: 41.3071, lng: -72.9308, benefit: "+Form" },
   { id: "z-nhv-gym3", type: "training", name: "Elm City Conditioning Hub", lat: 41.3120, lng: -72.9319, benefit: "+Form" },
-  { id: "z-nhv-park", type: "recovery", name: "Edgewood Park Recovery Route", lat: 41.3274, lng: -72.9592, benefit: "+Morale" },
-  { id: "z-nhv-park2", type: "recovery", name: "Wooster Square Cooldown Park", lat: 41.3038, lng: -72.9172, benefit: "+Morale" },
+  { id: "z-nhv-park", type: "stadium", name: "Edgewood Park Recovery Route", lat: 41.3274, lng: -72.9592, benefit: "+Morale" },
+  { id: "z-nhv-park2", type: "stadium", name: "Wooster Square Cooldown Park", lat: 41.3038, lng: -72.9172, benefit: "+Morale" },
   { id: "z-nhv-field", type: "training", name: "Rice Field Sprint Grid", lat: 41.3190, lng: -72.9248, benefit: "+Form" },
   { id: "z-nhv-rival2", type: "rival", name: "State Street Rival Cage", lat: 41.3142, lng: -72.9195, benefit: "Battle" },
   { id: "z-nhv-rival3", type: "rival", name: "Whalley Avenue Rival Yard", lat: 41.3161, lng: -72.9458, benefit: "Battle" },
-  { id: "z-nhv-fan2", type: "fan-arena", name: "Chapel Street Fan Corner", lat: 41.3088, lng: -72.9288, benefit: "+Fan Bond" },
-  { id: "z-nhv-fan3", type: "fan-arena", name: "Union Station Fan Plaza", lat: 41.2989, lng: -72.9261, benefit: "+Fan Bond" },
+  { id: "z-nhv-fan2", type: "pressure", name: "Chapel Street Fan Corner", lat: 41.3088, lng: -72.9288, benefit: "+Confidence" },
+  { id: "z-nhv-fan3", type: "pressure", name: "Union Station Fan Plaza", lat: 41.2989, lng: -72.9261, benefit: "+Confidence" },
   { id: "z-nhv-stad2", type: "stadium", name: "Westville Match Pulse", lat: 41.3209, lng: -72.9625, benefit: "Live Bonus" },
   { id: "z-nhv-stad3", type: "stadium", name: "Union Waterfront Match Pulse", lat: 41.2968, lng: -72.9198, benefit: "Live Bonus" },
   { id: "z-nhv-stad4", type: "stadium", name: "Elm City Night Match Hub", lat: 41.3138, lng: -72.9386, benefit: "Live Bonus" },
@@ -1042,54 +1042,54 @@ export const mockZones: MapZone[] = [
   // New York metro
   { id: "z-nyc-train", type: "training", name: "Hudson Elite Ground", lat: 40.7558, lng: -74.0024, benefit: "+Form" },
   { id: "z-nyc-rival", type: "rival", name: "Brooklyn Street Pitch", lat: 40.6782, lng: -73.9442, benefit: "Battle" },
-  { id: "z-nyc-fan", type: "fan-arena", name: "MSG Fan Rally Point", lat: 40.7505, lng: -73.9934, benefit: "+Fan Bond" },
+  { id: "z-nyc-fan", type: "pressure", name: "MSG Fan Rally Point", lat: 40.7505, lng: -73.9934, benefit: "+Confidence" },
   { id: "z-nyc-stad", type: "stadium", name: "MetLife Match Pulse", lat: 40.8136, lng: -74.0745, benefit: "Live Bonus" },
-  { id: "z-nyc-rec", type: "recovery", name: "Central Park Recovery Loop", lat: 40.7851, lng: -73.9683, benefit: "+Morale" },
+  { id: "z-nyc-rec", type: "stadium", name: "Central Park Recovery Loop", lat: 40.7851, lng: -73.9683, benefit: "+Morale" },
   { id: "z-nyc-mis", type: "mission", name: "Times Square Lens Op", lat: 40.758, lng: -73.9855, benefit: "Camera XP" },
   // Los Angeles
   { id: "z-la-train", type: "training", name: "LAFC Training Annex", lat: 34.0736, lng: -118.24, benefit: "+Form" },
-  { id: "z-la-rec", type: "recovery", name: "Santa Monica Ice Bath Trail", lat: 34.0195, lng: -118.4912, benefit: "+Morale" },
+  { id: "z-la-rec", type: "stadium", name: "Santa Monica Ice Bath Trail", lat: 34.0195, lng: -118.4912, benefit: "+Morale" },
   { id: "z-la-rival", type: "rival", name: "Downtown Rival Cage", lat: 34.0407, lng: -118.2468, benefit: "Battle" },
-  { id: "z-la-fan", type: "fan-arena", name: "SoFi Supporters Plaza", lat: 33.9535, lng: -118.339, benefit: "+Fan Bond" },
+  { id: "z-la-fan", type: "pressure", name: "SoFi Supporters Plaza", lat: 33.9535, lng: -118.339, benefit: "+Confidence" },
   { id: "z-la-stad", type: "stadium", name: "SoFi Stadium Hotspot", lat: 33.9545, lng: -118.3378, benefit: "Live Bonus" },
   { id: "z-la-mis", type: "mission", name: "Venice Beach Capture Route", lat: 33.985, lng: -118.4695, benefit: "Camera XP" },
   // Miami
   { id: "z-mia-train", type: "training", name: "South Florida Training Base", lat: 26.193, lng: -80.161, benefit: "+Form" },
-  { id: "z-mia-rec", type: "recovery", name: "South Beach Recovery Deck", lat: 25.7907, lng: -80.13, benefit: "+Morale" },
+  { id: "z-mia-rec", type: "stadium", name: "South Beach Recovery Deck", lat: 25.7907, lng: -80.13, benefit: "+Morale" },
   { id: "z-mia-rival", type: "rival", name: "Wynwood Wall Cup Clash", lat: 25.8014, lng: -80.1995, benefit: "Battle" },
-  { id: "z-mia-fan", type: "fan-arena", name: "Brickell Fan Arena", lat: 25.7753, lng: -80.2089, benefit: "+Fan Bond" },
+  { id: "z-mia-fan", type: "pressure", name: "Brickell Fan Arena", lat: 25.7753, lng: -80.2089, benefit: "+Confidence" },
   { id: "z-mia-stad", type: "stadium", name: "Hard Rock Final Four Zone", lat: 25.9581, lng: -80.2389, benefit: "Live Bonus" },
   { id: "z-mia-mis", type: "mission", name: "Ocean Drive Spotlight Mission", lat: 25.7806, lng: -80.13, benefit: "Camera XP" },
   // Dallas–Fort Worth
   { id: "z-dal-train", type: "training", name: "Frisco National Camp Grid", lat: 33.1543, lng: -96.835, benefit: "+Form" },
   { id: "z-dal-rival", type: "rival", name: "Deep Ellum Derby Pitch", lat: 32.7842, lng: -96.7791, benefit: "Battle" },
-  { id: "z-dal-fan", type: "fan-arena", name: "AT&T March-In Plaza", lat: 32.7473, lng: -97.0825, benefit: "+Fan Bond" },
+  { id: "z-dal-fan", type: "pressure", name: "AT&T March-In Plaza", lat: 32.7473, lng: -97.0825, benefit: "+Confidence" },
   { id: "z-dal-stad", type: "stadium", name: "Arlington Stadium Surge", lat: 32.7485, lng: -97.0812, benefit: "Live Bonus" },
-  { id: "z-dal-rec", type: "recovery", name: "Trinity Groves Recovery Hub", lat: 32.778, lng: -96.819, benefit: "+Morale" },
+  { id: "z-dal-rec", type: "stadium", name: "Trinity Groves Recovery Hub", lat: 32.778, lng: -96.819, benefit: "+Morale" },
   { id: "z-dal-pre", type: "pressure", name: "Playoff Intensity Ring", lat: 32.771, lng: -96.822, benefit: "+Confidence" },
   // Atlanta
   { id: "z-atl-train", type: "training", name: "Mercedes-Benz Training Lane", lat: 33.7554, lng: -84.4009, benefit: "+Form" },
   { id: "z-atl-rival", type: "rival", name: "Midtown Rival Alley", lat: 33.762, lng: -84.386, benefit: "Battle" },
-  { id: "z-atl-fan", type: "fan-arena", name: "Peachtree Fan Arena", lat: 33.749, lng: -84.395, benefit: "+Fan Bond" },
+  { id: "z-atl-fan", type: "pressure", name: "Peachtree Fan Arena", lat: 33.749, lng: -84.395, benefit: "+Confidence" },
   { id: "z-atl-stad", type: "stadium", name: "MB Stadium Spotlight", lat: 33.7556, lng: -84.401, benefit: "Live Bonus" },
   { id: "z-atl-mis", type: "mission", name: "Centennial Park Photo Op", lat: 33.7605, lng: -84.3934, benefit: "Camera XP" },
   // Seattle
   { id: "z-sea-train", type: "training", name: "Lumen Technical Ground", lat: 47.5952, lng: -122.3316, benefit: "+Form" },
-  { id: "z-sea-rec", type: "recovery", name: "Queen Anne Recovery Loft", lat: 47.6205, lng: -122.3493, benefit: "+Morale" },
+  { id: "z-sea-rec", type: "stadium", name: "Queen Anne Recovery Loft", lat: 47.6205, lng: -122.3493, benefit: "+Morale" },
   { id: "z-sea-rival", type: "rival", name: "Capitol Hill Rival Cage", lat: 47.614, lng: -122.315, benefit: "Battle" },
-  { id: "z-sea-fan", type: "fan-arena", name: "Pioneer Square Fan Hub", lat: 47.608, lng: -122.335, benefit: "+Fan Bond" },
+  { id: "z-sea-fan", type: "pressure", name: "Pioneer Square Fan Hub", lat: 47.608, lng: -122.335, benefit: "+Confidence" },
   { id: "z-sea-stad", type: "stadium", name: "Lumen Field Match Surge", lat: 47.5952, lng: -122.3295, benefit: "Live Bonus" },
   { id: "z-sea-mis", type: "mission", name: "Pike Place Market Capture", lat: 47.6089, lng: -122.3406, benefit: "Camera XP" },
   // Mexico City
   { id: "z-mex-train", type: "training", name: "Ciudad Deportiva Elite Track", lat: 19.4042, lng: -99.1038, benefit: "+Form" },
   { id: "z-mex-rival", type: "rival", name: "Condesa Street Rivalry", lat: 19.411, lng: -99.168, benefit: "Battle" },
-  { id: "z-mex-fan", type: "fan-arena", name: "Zócalo Fan Surge", lat: 19.4326, lng: -99.1332, benefit: "+Fan Bond" },
+  { id: "z-mex-fan", type: "pressure", name: "Zócalo Fan Surge", lat: 19.4326, lng: -99.1332, benefit: "+Confidence" },
   { id: "z-mex-stad", type: "stadium", name: "Azteca Legacy Hotspot", lat: 19.3029, lng: -99.1508, benefit: "Live Bonus" },
-  { id: "z-mex-rec", type: "recovery", name: "Polanco Recovery Spa", lat: 19.4342, lng: -99.1886, benefit: "+Morale" },
+  { id: "z-mex-rec", type: "stadium", name: "Polanco Recovery Spa", lat: 19.4342, lng: -99.1886, benefit: "+Morale" },
   { id: "z-mex-mis", type: "mission", name: "Chapultepec Lens Trail", lat: 19.419, lng: -99.182, benefit: "Camera XP" },
   // Guadalajara
   { id: "z-gdl-train", type: "training", name: "Akron High-Press Grid", lat: 20.6927, lng: -103.3703, benefit: "+Form" },
-  { id: "z-gdl-fan", type: "fan-arena", name: "Centro Histórico Fan Ring", lat: 20.6776, lng: -103.3476, benefit: "+Fan Bond" },
+  { id: "z-gdl-fan", type: "pressure", name: "Centro Histórico Fan Ring", lat: 20.6776, lng: -103.3476, benefit: "+Confidence" },
   { id: "z-gdl-rival", type: "rival", name: "Tlaquepaque Rival Pitch", lat: 20.639, lng: -103.311, benefit: "Battle" },
   { id: "z-gdl-stad", type: "stadium", name: "Estadio Akron Surge", lat: 20.694, lng: -103.369, benefit: "Live Bonus" },
   // Monterrey
@@ -1100,18 +1100,18 @@ export const mockZones: MapZone[] = [
   // Toronto
   { id: "z-tor-train", type: "training", name: "BMO Field Practice Strip", lat: 43.6332, lng: -79.4186, benefit: "+Form" },
   { id: "z-tor-rival", type: "rival", name: "Kensington Rival Maze", lat: 43.6548, lng: -79.4024, benefit: "Battle" },
-  { id: "z-tor-fan", type: "fan-arena", name: "Jurassic Park Fan Arena", lat: 43.6426, lng: -79.3871, benefit: "+Fan Bond" },
-  { id: "z-tor-rec", type: "recovery", name: "Harbourfront Recovery Deck", lat: 43.6387, lng: -79.3816, benefit: "+Morale" },
+  { id: "z-tor-fan", type: "pressure", name: "Jurassic Park Fan Arena", lat: 43.6426, lng: -79.3871, benefit: "+Confidence" },
+  { id: "z-tor-rec", type: "stadium", name: "Harbourfront Recovery Deck", lat: 43.6387, lng: -79.3816, benefit: "+Morale" },
   { id: "z-tor-mis", type: "mission", name: "CN Tower Frame Challenge", lat: 43.6426, lng: -79.387, benefit: "Camera XP" },
   // Vancouver
   { id: "z-van-train", type: "training", name: "BC Place Conditioning Lane", lat: 49.2767, lng: -123.1111, benefit: "+Form" },
-  { id: "z-van-rec", type: "recovery", name: "Stanley Park Coastal Recovery", lat: 49.3043, lng: -123.1443, benefit: "+Morale" },
+  { id: "z-van-rec", type: "stadium", name: "Stanley Park Coastal Recovery", lat: 49.3043, lng: -123.1443, benefit: "+Morale" },
   { id: "z-van-rival", type: "rival", name: "Gastown Cobble Rivalry", lat: 49.2849, lng: -123.1088, benefit: "Battle" },
-  { id: "z-van-fan", type: "fan-arena", name: "BC Place Fan Concourse", lat: 49.2767, lng: -123.1085, benefit: "+Fan Bond" },
+  { id: "z-van-fan", type: "pressure", name: "BC Place Fan Concourse", lat: 49.2767, lng: -123.1085, benefit: "+Confidence" },
   { id: "z-van-mis", type: "mission", name: "Granville Island Capture", lat: 49.2712, lng: -123.135, benefit: "Camera XP" },
   // Montreal
   { id: "z-mon-train", type: "training", name: "Saputo Academy Grid", lat: 45.5609, lng: -73.5517, benefit: "+Form" },
-  { id: "z-mon-fan", type: "fan-arena", name: "Old Montreal Fan March", lat: 45.5075, lng: -73.5541, benefit: "+Fan Bond" },
+  { id: "z-mon-fan", type: "pressure", name: "Old Montreal Fan March", lat: 45.5075, lng: -73.5541, benefit: "+Confidence" },
   { id: "z-mon-stad", type: "stadium", name: "Olympic Stadium Surge", lat: 45.5581, lng: -73.5519, benefit: "Live Bonus" },
   { id: "z-mon-rival", type: "rival", name: "Plateau Rival Alley", lat: 45.5242, lng: -73.581, benefit: "Battle" },
   { id: "z-mon-mis", type: "mission", name: "Old Port Night Lens Op", lat: 45.507, lng: -73.551, benefit: "Camera XP" },
@@ -1120,53 +1120,53 @@ export const mockZones: MapZone[] = [
   { id: "z-chi-rival", type: "rival", name: "Soldier Field Clash", lat: 41.8623, lng: -87.6167, benefit: "Battle" },
   { id: "z-chi-stadium", type: "stadium", name: "Wrigley Football Ground", lat: 41.9484, lng: -87.6553, benefit: "+XP Boost" },
   // Los Angeles (additional)
-  { id: "z-la-fan2", type: "fan-arena", name: "Hollywood Fan Zone", lat: 34.0928, lng: -118.3287, benefit: "+Fan Bond" },
+  { id: "z-la-fan2", type: "pressure", name: "Hollywood Fan Zone", lat: 34.0928, lng: -118.3287, benefit: "+Confidence" },
   { id: "z-la-rival2", type: "rival", name: "Rose Bowl Duel", lat: 34.1614, lng: -118.1676, benefit: "Battle" },
   // Miami (additional)
-  { id: "z-mia-recover2", type: "recovery", name: "Coconut Grove Recovery", lat: 25.7296, lng: -80.2407, benefit: "+Morale" },
+  { id: "z-mia-recover2", type: "stadium", name: "Coconut Grove Recovery", lat: 25.7296, lng: -80.2407, benefit: "+Morale" },
   { id: "z-mia-pressure", type: "pressure", name: "South Beach Press Zone", lat: 25.7895, lng: -80.1300, benefit: "+Confidence" },
   // Houston
   { id: "z-hou-train", type: "training", name: "Houston Dynamo Grounds", lat: 29.7604, lng: -95.3698, benefit: "+Form" },
   { id: "z-hou-rival", type: "rival", name: "NRG Pitch Rival", lat: 29.6848, lng: -95.4108, benefit: "Battle" },
   // Dallas (additional)
-  { id: "z-dal-fan2", type: "fan-arena", name: "Deep Ellum Fan Zone", lat: 32.7842, lng: -96.7791, benefit: "+Fan Bond" },
+  { id: "z-dal-fan2", type: "pressure", name: "Deep Ellum Fan Zone", lat: 32.7842, lng: -96.7791, benefit: "+Confidence" },
   // Phoenix
   { id: "z-phx-train", type: "training", name: "Desert Sun Training Base", lat: 33.4484, lng: -112.0740, benefit: "+Form" },
   { id: "z-phx-stadium", type: "stadium", name: "State Farm Stadium Surge", lat: 33.5276, lng: -112.2626, benefit: "+XP Boost" },
   { id: "z-phx-pressure", type: "pressure", name: "Valley Pressure Pit", lat: 33.4372, lng: -112.0797, benefit: "+Confidence" },
   // Seattle (additional)
-  { id: "z-sea-fan2", type: "fan-arena", name: "Pacific Northwest Fan Zone", lat: 47.6062, lng: -122.3321, benefit: "+Fan Bond" },
+  { id: "z-sea-fan2", type: "pressure", name: "Pacific Northwest Fan Zone", lat: 47.6062, lng: -122.3321, benefit: "+Confidence" },
   // Boston
   { id: "z-bos-train", type: "training", name: "Gillette Training Grid", lat: 42.0909, lng: -71.2643, benefit: "+Form" },
   { id: "z-bos-rival", type: "rival", name: "Fenway Football Clash", lat: 42.3467, lng: -71.0972, benefit: "Battle" },
-  { id: "z-bos-recovery", type: "recovery", name: "Charles River Recovery Path", lat: 42.3601, lng: -71.0942, benefit: "+Morale" },
+  { id: "z-bos-recovery", type: "stadium", name: "Charles River Recovery Path", lat: 42.3601, lng: -71.0942, benefit: "+Morale" },
   // Atlanta (additional)
   { id: "z-atl-pressure", type: "pressure", name: "ATL Championship Pressure Zone", lat: 33.7550, lng: -84.3900, benefit: "+Confidence" },
   // Denver
   { id: "z-den-train", type: "training", name: "Mile High Training Complex", lat: 39.7392, lng: -104.9903, benefit: "+Form" },
-  { id: "z-den-fan", type: "fan-arena", name: "Empower Fan Fest", lat: 39.7439, lng: -105.0200, benefit: "+Fan Bond" },
+  { id: "z-den-fan", type: "pressure", name: "Empower Fan Fest", lat: 39.7439, lng: -105.0200, benefit: "+Confidence" },
   { id: "z-den-rival", type: "rival", name: "Rocky Mountain Rival Cage", lat: 39.7554, lng: -104.9942, benefit: "Battle" },
   // Portland
   { id: "z-por-train", type: "training", name: "Providence Park Training", lat: 45.5215, lng: -122.6916, benefit: "+Form" },
-  { id: "z-por-recovery", type: "recovery", name: "Forest Park Recovery Trail", lat: 45.5420, lng: -122.7490, benefit: "+Morale" },
+  { id: "z-por-recovery", type: "stadium", name: "Forest Park Recovery Trail", lat: 45.5420, lng: -122.7490, benefit: "+Morale" },
   // Las Vegas
   { id: "z-lv-stadium", type: "stadium", name: "Allegiant Stadium Surge", lat: 36.0909, lng: -115.1833, benefit: "+XP Boost" },
   { id: "z-lv-pressure", type: "pressure", name: "Strip Pressure Zone", lat: 36.1126, lng: -115.1729, benefit: "+Confidence" },
-  { id: "z-lv-fan", type: "fan-arena", name: "Vegas Fan Arena", lat: 36.1026, lng: -115.1702, benefit: "+Fan Bond" },
+  { id: "z-lv-fan", type: "pressure", name: "Vegas Fan Arena", lat: 36.1026, lng: -115.1702, benefit: "+Confidence" },
   // Toronto (additional)
   { id: "z-tor-stadium2", type: "stadium", name: "Scotiabank Arena Pitch", lat: 43.6435, lng: -79.3791, benefit: "+XP Boost" },
   // Montreal (additional)
-  { id: "z-mtl-recover", type: "recovery", name: "Montreal Recovery Lodge", lat: 45.5017, lng: -73.5673, benefit: "+Morale" },
+  { id: "z-mtl-recover", type: "stadium", name: "Montreal Recovery Lodge", lat: 45.5017, lng: -73.5673, benefit: "+Morale" },
   { id: "z-mtl-pressure", type: "pressure", name: "Old Port Pressure Test", lat: 45.5048, lng: -73.5546, benefit: "+Confidence" },
   // Vancouver (additional)
-  { id: "z-van-fan2", type: "fan-arena", name: "BC Place Fan Fest", lat: 49.2769, lng: -123.1118, benefit: "+Fan Bond" },
+  { id: "z-van-fan2", type: "pressure", name: "BC Place Fan Fest", lat: 49.2769, lng: -123.1118, benefit: "+Confidence" },
   { id: "z-van-train2", type: "training", name: "Whitecaps Training Centre", lat: 49.2604, lng: -123.0638, benefit: "+Form" },
   // Guadalajara (additional)
   { id: "z-gdl-rival2", type: "rival", name: "Chivas Rival Ground", lat: 20.6597, lng: -103.3496, benefit: "Battle" },
   { id: "z-gdl-stadium2", type: "stadium", name: "Estadio Akron", lat: 20.6706, lng: -103.4817, benefit: "+XP Boost" },
   // Monterrey (additional)
   { id: "z-mty-train2", type: "training", name: "BBVA Bancomer Grounds", lat: 25.6866, lng: -100.3161, benefit: "+Form" },
-  { id: "z-mty-fan", type: "fan-arena", name: "Monterrey Fan Arena", lat: 25.6751, lng: -100.3318, benefit: "+Fan Bond" },
+  { id: "z-mty-fan", type: "pressure", name: "Monterrey Fan Arena", lat: 25.6751, lng: -100.3318, benefit: "+Confidence" },
   // Puebla
   { id: "z-pue-train", type: "training", name: "Cuauhtémoc Training Grounds", lat: 19.0414, lng: -98.2063, benefit: "+Form" },
   { id: "z-pue-stadium", type: "stadium", name: "Estadio Cuauhtémoc Surge", lat: 19.0482, lng: -98.2019, benefit: "+XP Boost" },
@@ -1283,8 +1283,6 @@ export const rarityColors: Record<string, string> = {
 
 export const zoneIcons: Record<string, string> = {
   training:    "⚽",
-  recovery:    "💚",
-  "fan-arena": "🏟️",
   rival:       "⚔️",
   pressure:    "🔥",
   stadium:     "🌟",

@@ -490,7 +490,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (suggestedReplies.length === 0) {
       const byZone =
-        context?.zoneType === "recovery"
+        context?.zoneType === "stadium"
           ? ["How's your body now?", "Need a lighter plan?", "What helps your reset?"]
           : context?.zoneType === "rival"
             ? ["Talk rivalry mindset", "Where do we exploit them?", "How aggressive should we be?"]
