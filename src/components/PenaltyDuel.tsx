@@ -306,27 +306,34 @@ const PenaltyDuel = ({
   return (
     <div
       className="fixed inset-0 z-[1500] flex flex-col overflow-hidden select-none"
-      style={{ background: "hsl(225 35% 4%)" }}
+      style={{
+        background:
+          "linear-gradient(180deg, hsl(194 75% 66%) 0%, hsl(195 60% 57%) 16%, hsl(102 68% 43%) 44%, hsl(98 70% 39%) 100%)",
+      }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
       {/* Stadium atmosphere layers */}
       <div className="absolute inset-0 pointer-events-none">
-        {/* Pitch gradient */}
-        <div className="absolute inset-x-0 bottom-0 h-[45%]"
-          style={{ background: "linear-gradient(to top, hsl(153 40% 8% / 0.5), transparent)" }} />
-        {/* Stadium light cones */}
-        <div className="absolute top-0 left-[15%] w-32 h-60 animate-duel-stadium-pulse"
-          style={{ background: "linear-gradient(180deg, hsl(45 80% 90% / 0.04), transparent)", transform: "rotate(-8deg)" }} />
-        <div className="absolute top-0 right-[15%] w-32 h-60 animate-duel-stadium-pulse"
-          style={{ background: "linear-gradient(180deg, hsl(45 80% 90% / 0.04), transparent)", transform: "rotate(8deg)", animationDelay: "1.5s" }} />
-        {/* Rarity ambience */}
-        <div className="absolute inset-0" style={{
-          background: `radial-gradient(ellipse at 50% 25%, ${rarityColor} / 0.06, transparent 55%)`
-        }} />
-        {/* Vignette */}
-        <div className="absolute inset-0"
-          style={{ background: "radial-gradient(ellipse at 50% 50%, transparent 40%, hsl(225 35% 2% / 0.7) 100%)" }} />
+        <div
+          className="absolute inset-0 opacity-20"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(0deg, rgba(255,255,255,0.15) 0 2px, transparent 2px 24px)",
+          }}
+        />
+        <div
+          className="absolute inset-x-0 top-0 h-[28%]"
+          style={{ background: "linear-gradient(180deg, rgba(8,35,54,0.35), transparent)" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "radial-gradient(ellipse at 50% 10%, rgba(255,255,255,0.28), transparent 55%)" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: "radial-gradient(ellipse at 50% 56%, transparent 45%, rgba(8,32,20,0.28) 100%)" }}
+        />
       </div>
 
       {/* ─── INTRO CINEMATIC ─── */}
@@ -360,75 +367,85 @@ const PenaltyDuel = ({
 
       {/* ─── HUD (visible from ready onward) ─── */}
       {phase !== "intro" && (
-        <div className="relative z-30 flex items-center justify-between px-4 pt-[max(2.75rem,env(safe-area-inset-top))] pb-1.5 animate-fade-in">
+        <div className="relative z-30 flex items-center justify-between px-3 pt-[max(0.9rem,env(safe-area-inset-top))] pb-1.5 animate-fade-in">
           {/* Glove */}
-          <div className="flex items-center gap-1.5 glass-card px-2 py-1 rounded-xl">
-            <span className="text-sm">🧤</span>
-            <span className="text-[9px] font-bold text-foreground/70 max-w-[5rem] truncate">{gloveName}</span>
+          <div className="flex items-center gap-1.5 rounded-xl border border-white/35 bg-black/25 backdrop-blur-sm px-2 py-1">
+            <span className="text-xs">🧤</span>
+            <span className="text-[9px] font-bold text-white/90 max-w-[5rem] truncate">{gloveName}</span>
           </div>
           {/* Difficulty */}
-          <div className="text-center">
-            <p className="text-[8px] uppercase tracking-widest text-muted-foreground/60">Penalty Duel</p>
-            <p className={`text-[10px] font-black ${
-              player.rarity === "legendary" ? "text-accent" :
-              player.rarity === "epic" ? "text-glow-epic" :
-              player.rarity === "rare" ? "text-glow-rare" : "text-muted-foreground"
-            }`}>{diffLabel}</p>
+          <div className="text-center rounded-xl border border-white/30 bg-black/25 px-2.5 py-1 backdrop-blur-sm">
+            <p className="text-[8px] uppercase tracking-[0.14em] text-white/75">Penalty Duel</p>
+            <p className="text-[10px] font-black text-yellow-200">{diffLabel}</p>
           </div>
           {/* Focus Points */}
-          <div className="flex items-center gap-1 glass-card px-2 py-1 rounded-xl">
-            <span className="text-sm">🎯</span>
-            <span className="text-xs font-black text-accent">{focusPoints}</span>
-            <span className="text-[8px] text-muted-foreground">FP</span>
+          <div className="flex items-center gap-1 rounded-xl border border-white/35 bg-black/25 px-2 py-1 backdrop-blur-sm">
+            <span className="text-xs">⚽</span>
+            <span className="text-xs font-black text-white">{focusPoints}</span>
+            <span className="text-[8px] text-white/80">FP</span>
           </div>
         </div>
       )}
 
       {/* ─── MAIN DUEL AREA ─── */}
       {phase !== "intro" && (
-        <div className="relative flex-1 flex flex-col items-center justify-center px-4">
-          {/* Shooter portrait (compact badge above goal) */}
-          <div className={`relative z-20 mb-3 transition-all duration-700 ${
-            phase === "runup" ? "animate-duel-runup" :
-            phase === "shoot" ? "animate-duel-tension" : ""
-          }`}>
-            <AnimatedPortrait player={player} size="md" className={`
-              ${phase === "save" ? "opacity-70 scale-90 transition-all duration-500" : ""}
-              ${phase === "goal" ? "scale-105 transition-all duration-500" : ""}
-            `} />
-            {/* Rarity ring */}
-            <div className="absolute -inset-1 rounded-full pointer-events-none" style={{
-              boxShadow: `0 0 20px ${rarityColor} / 0.25, 0 0 60px ${rarityColor} / 0.08`,
-            }} />
+        <div className="relative flex-1 flex flex-col items-center justify-start px-3 pt-1">
+          <div className="relative z-20 w-full max-w-[340px] rounded-2xl border border-white/35 bg-black/25 backdrop-blur-sm p-2.5 mb-2">
+            <div className="flex items-center gap-2.5">
+              <div className={`relative transition-all duration-500 ${
+                phase === "runup" ? "animate-duel-runup" :
+                phase === "shoot" ? "animate-duel-tension" : ""
+              }`}>
+                <AnimatedPortrait player={player} size="sm" />
+                <div
+                  className="absolute -inset-1 rounded-full pointer-events-none"
+                  style={{ boxShadow: `0 0 16px ${rarityColor}55` }}
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-white truncate">{player.name}</p>
+                <p className="text-[10px] text-white/85 truncate">
+                  {player.position} · {player.representedCountry}
+                </p>
+              </div>
+              <div className="ml-auto rounded-lg border border-white/35 bg-white/10 px-2 py-1">
+                <p className="text-[9px] font-black text-white">{roleMode ? roleMode.toUpperCase() : "DUEL"}</p>
+              </div>
+            </div>
           </div>
 
-          <p className="relative z-20 text-sm font-black text-foreground mb-0.5">{player.name}</p>
-          <p className="relative z-20 text-[9px] text-muted-foreground mb-4">
-            {player.position} · {player.nationalTeam}
-          </p>
-
           {/* ─── GOAL FRAME ─── */}
-          <div className={`relative z-20 w-full max-w-[320px] aspect-[5/3] mx-auto ${
-            phase === "save" ? "animate-duel-save-shake" : ""
+          <div className={`relative z-20 w-full max-w-[350px] aspect-[4/3] mx-auto ${
+            phase === "result" && (outcome === "save" || outcome === "deflected") ? "animate-duel-save-shake" : ""
           }`}>
+            <div
+              className="absolute -inset-x-2 -top-5 h-10 rounded-2xl border border-white/25 bg-black/20 overflow-hidden"
+              style={{ backdropFilter: "blur(2px)" }}
+            >
+              <div className="absolute inset-0 opacity-55 text-[11px] font-black tracking-[0.18em] text-red-200/70 flex items-center">
+                <span className="whitespace-nowrap animate-[marquee_9s_linear_infinite]">
+                  PENALTY CROWD · MATCH NIGHT · PENALTY CROWD · MATCH NIGHT ·
+                </span>
+              </div>
+            </div>
             {/* Frame structure */}
             <div className="absolute inset-0 rounded-t-2xl overflow-hidden"
               style={{
-                border: "3px solid hsl(var(--foreground) / 0.15)",
-                borderBottom: "3px solid hsl(var(--foreground) / 0.1)",
-                background: "linear-gradient(175deg, hsl(var(--foreground) / 0.04) 0%, transparent 60%)",
+                border: "3px solid rgba(255,255,255,0.82)",
+                borderBottom: "2px solid rgba(255,255,255,0.65)",
+                background: "linear-gradient(180deg, rgba(225,252,238,0.12) 0%, rgba(32,94,42,0.18) 100%)",
               }}>
 
               {/* Net pattern */}
-              <div className="absolute inset-0 opacity-[0.04]" style={{
-                backgroundImage: `repeating-linear-gradient(90deg, hsl(var(--foreground)) 0px, transparent 1px, transparent 14px),
-                                  repeating-linear-gradient(0deg, hsl(var(--foreground)) 0px, transparent 1px, transparent 14px)`,
+              <div className="absolute inset-0 opacity-[0.16]" style={{
+                backgroundImage: `repeating-linear-gradient(90deg, rgba(255,255,255,0.55) 0px, transparent 1px, transparent 14px),
+                                  repeating-linear-gradient(0deg, rgba(255,255,255,0.55) 0px, transparent 1px, transparent 14px)`,
               }} />
 
               {/* Zone lines */}
-              <div className="absolute top-0 bottom-0 left-[33.3%] w-px bg-foreground/5" />
-              <div className="absolute top-0 bottom-0 left-[66.6%] w-px bg-foreground/5" />
-              <div className="absolute left-0 right-0 top-1/2 h-px bg-foreground/5" />
+              <div className="absolute top-0 bottom-0 left-[33.3%] w-px bg-white/10" />
+              <div className="absolute top-0 bottom-0 left-[66.6%] w-px bg-white/10" />
+              <div className="absolute left-0 right-0 top-1/2 h-px bg-white/10" />
 
               {/* 6-zone selector (setup only) */}
               {phase === "setup" && (
@@ -491,7 +508,7 @@ const PenaltyDuel = ({
                   className={`h-8 w-8 rounded-full border-2 flex items-center justify-center text-[10px] font-black ${
                     phase === "dive"
                       ? "border-primary bg-primary/25 text-primary"
-                      : "border-foreground/30 bg-background/70 text-foreground/80"
+                      : "border-white/65 bg-sky-500/35 text-white"
                   }`}
                 >
                   GK
@@ -514,10 +531,10 @@ const PenaltyDuel = ({
 
             {/* Grass edge */}
             <div className="absolute -bottom-3 inset-x-0 h-6 rounded-b-xl"
-              style={{ background: "linear-gradient(to top, hsl(153 45% 15% / 0.35), transparent)" }} />
+              style={{ background: "linear-gradient(to top, rgba(32,95,44,0.65), transparent)" }} />
 
             {/* Penalty spot */}
-            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-foreground/15" />
+            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white/70" />
 
             {/* Kicker character + idle/run-up near penalty spot */}
             <div
@@ -529,7 +546,7 @@ const PenaltyDuel = ({
               <div className={`h-9 w-9 rounded-full border-2 flex items-center justify-center text-xs font-black ${
                 showKickMotion
                   ? "border-amber-300/70 bg-amber-500/20 text-amber-200"
-                  : "border-foreground/30 bg-background/70 text-foreground/80"
+                  : "border-white/70 bg-red-500/25 text-white"
               }`}>
                 ST
               </div>
@@ -550,15 +567,15 @@ const PenaltyDuel = ({
           </div>
 
           {/* ─── PHASE MESSAGES ─── */}
-          <div className="relative z-20 mt-4 text-center min-h-0 flex-1 overflow-y-auto flex flex-col items-center justify-center px-4">
+          <div className="relative z-20 mt-2 text-center min-h-0 flex-1 overflow-y-auto flex flex-col items-center justify-center px-2">
             {phase === "ready" && (
-              <div className="animate-fade-in-up">
-                <p className="text-sm text-foreground/80 italic max-w-[260px] leading-relaxed">
+              <div className="animate-fade-in-up rounded-xl border border-white/35 bg-black/20 px-3 py-2 max-w-[300px]">
+                <p className="text-[11px] text-white/90 italic leading-relaxed">
                   "{preLine}"
                 </p>
-                <p className="text-[10px] text-muted-foreground mt-1">— {player.name}</p>
+                <p className="text-[9px] text-white/75 mt-1">— {player.name}</p>
                 {gloveName && gloveName !== "Basic Gloves" && (
-                  <p className="text-[10px] text-emerald-400 mt-2 font-bold">🧤 {gloveName} active — wider save window</p>
+                  <p className="text-[9px] text-emerald-200 mt-1.5 font-bold">🧤 {gloveName} active</p>
                 )}
               </div>
             )}
@@ -648,10 +665,10 @@ const PenaltyDuel = ({
             )}
             {phase === "shoot" && (
               <div className="animate-fade-in w-full max-w-[280px]">
-                <p className="text-2xl font-black text-foreground tracking-tight animate-bounce mb-3">
+                <p className="text-2xl font-black text-white tracking-tight animate-bounce mb-2">
                   {roleMode === "kick" ? "KICK!" : "SHOT!"}
                 </p>
-                <p className="text-[10px] text-foreground/40">
+                <p className="text-[10px] text-white/85">
                   {roleMode === "kick"
                     ? `${goalZoneLabel[chosenRef.current]} · ${powerBandLabel(capturedPower)}`
                     : `${goalZoneLabel[chosenRef.current]} · ${(actualShotType ?? "speed").toUpperCase()}`}
@@ -659,7 +676,7 @@ const PenaltyDuel = ({
               </div>
             )}
             {phase === "dive" && (
-              <p className="text-sm font-bold text-primary animate-fade-in">
+              <p className="text-sm font-bold text-white animate-fade-in drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
                 {roleMode === "kick" ? `Keeper dives ${diveDir}…` : `Diving ${diveDir}…`}
               </p>
             )}
@@ -972,7 +989,7 @@ function SixZoneGoalSelector({
 }) {
   const zones: GoalZone[] = ["tl", "tc", "tr", "bl", "bc", "br"];
   return (
-    <div className="absolute inset-0 grid grid-cols-3 grid-rows-2 gap-px p-1.5">
+    <div className="absolute inset-0 grid grid-cols-3 grid-rows-2 gap-[2px] p-1.5">
       {zones.map((z) => {
         const selected = selectedZone === z;
         return (
@@ -980,13 +997,15 @@ function SixZoneGoalSelector({
             key={z}
             type="button"
             onClick={() => onSelect(z)}
-            className={`rounded-md border text-[8px] font-black transition-all ${
+            className={`group rounded-sm border transition-all ${
               selected
-                ? "border-primary bg-primary/25 text-primary shadow-[0_0_14px_rgba(99,102,241,0.45)]"
-                : "border-border/25 bg-background/20 text-foreground/65"
+                ? "border-cyan-200/90 bg-cyan-300/25 shadow-[0_0_16px_rgba(34,211,238,0.55)]"
+                : "border-white/20 bg-transparent hover:bg-white/10 active:bg-white/15"
             }`}
           >
-            {z === "tl" ? "TL" : z === "tc" ? "TC" : z === "tr" ? "TR" : z === "bl" ? "BL" : z === "bc" ? "BC" : "BR"}
+            <span className={`text-[8px] font-black tracking-wide ${selected ? "text-cyan-100" : "text-white/75 group-hover:text-white"}`}>
+              {z === "tl" ? "TL" : z === "tc" ? "TC" : z === "tr" ? "TR" : z === "bl" ? "BL" : z === "bc" ? "BC" : "BR"}
+            </span>
           </button>
         );
       })}
