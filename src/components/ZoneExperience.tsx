@@ -867,6 +867,20 @@ const PVP_TURN_TIMER_SEC = 6;
 const PVP_AI_LOCK_MIN_MS = 250;
 const PVP_AI_LOCK_JITTER_MS = 350;
 const PVP_REVEAL_MS = 450;
+const PVP_DUEL_TURNS: PvPTurn[] = [
+  { round: 1, sudden: false, kicker: "you", keeper: "them" },
+  { round: 1, sudden: false, kicker: "them", keeper: "you" },
+  { round: 2, sudden: false, kicker: "you", keeper: "them" },
+  { round: 2, sudden: false, kicker: "them", keeper: "you" },
+  { round: 3, sudden: false, kicker: "you", keeper: "them" },
+  { round: 3, sudden: false, kicker: "them", keeper: "you" },
+  { round: 4, sudden: true, kicker: "you", keeper: "them" },
+  { round: 4, sudden: true, kicker: "them", keeper: "you" },
+  { round: 5, sudden: true, kicker: "you", keeper: "them" },
+  { round: 5, sudden: true, kicker: "them", keeper: "you" },
+  { round: 6, sudden: true, kicker: "you", keeper: "them" },
+  { round: 6, sudden: true, kicker: "them", keeper: "you" },
+];
 
 const PVP_BALL_POS: Record<PvPGoalZone | "miss-left" | "miss-right" | "miss-high", { left: string; top: string }> = {
   tl: { left: "17%", top: "20%" },
@@ -1058,21 +1072,7 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
     return () => window.clearInterval(id);
   }, [requestExpiresAt]);
 
-  const duelTurns: PvPTurn[] = [
-    { round: 1, sudden: false, kicker: "you", keeper: "them" },
-    { round: 1, sudden: false, kicker: "them", keeper: "you" },
-    { round: 2, sudden: false, kicker: "you", keeper: "them" },
-    { round: 2, sudden: false, kicker: "them", keeper: "you" },
-    { round: 3, sudden: false, kicker: "you", keeper: "them" },
-    { round: 3, sudden: false, kicker: "them", keeper: "you" },
-    { round: 4, sudden: true, kicker: "you", keeper: "them" },
-    { round: 4, sudden: true, kicker: "them", keeper: "you" },
-    { round: 5, sudden: true, kicker: "you", keeper: "them" },
-    { round: 5, sudden: true, kicker: "them", keeper: "you" },
-    { round: 6, sudden: true, kicker: "you", keeper: "them" },
-    { round: 6, sudden: true, kicker: "them", keeper: "you" },
-  ];
-  const curTurn = duelTurns[Math.min(duelTurnIndex, duelTurns.length - 1)]!;
+  const curTurn = PVP_DUEL_TURNS[Math.min(duelTurnIndex, PVP_DUEL_TURNS.length - 1)]!;
   const isYourKick = curTurn.kicker === "you";
 
   useEffect(() => {
