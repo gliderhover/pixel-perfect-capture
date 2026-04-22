@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, type PointerEvent } from "react";
+import { useState, useEffect, useCallback, useRef, type PointerEvent } from "react";
 import {
   X, Dumbbell, Swords, Flame, Trophy,
   ChevronRight, Check, Zap, Timer,
@@ -61,23 +61,66 @@ function isPassingTriangleMeta(m: ActivityCompleteMeta | undefined): m is { pass
   return Boolean(m && typeof m === "object" && "passingTriangle" in m);
 }
 
-function distPointToSegment(
-  px: number,
-  py: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number
-): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq < 1e-6) return Math.hypot(px - x1, py - y1);
-  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  const qx = x1 + t * dx;
-  const qy = y1 + t * dy;
-  return Math.hypot(px - qx, py - qy);
+function quadBezierPoint(
+  p0: { x: number; y: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  t: number
+) {
+  const o = 1 - t;
+  return {
+    x: o * o * p0.x + 2 * o * t * p1.x + t * t * p2.x,
+    y: o * o * p0.y + 2 * o * t * p1.y + t * t * p2.y,
+  };
+}
+
+function clampBotOutsideCenter(
+  x: number,
+  y: number,
+  cx: number,
+  cy: number,
+  rGuard: number,
+  pad: number,
+  field: number
+) {
+  let px = Math.max(pad, Math.min(field - pad, x));
+  let py = Math.max(pad, Math.min(field - pad, y));
+  const dx = px - cx;
+  const dy = py - cy;
+  const d = Math.hypot(dx, dy);
+  if (d < rGuard + 0.01) {
+    const a = Math.atan2(dy, dx);
+    px = cx + Math.cos(a) * (rGuard + 1.5);
+    py = cy + Math.sin(a) * (rGuard + 1.5);
+  }
+  return { x: px, y: py };
+}
+
+function separateBotTriad(
+  bots: Array<{ x: number; y: number }>,
+  minD: number,
+  cx: number,
+  cy: number,
+  rGuard: number,
+  pad: number,
+  field: number
+) {
+  const out = bots.map((b) => ({ ...b }));
+  for (let i = 0; i < out.length; i++) {
+    for (let j = i + 1; j < out.length; j++) {
+      const dx = out[j]!.x - out[i]!.x;
+      const dy = out[j]!.y - out[i]!.y;
+      const d = Math.hypot(dx, dy);
+      if (d < minD && d > 1e-6) {
+        const push = (minD - d) / 2 + 0.5;
+        const nx = (dx / d) * push;
+        const ny = (dy / d) * push;
+        out[i] = { x: out[i]!.x - nx, y: out[i]!.y - ny };
+        out[j] = { x: out[j]!.x + nx, y: out[j]!.y + ny };
+      }
+    }
+  }
+  return out.map((b) => clampBotOutsideCenter(b.x, b.y, cx, cy, rGuard, pad, field));
 }
 
 function clampToDisk(px: number, py: number, cx: number, cy: number, r: number) {
@@ -90,12 +133,42 @@ function clampToDisk(px: number, py: number, cx: number, cy: number, r: number) 
 
 function passingTriangleDifficulty(playedSec: number) {
   if (playedSec < 10) {
-    return { passGapMin: 800, passGapMax: 1100, ballMin: 600, ballMax: 750, interceptR: 34, laneCutR: 22 };
+    return {
+      passGapMin: 800,
+      passGapMax: 1100,
+      ballMin: 600,
+      ballMax: 750,
+      interceptR: 30,
+      curveChance: 0.34,
+      botSpeed: 46,
+      botRetargetMin: 1800,
+      botRetargetMax: 2600,
+    };
   }
   if (playedSec < 20) {
-    return { passGapMin: 1200, passGapMax: 1600, ballMin: 850, ballMax: 1000, interceptR: 38, laneCutR: 26 };
+    return {
+      passGapMin: 1200,
+      passGapMax: 1600,
+      ballMin: 850,
+      ballMax: 1000,
+      interceptR: 37,
+      curveChance: 0.28,
+      botSpeed: 32,
+      botRetargetMin: 2800,
+      botRetargetMax: 3800,
+    };
   }
-  return { passGapMin: 1800, passGapMax: 2200, ballMin: 1100, ballMax: 1300, interceptR: 42, laneCutR: 30 };
+  return {
+    passGapMin: 1800,
+    passGapMax: 2200,
+    ballMin: 1100,
+    ballMax: 1300,
+    interceptR: 44,
+    curveChance: 0.22,
+    botSpeed: 22,
+    botRetargetMin: 4000,
+    botRetargetMax: 5200,
+  };
 }
 
 function randRange(a: number, b: number) {
@@ -1039,12 +1112,64 @@ function PressureActivity({
 }
 
 /* ── Stadium Zone: Passing Triangle ───────────────────────────────────── */
-const PT_FIELD = 260;
+const PT_FIELD = 380;
 const PT_CX = PT_FIELD / 2;
 const PT_CY = PT_FIELD / 2;
-const PT_R_MOVE = 70;
-const PT_R_BOT = 104;
+const PT_PAD = 14;
+const PT_R_MOVE = 82;
+/** Bots must stay outside this radius from pitch center (defender zone + margin). */
+const PT_R_GUARD = PT_R_MOVE + 36;
 const PT_BOT_ANGLES = [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6] as const;
+
+type PtBot = { x: number; y: number; tx: number; ty: number; nextRetargetAt: number };
+type PtLeg = {
+  from: number;
+  to: number;
+  start: number;
+  dur: number;
+  curved: boolean;
+  p0: { x: number; y: number };
+  p2: { x: number; y: number };
+  ctrl: { x: number; y: number };
+};
+
+function makeInitialPtBots(): PtBot[] {
+  const ring = PT_R_GUARD + 38;
+  return PT_BOT_ANGLES.map((ang) => {
+    const x = PT_CX + Math.cos(ang) * ring;
+    const y = PT_CY + Math.sin(ang) * ring;
+    const c = clampBotOutsideCenter(x, y, PT_CX, PT_CY, PT_R_GUARD, PT_PAD, PT_FIELD);
+    return { x: c.x, y: c.y, tx: c.x, ty: c.y, nextRetargetAt: 0 };
+  });
+}
+
+function tryPickBotTarget(i: number, bots: PtBot[], diff: ReturnType<typeof passingTriangleDifficulty>) {
+  const others = bots.filter((_, j) => j !== i).map((b) => ({ x: b.x, y: b.y }));
+  for (let k = 0; k < 14; k++) {
+    const anchor = PT_BOT_ANGLES[i]!;
+    const ang = anchor + (Math.random() - 0.5) * 1.2;
+    const outer = PT_FIELD / 2 - PT_PAD - 8;
+    const rad = PT_R_GUARD + 10 + Math.random() * Math.max(10, outer - PT_R_GUARD - 14);
+    const rawX = PT_CX + Math.cos(ang) * rad;
+    const rawY = PT_CY + Math.sin(ang) * rad;
+    const p = clampBotOutsideCenter(rawX, rawY, PT_CX, PT_CY, PT_R_GUARD, PT_PAD, PT_FIELD);
+    let ok = true;
+    for (const o of others) {
+      if (Math.hypot(p.x - o.x, p.y - o.y) < 24) ok = false;
+    }
+    if (ok) return { x: p.x, y: p.y };
+  }
+  const a = PT_BOT_ANGLES[i]!;
+  return clampBotOutsideCenter(
+    PT_CX + Math.cos(a) * (PT_R_GUARD + 30),
+    PT_CY + Math.sin(a) * (PT_R_GUARD + 30),
+    PT_CX,
+    PT_CY,
+    PT_R_GUARD,
+    PT_PAD,
+    PT_FIELD
+  );
+}
 
 function StadiumActivity({
   onComplete,
@@ -1053,10 +1178,6 @@ function StadiumActivity({
 }) {
   const { activePlayer } = useGameProgress();
   type PtPhase = "ready" | "playing" | "result";
-  const botPts = useMemo(
-    () => PT_BOT_ANGLES.map((a) => ({ x: PT_CX + PT_R_BOT * Math.cos(a), y: PT_CY + PT_R_BOT * Math.sin(a) })),
-    []
-  );
 
   const fieldRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<PtPhase>("ready");
@@ -1064,15 +1185,15 @@ function StadiumActivity({
   const [remaining, setRemaining] = useState(30);
   const [urgency, setUrgency] = useState<"high" | "mid" | "low">("high");
   const [, setRender] = useState(0);
-  const [passVisual, setPassVisual] = useState<{ from: number; to: number } | null>(null);
   const [resultPayload, setResultPayload] = useState<PassingTriangleReward | null>(null);
 
   const defenderRef = useRef({ x: PT_CX, y: PT_CY });
   const targetRef = useRef({ x: PT_CX, y: PT_CY });
-  const ballRef = useRef({ x: botPts[0]!.x, y: botPts[0]!.y });
+  const botsRef = useRef<PtBot[]>(makeInitialPtBots());
+  const ballRef = useRef({ x: botsRef.current[0]!.x, y: botsRef.current[0]!.y });
   const playStartRef = useRef(0);
   const holderRef = useRef(0);
-  const legRef = useRef<{ from: number; to: number; start: number; dur: number } | null>(null);
+  const legRef = useRef<PtLeg | null>(null);
   const gapEndRef = useRef(0);
   const endedRef = useRef(false);
   const rafRef = useRef<number>(0);
@@ -1081,18 +1202,18 @@ function StadiumActivity({
     endedRef.current = false;
     defenderRef.current = { x: PT_CX, y: PT_CY };
     targetRef.current = { x: PT_CX, y: PT_CY };
-    ballRef.current = { x: botPts[0]!.x, y: botPts[0]!.y };
+    botsRef.current = makeInitialPtBots();
+    ballRef.current = { x: botsRef.current[0]!.x, y: botsRef.current[0]!.y };
     holderRef.current = 0;
     legRef.current = null;
     gapEndRef.current = 0;
     playStartRef.current = 0;
-    setPassVisual(null);
     setResultPayload(null);
     setRemaining(30);
     setUrgency("high");
     setReadyN(3);
     setPhase("ready");
-  }, [botPts]);
+  }, []);
 
   useEffect(() => {
     if (phase !== "ready") return;
@@ -1129,29 +1250,85 @@ function StadiumActivity({
       setUrgency(played < 10 ? "high" : played < 20 ? "mid" : "low");
       const diff = passingTriangleDifficulty(played);
 
+      const startFrameBots = botsRef.current.map((b) => ({ ...b }));
+      const nextBots = startFrameBots.map((b) => ({ ...b }));
+      for (let i = 0; i < 3; i++) {
+        const bb = nextBots[i]!;
+        if (now >= bb.nextRetargetAt) {
+          const t = tryPickBotTarget(i, startFrameBots, diff);
+          bb.tx = t.x;
+          bb.ty = t.y;
+          bb.nextRetargetAt = now + randRange(diff.botRetargetMin, diff.botRetargetMax);
+        }
+        const dx = bb.tx - bb.x;
+        const dy = bb.ty - bb.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 0.25) {
+          const mv = Math.min(dist, diff.botSpeed * dt);
+          bb.x += (dx / dist) * mv;
+          bb.y += (dy / dist) * mv;
+        }
+      }
+      const separated = separateBotTriad(
+        nextBots.map((b) => ({ x: b.x, y: b.y })),
+        26,
+        PT_CX,
+        PT_CY,
+        PT_R_GUARD,
+        PT_PAD,
+        PT_FIELD
+      );
+      for (let i = 0; i < 3; i++) {
+        nextBots[i]!.x = separated[i]!.x;
+        nextBots[i]!.y = separated[i]!.y;
+      }
+      botsRef.current = nextBots;
+
       if (legRef.current === null) {
         if (now >= gapEndRef.current) {
           const from = holderRef.current;
-          const others = [0, 1, 2].filter((i) => i !== from) as [number, number];
+          const others = [0, 1, 2].filter((j) => j !== from) as [number, number];
           const to = others[Math.floor(Math.random() * 2)]!;
-          legRef.current = { from, to, start: now, dur: randRange(diff.ballMin, diff.ballMax) };
-          setPassVisual({ from, to });
+          const bFrom = botsRef.current[from]!;
+          const bTo = botsRef.current[to]!;
+          const p0 = { x: bFrom.x, y: bFrom.y };
+          const p2 = { x: bTo.x, y: bTo.y };
+          const mx = (p0.x + p2.x) / 2;
+          const my = (p0.y + p2.y) / 2;
+          const curved = Math.random() < diff.curveChance;
+          let ctrl = { x: mx, y: my };
+          if (curved) {
+            const vx = p2.x - p0.x;
+            const vy = p2.y - p0.y;
+            const len = Math.hypot(vx, vy) || 1;
+            const perpX = -vy / len;
+            const perpY = vx / len;
+            const sign = Math.random() < 0.5 ? -1 : 1;
+            const amp = 14 + Math.random() * 12;
+            ctrl = { x: mx + perpX * amp * sign, y: my + perpY * amp * sign };
+          }
+          legRef.current = {
+            from,
+            to,
+            start: now,
+            dur: randRange(diff.ballMin, diff.ballMax),
+            curved,
+            p0,
+            p2,
+            ctrl,
+          };
         }
       } else {
         const leg = legRef.current;
         const u = Math.min(1, (now - leg.start) / leg.dur);
-        const fx = botPts[leg.from]!.x;
-        const fy = botPts[leg.from]!.y;
-        const tx = botPts[leg.to]!.x;
-        const ty = botPts[leg.to]!.y;
-        const bx = fx + (tx - fx) * u;
-        const by = fy + (ty - fy) * u;
-        ballRef.current = { x: bx, y: by };
+        const bpos = leg.curved
+          ? quadBezierPoint(leg.p0, leg.ctrl, leg.p2, u)
+          : { x: leg.p0.x + (leg.p2.x - leg.p0.x) * u, y: leg.p0.y + (leg.p2.y - leg.p0.y) * u };
+        ballRef.current = bpos;
 
         const dr = defenderRef.current;
-        const dBall = Math.hypot(dr.x - bx, dr.y - by);
-        const laneD = distPointToSegment(dr.x, dr.y, fx, fy, tx, ty);
-        if (dBall < diff.interceptR || (laneD < diff.laneCutR && dBall < diff.interceptR + 14)) {
+        const dBall = Math.hypot(dr.x - bpos.x, dr.y - bpos.y);
+        if (dBall < diff.interceptR) {
           endedRef.current = true;
           setResultPayload(passingTriangleTierForIntercept(played));
           setPhase("result");
@@ -1162,7 +1339,6 @@ function StadiumActivity({
           holderRef.current = leg.to;
           legRef.current = null;
           gapEndRef.current = now + randRange(diff.passGapMin, diff.passGapMax);
-          setPassVisual(null);
         }
       }
 
@@ -1171,7 +1347,7 @@ function StadiumActivity({
       const vx = tgt.x - d.x;
       const vy = tgt.y - d.y;
       const len = Math.hypot(vx, vy);
-      const speed = 125;
+      const speed = 128;
       if (len > 0.5) {
         const step = Math.min(len, speed * dt);
         const nx = d.x + (vx / len) * step;
@@ -1188,7 +1364,7 @@ function StadiumActivity({
     return () => {
       cancelAnimationFrame(rafRef.current);
     };
-  }, [phase, botPts]);
+  }, [phase]);
 
   useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
 
@@ -1215,6 +1391,7 @@ function StadiumActivity({
 
   const d = defenderRef.current;
   const b = ballRef.current;
+  const bots = botsRef.current;
 
   return (
     <div
@@ -1222,12 +1399,11 @@ function StadiumActivity({
       style={{ touchAction: phase === "playing" ? "none" : "manipulation" }}
     >
       <p className="text-xs font-black text-foreground tracking-tight">Passing Triangle</p>
-      <p className="text-[10px] text-muted-foreground mt-0.5">Monkey in the middle — cut the lane.</p>
+      <p className="text-[10px] text-muted-foreground mt-0.5">Monkey in the middle — read the ball.</p>
 
       <div
         ref={fieldRef}
-        className="relative mx-auto mt-3 rounded-2xl border border-yellow-500/25 bg-gradient-to-b from-emerald-950/50 via-background/90 to-background overflow-hidden"
-        style={{ width: "min(100%, 300px)", aspectRatio: "1" }}
+        className="relative mx-auto mt-3 rounded-2xl border border-yellow-500/25 bg-gradient-to-b from-emerald-950/50 via-background/90 to-background overflow-hidden max-h-[min(72dvh,420px)] w-[min(100%,min(92vw,400px))] aspect-square"
         onPointerDown={onFieldPointer}
       >
         <svg
@@ -1251,19 +1427,9 @@ function StadiumActivity({
             strokeWidth={urgency === "high" ? 3 : 2}
             strokeDasharray={phase === "ready" ? "6 4" : "0"}
           />
-          {passVisual && (
-            <line
-              x1={botPts[passVisual.from]!.x}
-              y1={botPts[passVisual.from]!.y}
-              x2={botPts[passVisual.to]!.x}
-              y2={botPts[passVisual.to]!.y}
-              stroke={urgency === "high" ? "rgba(251,113,133,0.55)" : "rgba(250,204,21,0.35)"}
-              strokeWidth="2"
-            />
-          )}
         </svg>
 
-        {botPts.map((p, i) => (
+        {bots.map((p, i) => (
           <div
             key={`bot-${i}`}
             className="absolute flex flex-col items-center pointer-events-none"
