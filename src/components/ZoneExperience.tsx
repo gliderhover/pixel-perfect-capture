@@ -1052,6 +1052,7 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
   const [lastExplain, setLastExplain] = useState("");
   const [matchDone, setMatchDone] = useState(false);
   const powerDirRef = useRef(1);
+  const advanceTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -1077,6 +1078,10 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
 
   useEffect(() => {
     if (!duelTargetId || matchDone) return;
+    if (advanceTimerRef.current !== null) {
+      window.clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
     setTurnTimer(PVP_TURN_TIMER_SEC);
     setLockedYou(false);
     setLockedThem(false);
@@ -1090,6 +1095,14 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
     setLastOutcome(null);
     setLastExplain("");
   }, [duelTargetId, duelTurnIndex, matchDone]);
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimerRef.current !== null) {
+        window.clearTimeout(advanceTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!duelTargetId || matchDone) return;
@@ -1157,7 +1170,10 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
     setYouScore(nextYou);
     setThemScore(nextThem);
 
-    const nextT = window.setTimeout(() => {
+    if (advanceTimerRef.current !== null) {
+      window.clearTimeout(advanceTimerRef.current);
+    }
+    advanceTimerRef.current = window.setTimeout(() => {
       const nextIdx = duelTurnIndex + 1;
       const afterRegulation = nextIdx >= 6;
       if (afterRegulation && (nextIdx >= 12 || (nextIdx % 2 === 0 && nextYou !== nextThem))) {
@@ -1184,8 +1200,8 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
         return;
       }
       setDuelTurnIndex(nextIdx);
+      advanceTimerRef.current = null;
     }, PVP_REVEAL_MS);
-    return () => window.clearTimeout(nextT);
   }, [
     duelTargetId,
     turnPhase,
