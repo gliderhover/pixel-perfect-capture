@@ -1198,9 +1198,6 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
     duelTurnIndex,
     activePlayer.stats.overall,
     activePlayer.name,
-    youScore,
-    themScore,
-    challengers,
     onComplete,
   ]);
 
