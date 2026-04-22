@@ -26,6 +26,23 @@ type TrainingTriviaMeta = {
   totalQuestions: number;
 };
 
+/** Pressure Clock — fixed rewards applied in handleActivityComplete when present */
+type PressureClockReward = {
+  tierLabel: string;
+  differenceMs: number;
+  targetMs: number;
+  elapsedMs: number;
+  xp: number;
+  confidence: number;
+  fp: number;
+};
+
+type ActivityCompleteMeta = TrainingTriviaMeta | { pressureClock: PressureClockReward };
+
+function isPressureClockMeta(m: ActivityCompleteMeta | undefined): m is { pressureClock: PressureClockReward } {
+  return Boolean(m && typeof m === "object" && "pressureClock" in m);
+}
+
 /* ── Zone identity config ──────────────────────────────────────────────── */
 const zoneConfig: Record<
   MapZone["type"],
@@ -103,8 +120,8 @@ const zoneConfig: Record<
   pressure: {
     icon: Flame,
     emoji: "🔥",
-    purpose: "Clutch Moment Challenge: choose the right response in high-pressure moments.",
-    cta: "Enter Clutch Moment",
+    purpose: "Pressure Clock: memorize the hidden countdown, then tap Stop when you think it hits zero.",
+    cta: "Enter Pressure Clock",
     rewardLabel: "+Confidence",
     attribute: "confidence",
     xp: 30,
@@ -886,56 +903,169 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
   );
 }
 
-/* ── Pressure Zone: Reaction Speed Test ────────────────────────────────── */
-function PressureActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const scenarios = [
-    "Final penalty",
-    "Last-minute counterattack",
-    "Must-win header",
-    "Mistake recovery",
-    "Final defensive stand",
-    "Calm the crowd after a bad touch",
-  ];
-  const options = ["Go aggressive", "Stay composed", "Play safe", "Trust instinct"] as const;
-  const [scenario] = useState(scenarios[Math.floor(Math.random() * scenarios.length)]!);
-  const [picked, setPicked] = useState<string | null>(null);
-  const { activePlayer } = useGameProgress();
+/* ── Pressure Zone: Pressure Clock (blind countdown guess) ──────────── */
+const PRESSURE_CUE_LINES = ["Feel the rhythm", "Pressure rising", "Now or never?", "Hold your nerve"] as const;
 
-  const choose = (choice: string) => {
-    if (picked) return;
-    setPicked(choice);
-    const conf = activePlayer.attributes.confidence;
-    const form = activePlayer.attributes.form;
-    const morale = activePlayer.attributes.morale;
-    const base =
-      choice === "Stay composed" ? morale :
-      choice === "Go aggressive" ? conf :
-      choice === "Trust instinct" ? Math.round((conf + form) / 2) :
-      Math.round((morale + form) / 2);
-    onComplete(base >= 75 ? 6 : base >= 60 ? 4 : 2);
+function rollPressureTargetMs() {
+  return 3000 + Math.floor(Math.random() * (30000 - 3000 + 1));
+}
+
+function pressureRewardsFromDiff(differenceMs: number): Omit<PressureClockReward, "differenceMs" | "targetMs" | "elapsedMs"> {
+  if (differenceMs <= 500) {
+    return { tierLabel: "Perfect Clutch", xp: 20, confidence: 10, fp: 8 };
+  }
+  if (differenceMs <= 1500) {
+    return { tierLabel: "Great Timing", xp: 14, confidence: 7, fp: 5 };
+  }
+  if (differenceMs <= 3000) {
+    return { tierLabel: "Good Instinct", xp: 10, confidence: 4, fp: 3 };
+  }
+  return { tierLabel: "Shaky Nerves", xp: 5, confidence: 1, fp: 1 };
+}
+
+function PressureActivity({
+  onComplete,
+}: {
+  onComplete: (score: number, meta?: ActivityCompleteMeta) => void;
+}) {
+  type ClockPhase = "ready" | "running" | "result";
+  const [phase, setPhase] = useState<ClockPhase>("ready");
+  const [targetMs, setTargetMs] = useState(rollPressureTargetMs);
+  const [cueIdx, setCueIdx] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [differenceMs, setDifferenceMs] = useState(0);
+  const [tierPayload, setTierPayload] = useState<PressureClockReward | null>(null);
+  const stopHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (phase !== "running") return;
+    const t = window.setInterval(() => setCueIdx((i) => (i + 1) % PRESSURE_CUE_LINES.length), 2200);
+    return () => window.clearInterval(t);
+  }, [phase]);
+
+  const handleStart = () => {
+    if (phase !== "ready") return;
+    stopHandledRef.current = false;
+    startTimeRef.current = Date.now();
+    setPhase("running");
   };
 
+  const handleStop = () => {
+    if (phase !== "running" || stopHandledRef.current || startTimeRef.current === null) return;
+    stopHandledRef.current = true;
+    const stopTime = Date.now();
+    const elapsed = stopTime - startTimeRef.current;
+    const diff = Math.abs(elapsed - targetMs);
+    const tier = pressureRewardsFromDiff(diff);
+    setElapsedMs(elapsed);
+    setDifferenceMs(diff);
+    setTierPayload({
+      ...tier,
+      differenceMs: diff,
+      targetMs,
+      elapsedMs: elapsed,
+    });
+    setPhase("result");
+  };
+
+  const handleRetry = () => {
+    setTargetMs(rollPressureTargetMs());
+    setPhase("ready");
+    startTimeRef.current = null;
+    setTierPayload(null);
+    setElapsedMs(0);
+    setDifferenceMs(0);
+    stopHandledRef.current = false;
+    setCueIdx(0);
+  };
+
+  const handleClaimRewards = () => {
+    if (!tierPayload) return;
+    onComplete(0, { pressureClock: tierPayload });
+  };
+
+  const targetWholeSec = Math.round(targetMs / 1000);
+
   return (
-    <div className="py-4">
-      <p className="text-xs font-black text-foreground">Clutch Moment Challenge</p>
-      <p className="text-[10px] text-muted-foreground mb-3">Scenario: {scenario}</p>
-      <div className="grid grid-cols-2 gap-2">
-        {options.map((o) => (
+    <div
+      className="py-4 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
+      style={{ touchAction: "manipulation" }}
+    >
+      <p className="text-xs font-black text-foreground tracking-tight">Pressure Clock</p>
+
+      {phase === "ready" && (
+        <div className="mt-3 space-y-3">
+          <p className="text-2xl font-black text-foreground tabular-nums">
+            Target: {targetWholeSec} second{targetWholeSec === 1 ? "" : "s"}
+          </p>
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Memorize it. The clock disappears after you start.
+          </p>
           <button
-            key={o}
             type="button"
-            disabled={Boolean(picked)}
-            onClick={() => choose(o)}
-            className="p-2.5 rounded-xl border border-violet-500/20 bg-violet-500/10 text-[10px] font-bold text-foreground active:scale-[0.98]"
+            onClick={handleStart}
+            className="w-full min-h-[52px] rounded-2xl bg-gradient-to-r from-violet-600 to-rose-600 text-white font-black text-sm shadow-lg active:scale-[0.98] transition-transform"
           >
-            {o}
+            Start
           </button>
-        ))}
-      </div>
-      {picked && (
-        <div className="mt-3 p-2 rounded-xl bg-violet-500/10 border border-violet-500/20">
-          <p className="text-[10px] text-foreground font-bold">Chosen: {picked}</p>
-          <p className="text-[10px] text-muted-foreground">Confidence + XP + FP resolved.</p>
+        </div>
+      )}
+
+      {phase === "running" && (
+        <div className="mt-4 space-y-4">
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Trust your instinct. Stop when the hidden clock hits zero.
+          </p>
+          <div className="relative mx-auto flex h-44 w-44 items-center justify-center rounded-full border-2 border-orange-500/35 bg-gradient-to-b from-orange-500/10 via-background/80 to-background shadow-[0_0_40px_rgba(249,115,22,0.18)] animate-pulse">
+            <div className="absolute inset-3 rounded-full border border-rose-500/25 animate-pulse" style={{ animationDuration: "1.1s" }} />
+            <div className="relative text-center px-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-orange-300/90">Pressure</p>
+              <p className="mt-2 text-xs font-bold text-foreground">{PRESSURE_CUE_LINES[cueIdx]}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleStop}
+            className="w-full min-h-[56px] rounded-2xl border-2 border-rose-500/50 bg-rose-950/40 text-rose-100 font-black text-base shadow-[0_0_24px_rgba(244,63,94,0.25)] active:scale-[0.98] transition-transform"
+          >
+            Stop
+          </button>
+        </div>
+      )}
+
+      {phase === "result" && tierPayload && (
+        <div className="mt-3 space-y-3">
+          <div className="rounded-2xl border border-violet-500/25 bg-violet-950/30 p-3 text-left space-y-1.5">
+            <p className="text-sm font-black text-foreground">{tierPayload.tierLabel}</p>
+            <p className="text-[10px] text-muted-foreground">
+              Target: <span className="font-bold text-foreground">{(tierPayload.targetMs / 1000).toFixed(2)}s</span>
+              {" · "}
+              You stopped: <span className="font-bold text-foreground">{(tierPayload.elapsedMs / 1000).toFixed(2)}s</span>
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              Difference: <span className="font-bold text-foreground">{Math.round(tierPayload.differenceMs)}ms</span>
+            </p>
+            <p className="text-[10px] text-emerald-300/95 pt-1">
+              Rewards: +{tierPayload.confidence} Confidence · +{tierPayload.xp} XP · +{tierPayload.fp} FP
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleClaimRewards}
+              className="w-full min-h-[50px] rounded-2xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-black text-sm active:scale-[0.98] transition-transform"
+            >
+              Claim rewards
+            </button>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="w-full min-h-[48px] rounded-2xl border border-border/40 bg-background/60 text-foreground font-bold text-sm active:scale-[0.98] transition-transform"
+            >
+              Try again
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -1000,17 +1130,36 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
   const [step, setStep] = useState<ZoneStep>("intro");
   const [activityScore, setActivityScore] = useState(0);
   const [trainingMeta, setTrainingMeta] = useState<TrainingTriviaMeta | null>(null);
+  const [pressureClockResult, setPressureClockResult] = useState<PressureClockReward | null>(null);
   const { activePlayer, addXp, applyAttributeDelta, addFocusPoints } = useGameProgress();
   const config = zoneConfig[zone.type];
   const Icon = config.icon;
 
+  useEffect(() => {
+    setStep("intro");
+    setActivityScore(0);
+    setTrainingMeta(null);
+    setPressureClockResult(null);
+  }, [zone.id]);
+
   const handleActivityComplete = useCallback(
-    (score: number, meta?: TrainingTriviaMeta) => {
+    (score: number, meta?: ActivityCompleteMeta) => {
       setActivityScore(score);
-      if (zone.type === "training") setTrainingMeta(meta ?? null);
-      // Apply scaled rewards based on performance
+
+      if (isPressureClockMeta(meta)) {
+        const pc = meta.pressureClock;
+        setPressureClockResult(pc);
+        addXp(activePlayer.id, pc.xp);
+        applyAttributeDelta(activePlayer.id, { confidence: pc.confidence });
+        if (pc.fp > 0) addFocusPoints(pc.fp);
+        setStep("reward");
+        return;
+      }
+
+      if (zone.type === "training") setTrainingMeta((meta as TrainingTriviaMeta | undefined) ?? null);
+
       const trainingEffectiveScore =
-        zone.type === "training" ? score + (meta?.streakBonus ?? 0) : score;
+        zone.type === "training" ? score + ((meta as TrainingTriviaMeta | undefined)?.streakBonus ?? 0) : score;
       const mult =
         zone.type === "rival"
           ? 1
@@ -1051,7 +1200,11 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
     }
     if (zone.type === "recovery") return `${activityScore} breathing cycles`;
     if (zone.type === "fan-arena") return `${activityScore} taps — ${activityScore >= 15 ? "Epic Hype!" : "Nice effort!"}`;
-    if (zone.type === "pressure") return `${activityScore}/3 reactions caught`;
+    if (zone.type === "pressure" && pressureClockResult) {
+      const pc = pressureClockResult;
+      return `${pc.tierLabel} · target ${(pc.targetMs / 1000).toFixed(2)}s · stopped ${(pc.elapsedMs / 1000).toFixed(2)}s · Δ ${Math.round(pc.differenceMs)}ms`;
+    }
+    if (zone.type === "pressure") return "Pressure Clock";
     if (zone.type === "stadium") return `${activityScore} event rewards`;
     if (zone.type === "rival") return "Challenge complete";
     return "Complete";
@@ -1064,8 +1217,9 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
       : zone.type === "training"
         ? Math.max(0.5, Math.min(1.6, effectiveTrainingScore / 6))
         : Math.max(0.5, Math.min(1.5, activityScore / 3));
-  const finalXp = Math.round(config.xp * mult);
-  const finalAttr = Math.max(1, Math.round(config.attrGain * mult));
+  const finalXp = pressureClockResult ? pressureClockResult.xp : Math.round(config.xp * mult);
+  const finalAttr = pressureClockResult ? pressureClockResult.confidence : Math.max(1, Math.round(config.attrGain * mult));
+  const finalFp = pressureClockResult ? pressureClockResult.fp : config.fpGain;
 
   return (
     <div className="fixed inset-0 z-[1350] flex items-end justify-center bg-background/50 backdrop-blur-sm" onClick={onClose}>
@@ -1183,7 +1337,7 @@ const ZoneExperience = ({ zone, onClose }: ZoneExperienceProps) => {
                 {[
                   { label: `+${finalAttr} ${config.attribute.charAt(0).toUpperCase() + config.attribute.slice(1)}`, icon: "📈" },
                   { label: `+${finalXp} XP`, icon: "⭐" },
-                  { label: `+${config.fpGain} FP`, icon: "🎯" },
+                  { label: `+${finalFp} FP`, icon: "🎯" },
                 ].map((r) => (
                   <div key={r.label} className={`px-3 py-2 rounded-xl ${config.bgAccent} ring-1 ${config.ringColor}`}>
                     <span className="text-sm">{r.icon}</span>
