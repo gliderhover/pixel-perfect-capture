@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { ChevronRight, X, Shield, Zap } from "lucide-react";
+import { X, Zap } from "lucide-react";
 import type { Player } from "@/data/mockData";
-import { keeperGloves, recruitBoosts, type KeeperGloves, type RecruitBoost } from "@/data/keeperItems";
+import { keeperGloves } from "@/data/keeperItems";
 import AnimatedPortrait from "./AnimatedPortrait";
 import PenaltyDuel from "./PenaltyDuel";
 import { useGameProgress } from "@/context/GameProgressContext";
@@ -28,14 +28,12 @@ const focusCostByRarity: Record<string, number> = {
   legendary: 5,
 };
 
-type EncounterPhase = "intro" | "equip" | "duel" | "recruited" | "escaped";
+type EncounterPhase = "intro" | "duel" | "recruited" | "escaped";
 
 const PlayerEncounter = ({ player, onClose, encounterRemainingMs, onFlowEnd }: PlayerEncounterProps) => {
   const [phase, setPhase] = useState<EncounterPhase>("intro");
   const [revealed, setRevealed] = useState(false);
-  const [selectedGloves, setSelectedGloves] = useState<KeeperGloves>(keeperGloves[0]);
-  const [activeBoosts, setActiveBoosts] = useState<RecruitBoost[]>([]);
-  const [hasUsedRetry, setHasUsedRetry] = useState(false);
+  const selectedGloves = keeperGloves[0];
   const [recruitError, setRecruitError] = useState<string | null>(null);
   const [isRecruiting, setIsRecruiting] = useState(false);
   const { userId, refreshOwnedPlayers, focusPoints, spendFocusPoints } = useGameProgress();
@@ -54,14 +52,6 @@ const PlayerEncounter = ({ player, onClose, encounterRemainingMs, onFlowEnd }: P
     const t = setTimeout(() => setRevealed(true), 100);
     return () => clearTimeout(t);
   }, []);
-
-  const toggleBoost = (boost: RecruitBoost) => {
-    setActiveBoosts((prev) =>
-      prev.find((b) => b.id === boost.id)
-        ? prev.filter((b) => b.id !== boost.id)
-        : [...prev, boost]
-    );
-  };
 
   const handleStartDuel = () => {
     // First attempt costs Focus Points
@@ -87,12 +77,6 @@ const PlayerEncounter = ({ player, onClose, encounterRemainingMs, onFlowEnd }: P
   };
 
   const handleGoal = () => {
-    const hasRetryBoost = activeBoosts.some((b) => b.effect === "retry") && !hasUsedRetry;
-    if (hasRetryBoost) {
-      setHasUsedRetry(true);
-      setPhase("equip");
-      return;
-    }
     setPhase("escaped");
   };
 
@@ -109,8 +93,8 @@ const PlayerEncounter = ({ player, onClose, encounterRemainingMs, onFlowEnd }: P
         player={player}
         gloveTimingBonus={selectedGloves.timingBonus}
         diveForgiveness={selectedGloves.diveForgiveness > 0}
-        slowShot={activeBoosts.some((b) => b.effect === "slow_shot")}
-        hintDirection={activeBoosts.some((b) => b.effect === "hint_direction")}
+        slowShot={false}
+        hintDirection={false}
         focusPoints={focusPoints}
         gloveName={selectedGloves.name}
         onSave={handleSave}
@@ -209,88 +193,6 @@ const PlayerEncounter = ({ player, onClose, encounterRemainingMs, onFlowEnd }: P
     );
   }
 
-  // --- EQUIP ---
-  if (phase === "equip") {
-    return (
-      <div className="fixed inset-0 z-[1400] flex flex-col bg-background/95 backdrop-blur-xl">
-        <button type="button" onClick={() => closeWithResult("closed")}
-          className="absolute top-[max(3rem,env(safe-area-inset-top))] right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full glass-card">
-          <X className="h-5 w-5 text-muted-foreground" />
-        </button>
-
-        <div className="flex-1 overflow-y-auto px-5 pt-[max(4rem,env(safe-area-inset-top))] pb-36">
-          <div className="text-center mb-5">
-            <Shield className="w-7 h-7 text-primary mx-auto mb-2" />
-            <h2 className="text-xl font-black text-foreground">Prepare Your Gloves</h2>
-            <p className="text-xs text-muted-foreground mt-1">
-              Equip gloves & boosts before facing <span className="text-foreground font-semibold">{player.name}</span>
-            </p>
-            {hasUsedRetry && (
-              <p className="text-xs text-accent font-bold mt-2">🔄 Free retry from Pressure Calm!</p>
-            )}
-          </div>
-
-          {/* Focus Points */}
-          <div className="glass-card px-4 py-3 rounded-2xl mb-5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🎯</span>
-              <div>
-                <p className="text-xs font-bold text-foreground">Focus Points</p>
-                <p className="text-[10px] text-muted-foreground">Used for retries if you miss</p>
-              </div>
-            </div>
-            <span className="text-xl font-black text-accent">{focusPoints}</span>
-          </div>
-
-          {/* Gloves */}
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Keeper Gloves</p>
-          <div className="grid grid-cols-2 gap-2 mb-5">
-            {keeperGloves.map((g) => (
-              <button key={g.id} type="button" onClick={() => setSelectedGloves(g)}
-                className={`p-3 rounded-2xl text-left transition-all active:scale-95 ${
-                  selectedGloves.id === g.id ? "glass-card-strong border-primary/40 glow-primary" : "glass-card border-transparent"
-                }`}>
-                <span className="text-xl">{g.icon}</span>
-                <p className="text-xs font-bold text-foreground mt-1">{g.name}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{g.description}</p>
-              </button>
-            ))}
-          </div>
-
-          {/* Boosts */}
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Boosts</p>
-          <div className="grid grid-cols-2 gap-2">
-            {recruitBoosts.map((b) => {
-              const active = activeBoosts.some((ab) => ab.id === b.id);
-              return (
-                <button key={b.id} type="button" onClick={() => toggleBoost(b)}
-                  className={`p-3 rounded-2xl text-left transition-all active:scale-95 ${
-                    active ? "glass-card-strong border-accent/40 glow-accent" : "glass-card border-transparent"
-                  }`}>
-                  <span className="text-xl">{b.icon}</span>
-                  <p className="text-xs font-bold text-foreground mt-1">{b.name}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{b.description}</p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background/95 to-transparent"
-          style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}>
-          {recruitError && (
-            <p className="mb-2 text-[10px] text-destructive text-center">{recruitError}</p>
-          )}
-          <button type="button" onClick={() => setPhase("duel")}
-            disabled={isRecruiting}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary text-primary-foreground font-black text-base glow-primary active:scale-[0.97] transition-transform flex items-center justify-center gap-2">
-            ⚡ {isRecruiting ? "Saving recruit..." : "Start Penalty Duel"} <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // --- INTRO ---
   return (
     <div className="fixed inset-0 z-[1400]" onClick={() => closeWithResult("closed")}>
@@ -372,9 +274,9 @@ const PlayerEncounter = ({ player, onClose, encounterRemainingMs, onFlowEnd }: P
           </p>
 
           {focusPoints >= (focusCostByRarity[player.rarity] ?? 2) ? (
-            <button type="button" onClick={() => setPhase("equip")}
+            <button type="button" onClick={handleStartDuel}
               className="floating-button flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary via-primary to-primary py-4 text-sm font-black text-primary-foreground glow-primary">
-              ⚡ Start Penalty Duel <ChevronRight className="h-4 w-4" />
+              ⚡ Start Penalty Duel
             </button>
           ) : (
             <div className="text-center">

@@ -1024,6 +1024,8 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
   const [theirDecision, setTheirDecision] = useState<TurnDecision | null>(null);
   const [lockedYou, setLockedYou] = useState(false);
   const [lockedThem, setLockedThem] = useState(false);
+  const [draftZone, setDraftZone] = useState<PvPGoalZone | null>(null);
+  const [draftShotType, setDraftShotType] = useState<PvPShotType>("speed");
   const [powerPct, setPowerPct] = useState(20);
   const [ballAt, setBallAt] = useState<keyof typeof PVP_BALL_POS | null>(null);
   const [gloveDir, setGloveDir] = useState<Direction | null>(null);
@@ -1075,6 +1077,8 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
     setLockedThem(false);
     setYourDecision(null);
     setTheirDecision(null);
+    setDraftZone(null);
+    setDraftShotType("speed");
     setTurnPhase("pick");
     setBallAt(null);
     setGloveDir(null);
@@ -1095,104 +1099,104 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
   }, [duelTargetId, turnPhase, matchDone]);
 
   useEffect(() => {
-    if (!duelTargetId || turnPhase !== "pick" || matchDone) return;
-    const myRole = isYourKick ? "kicker" : "keeper";
-    if (!lockedThem) {
-      const aiLockDelay = 1000 + Math.random() * 2500;
-      const t = window.setTimeout(() => {
-        const ai: TurnDecision = {
-          zone: randomPvPZone(),
-          powerPct: 35 + Math.random() * 55,
-          shotType: randomShotType(),
-          auto: false,
-        };
-        setTheirDecision(ai);
-        setLockedThem(true);
-      }, aiLockDelay);
-      return () => window.clearTimeout(t);
-    }
-    if (lockedYou && lockedThem) {
-      const k = curTurn.kicker === "you" ? yourDecision : theirDecision;
-      const g = curTurn.keeper === "you" ? yourDecision : theirDecision;
-      if (!k || !g) return;
-      const resolved = resolvePvPTurn(
-        k,
-        g,
-        curTurn.kicker === "you" ? activePlayer.stats.overall : 74,
-        curTurn.keeper === "you" ? activePlayer.stats.overall : 74
-      );
-      setTurnPhase("reveal");
-      setBallAt(resolved.ballEnd);
-      setGloveDir(resolved.gloveDir);
-      setLastOutcome(resolved.outcome);
-      setLastExplain(resolved.explain);
-      if (resolved.goalScored) {
-        if (curTurn.kicker === "you") setYouScore((s) => s + 1);
-        else setThemScore((s) => s + 1);
-      }
-      const nextT = window.setTimeout(() => {
-        const nextIdx = duelTurnIndex + 1;
-        const afterRegulation = nextIdx >= 6;
-        const scoreDiff = Math.abs((curTurn.kicker === "you" ? youScore + (resolved.goalScored ? 1 : 0) : youScore) - (curTurn.kicker === "them" ? themScore + (resolved.goalScored ? 1 : 0) : themScore));
-        if (afterRegulation) {
-          const y = curTurn.kicker === "you" ? youScore + (resolved.goalScored ? 1 : 0) : youScore;
-          const t = curTurn.kicker === "them" ? themScore + (resolved.goalScored ? 1 : 0) : themScore;
-          if (nextIdx >= 12 || (nextIdx % 2 === 0 && y !== t)) {
-            setMatchDone(true);
-            const targetName = challengers.find((c) => c.id === duelTargetId)?.userName ?? "Rival";
-            const resultText = y > t ? `${activePlayer.name} beat ${targetName}` : y < t ? `${targetName} beat ${activePlayer.name}` : `${activePlayer.name} drew with ${targetName}`;
-            setRecentRows((prev) => [
-              { id: `r-${Date.now()}`, challenger: activePlayer.name, opponent: targetName, score: `${y}-${t}`, result: resultText, atMs: Date.now() },
-              ...prev.slice(0, 5),
-            ]);
-            setChallengers((prev) =>
-              prev.map((c) =>
-                c.id === duelTargetId || c.status === "dueling"
-                  ? { ...c, status: "cooldown", cooldownUntilMs: Date.now() + 20000 }
-                  : c
-              )
-            );
-            const outcomeScore = y > t ? 6 : y === t ? 4 : 2;
-            onComplete(outcomeScore);
-            return;
-          }
-        }
-        setDuelTurnIndex(nextIdx);
-      }, 1400);
-      return () => window.clearTimeout(nextT);
-    }
+    if (!duelTargetId || turnPhase !== "pick" || matchDone || lockedThem) return;
+    const aiLockDelay = 900 + Math.random() * 1500;
+    const t = window.setTimeout(() => {
+      const ai: TurnDecision = {
+        zone: randomPvPZone(),
+        powerPct: 35 + Math.random() * 55,
+        shotType: randomShotType(),
+        auto: false,
+      };
+      setTheirDecision(ai);
+      setLockedThem(true);
+    }, aiLockDelay);
+    return () => window.clearTimeout(t);
+  }, [duelTargetId, turnPhase, matchDone, lockedThem, duelTurnIndex]);
 
-    if (turnTimer <= 0) {
-      if (!lockedYou) {
-        const autoMe: TurnDecision = { zone: randomPvPZone(), powerPct: 48, shotType: randomShotType(), auto: true };
-        setYourDecision(autoMe);
-        setLockedYou(true);
-      }
-      if (!lockedThem) {
-        const autoThem: TurnDecision = { zone: randomPvPZone(), powerPct: 48, shotType: randomShotType(), auto: true };
-        setTheirDecision(autoThem);
-        setLockedThem(true);
-      }
+  useEffect(() => {
+    if (!duelTargetId || turnPhase !== "pick" || matchDone) return;
+    if (turnTimer > 0) return;
+    if (!lockedYou) {
+      const autoMe: TurnDecision = { zone: randomPvPZone(), powerPct: 48, shotType: randomShotType(), auto: true };
+      setYourDecision(autoMe);
+      setLockedYou(true);
     }
-    return undefined;
+    if (!lockedThem) {
+      const autoThem: TurnDecision = { zone: randomPvPZone(), powerPct: 48, shotType: randomShotType(), auto: true };
+      setTheirDecision(autoThem);
+      setLockedThem(true);
+    }
+  }, [duelTargetId, turnPhase, matchDone, turnTimer, lockedYou, lockedThem]);
+
+  useEffect(() => {
+    if (!duelTargetId || turnPhase !== "pick" || matchDone) return;
+    if (!lockedYou || !lockedThem) return;
+    const k = curTurn.kicker === "you" ? yourDecision : theirDecision;
+    const g = curTurn.keeper === "you" ? yourDecision : theirDecision;
+    if (!k || !g) return;
+
+    const resolved = resolvePvPTurn(
+      k,
+      g,
+      curTurn.kicker === "you" ? activePlayer.stats.overall : 74,
+      curTurn.keeper === "you" ? activePlayer.stats.overall : 74
+    );
+    const nextYou = youScore + (resolved.goalScored && curTurn.kicker === "you" ? 1 : 0);
+    const nextThem = themScore + (resolved.goalScored && curTurn.kicker === "them" ? 1 : 0);
+    setTurnPhase("reveal");
+    setBallAt(resolved.ballEnd);
+    setGloveDir(resolved.gloveDir);
+    setLastOutcome(resolved.outcome);
+    setLastExplain(resolved.explain);
+    setYouScore(nextYou);
+    setThemScore(nextThem);
+
+    const nextT = window.setTimeout(() => {
+      const nextIdx = duelTurnIndex + 1;
+      const afterRegulation = nextIdx >= 6;
+      if (afterRegulation && (nextIdx >= 12 || (nextIdx % 2 === 0 && nextYou !== nextThem))) {
+        setMatchDone(true);
+        const targetName = challengers.find((c) => c.id === duelTargetId)?.userName ?? "Rival";
+        const resultText = nextYou > nextThem
+          ? `${activePlayer.name} beat ${targetName}`
+          : nextYou < nextThem
+            ? `${targetName} beat ${activePlayer.name}`
+            : `${activePlayer.name} drew with ${targetName}`;
+        setRecentRows((prev) => [
+          { id: `r-${Date.now()}`, challenger: activePlayer.name, opponent: targetName, score: `${nextYou}-${nextThem}`, result: resultText, atMs: Date.now() },
+          ...prev.slice(0, 5),
+        ]);
+        setChallengers((prev) =>
+          prev.map((c) =>
+            c.id === duelTargetId || c.status === "dueling"
+              ? { ...c, status: "cooldown", cooldownUntilMs: Date.now() + 20000 }
+              : c
+          )
+        );
+        const outcomeScore = nextYou > nextThem ? 6 : nextYou === nextThem ? 4 : 2;
+        onComplete(outcomeScore);
+        return;
+      }
+      setDuelTurnIndex(nextIdx);
+    }, 1400);
+    return () => window.clearTimeout(nextT);
   }, [
     duelTargetId,
     turnPhase,
+    matchDone,
     lockedYou,
     lockedThem,
     yourDecision,
     theirDecision,
-    turnTimer,
     curTurn,
     duelTurnIndex,
     activePlayer.stats.overall,
     activePlayer.name,
-    challengers,
-    duelTargetId,
     youScore,
     themScore,
+    challengers,
     onComplete,
-    isYourKick,
   ]);
 
   useEffect(() => {
@@ -1266,6 +1270,7 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
     const canPickZone = turnPhase === "pick" && !lockedYou;
     const yourIsKicker = curTurn.kicker === "you";
     const selectPrompt = yourIsKicker ? "Pick shot zone and lock power" : "Pick defend zone + shot read";
+    const canLockNow = yourIsKicker ? Boolean(draftZone) : Boolean(draftZone && draftShotType);
     return (
       <div className="py-3 space-y-3">
         <div className="rounded-2xl border border-red-500/20 bg-red-950/20 p-3">
@@ -1303,9 +1308,13 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
                 key={z}
                 type="button"
                 disabled={!canPickZone}
-                onClick={() => lockMyChoice(z, yourIsKicker ? randomShotType() : "speed")}
+                onClick={() => setDraftZone(z)}
                 className={`rounded-md border text-[8px] font-black transition-all ${
-                  canPickZone ? "border-border/25 bg-background/20 text-foreground/70" : "border-border/20 bg-background/10 text-muted-foreground/60"
+                  draftZone === z
+                    ? "border-primary bg-primary/20 text-primary"
+                    : canPickZone
+                      ? "border-border/25 bg-background/20 text-foreground/70"
+                      : "border-border/20 bg-background/10 text-muted-foreground/60"
                 }`}
               >
                 {z.toUpperCase()}
@@ -1346,16 +1355,35 @@ function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => voi
                     key={t}
                     type="button"
                     onClick={() => {
-                      if (!canPickZone || !yourDecision) return;
-                      setYourDecision((prev) => (prev ? { ...prev, shotType: t } : prev));
+                      if (!canPickZone) return;
+                      setDraftShotType(t);
                     }}
-                    className="rounded-xl py-2 text-[10px] font-black uppercase tracking-wide border border-border/35 bg-background/40 text-foreground/80"
+                    className={`rounded-xl py-2 text-[10px] font-black uppercase tracking-wide border ${
+                      draftShotType === t
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border/35 bg-background/40 text-foreground/80"
+                    }`}
                   >
                     {t}
                   </button>
                 ))}
               </div>
             )}
+            <button
+              type="button"
+              disabled={!canPickZone || !canLockNow}
+              onClick={() => {
+                if (!draftZone) return;
+                lockMyChoice(draftZone, yourIsKicker ? randomShotType() : draftShotType);
+              }}
+              className={`w-full py-2 rounded-xl text-[10px] font-black ${
+                canPickZone && canLockNow
+                  ? "bg-gradient-to-r from-red-500 to-rose-600 text-white"
+                  : "bg-background/40 text-muted-foreground border border-border/20"
+              }`}
+            >
+              {canPickZone ? "Lock choice" : "Locked"}
+            </button>
           </div>
         )}
         {turnPhase === "reveal" && (
