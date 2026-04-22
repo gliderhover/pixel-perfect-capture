@@ -11,7 +11,6 @@ import {
   type ApiTrainingTriviaQuestion,
 } from "@/lib/apiService";
 import AnimatedPortrait from "./AnimatedPortrait";
-import ChallengeFlow from "./ChallengeFlow";
 
 interface ZoneExperienceProps {
   zone: MapZone;
@@ -820,124 +819,661 @@ function TrainingActivity({
   );
 }
 
-/* ── Rival Pitch: Launches Compete ChallengeFlow ───────────────────────── */
-function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => void }) {
-  const { activePlayer, playersById } = useGameProgress();
-  const [selectedRival, setSelectedRival] = useState<number | null>(null);
-  const [moves, setMoves] = useState<Array<"Press" | "Dribble" | "Shoot" | "Defend" | "Counter" | "Hold Possession">>([]);
-  const [resolved, setResolved] = useState<null | "win" | "lose" | "draw">(null);
-  const rivals = mockRivals.slice(0, 3);
+/* ── Rival Pitch: Mock-local PvP Penalty Duel ─────────────────────────── */
+type PvPStatus = "available" | "pending_challenge" | "dueling" | "cooldown" | "offline";
+type PvPTab = "local" | "global" | "recent";
+type PvPGoalZone = "tl" | "tc" | "tr" | "bl" | "bc" | "br";
+type PvPShotType = "high" | "curve" | "speed";
+type PvPOutcome = "goal" | "save" | "missed" | "woodwork" | "deflected" | "close-miss";
+type DuelTurnPhase = "pick" | "reveal";
 
-  const movePool: Array<"Press" | "Dribble" | "Shoot" | "Defend" | "Counter" | "Hold Possession"> = [
-    "Press", "Dribble", "Shoot", "Defend", "Counter", "Hold Possession",
-  ];
+type PvPChallenger = {
+  id: string;
+  userName: string;
+  level: number;
+  playerId: string;
+  wins: number;
+  losses: number;
+  status: PvPStatus;
+  localSessionId: string;
+  region: string;
+  cooldownUntilMs?: number;
+};
 
-  const beats = (a: typeof movePool[number], b: typeof movePool[number]) => {
-    if (a === "Dribble" && b === "Press") return 1;
-    if (a === "Press" && b === "Hold Possession") return 1;
-    if (a === "Counter" && b === "Press") return 1;
-    if (a === "Defend" && b === "Shoot") return 1;
-    if (a === b) return 0;
-    return -1;
-  };
+type TurnDecision = {
+  zone: PvPGoalZone;
+  powerPct: number;
+  shotType: PvPShotType;
+  auto: boolean;
+};
 
-  const resolve = () => {
-    if (selectedRival === null || moves.length < 3) return;
-    const rivalMoves = [0, 1, 2].map(() => movePool[Math.floor(Math.random() * movePool.length)]!);
-    let score = 0;
-    for (let i = 0; i < 3; i += 1) {
-      score += beats(moves[i]!, rivalMoves[i]!);
+type PvPTurn = {
+  round: number;
+  sudden: boolean;
+  kicker: "you" | "them";
+  keeper: "you" | "them";
+};
+
+type RecentPvPRow = {
+  id: string;
+  challenger: string;
+  opponent: string;
+  score: string;
+  result: string;
+  atMs: number;
+};
+
+const PVP_BALL_POS: Record<PvPGoalZone | "miss-left" | "miss-right" | "miss-high", { left: string; top: string }> = {
+  tl: { left: "17%", top: "20%" },
+  tc: { left: "50%", top: "15%" },
+  tr: { left: "83%", top: "20%" },
+  bl: { left: "17%", top: "58%" },
+  bc: { left: "50%", top: "54%" },
+  br: { left: "83%", top: "58%" },
+  "miss-left": { left: "-7%", top: "45%" },
+  "miss-right": { left: "107%", top: "45%" },
+  "miss-high": { left: "50%", top: "-10%" },
+};
+
+function zoneToDir(z: PvPGoalZone): Direction {
+  if (z.endsWith("l")) return "left";
+  if (z.endsWith("r")) return "right";
+  return "center";
+}
+
+function sameSideZone(a: PvPGoalZone, b: PvPGoalZone) {
+  return zoneToDir(a) === zoneToDir(b);
+}
+
+function sameHeightZone(a: PvPGoalZone, b: PvPGoalZone) {
+  return (a.startsWith("t") && b.startsWith("t")) || (a.startsWith("b") && b.startsWith("b"));
+}
+
+function randomPvPZone(): PvPGoalZone {
+  const z: PvPGoalZone[] = ["tl", "tc", "tr", "bl", "bc", "br"];
+  return z[Math.floor(Math.random() * z.length)]!;
+}
+
+function randomShotType(): PvPShotType {
+  const r = Math.random();
+  if (r < 0.34) return "curve";
+  if (r < 0.67) return "speed";
+  return "high";
+}
+
+function powerBandFromPct(p: number) {
+  if (p < 34) return "low" as const;
+  if (p <= 68) return "mid" as const;
+  return "high" as const;
+}
+
+function resolvePvPTurn(
+  kicker: TurnDecision,
+  keeper: TurnDecision,
+  kickerOverall: number,
+  keeperOverall: number
+) {
+  const powerBand = powerBandFromPct(kicker.powerPct);
+  let saveChance =
+    keeper.zone === kicker.zone
+      ? 0.68
+      : sameSideZone(keeper.zone, kicker.zone)
+        ? 0.42
+        : sameHeightZone(keeper.zone, kicker.zone)
+          ? 0.3
+          : 0.14;
+  if (keeper.shotType === kicker.shotType) saveChance += 0.12;
+  else saveChance -= 0.08;
+  if (kicker.shotType === "curve" && keeper.shotType !== "curve") saveChance -= 0.06;
+  if (kicker.shotType === "speed") saveChance += keeper.zone === kicker.zone ? 0.06 : -0.07;
+  if (powerBand === "mid") saveChance -= 0.05;
+  if (powerBand === "low") saveChance += 0.03;
+  if (powerBand === "high") saveChance -= 0.03;
+  saveChance += Math.max(-0.04, Math.min(0.05, (keeperOverall - kickerOverall) * 0.002));
+  saveChance = Math.max(0.05, Math.min(0.9, saveChance));
+
+  let missChance = 0.03;
+  if (powerBand === "high") missChance += kicker.zone.startsWith("t") ? 0.16 : 0.09;
+  if (powerBand === "low") missChance -= 0.01;
+  missChance = Math.max(0.01, missChance);
+
+  const r = Math.random();
+  let outcome: PvPOutcome;
+  let ballEnd: keyof typeof PVP_BALL_POS = kicker.zone;
+  if (r < missChance) {
+    if (Math.random() < (powerBand === "high" ? 0.12 : 0.04)) {
+      outcome = "woodwork";
+      ballEnd = kicker.zone === "tl" || kicker.zone === "bl" ? "tl" : kicker.zone === "tr" || kicker.zone === "br" ? "tr" : "tc";
+    } else {
+      outcome = "missed";
+      ballEnd = kicker.zone === "tl" || kicker.zone === "bl" ? "miss-left" : kicker.zone === "tr" || kicker.zone === "br" ? "miss-right" : "miss-high";
     }
-    const conf = activePlayer.attributes.confidence;
-    const form = activePlayer.attributes.form;
-    const morale = activePlayer.attributes.morale;
-    const fanBond = activePlayer.attributes.fanBond;
-    // Lightweight attribute influence on duel resolution
-    score += (form + conf) >= 140 ? 1 : 0; // better execution for Shoot phases
-    score += morale >= 70 && moves.includes("Hold Possession") ? 1 : 0;
-    score += fanBond >= 70 ? 1 : 0;
-    const outcome: "win" | "lose" | "draw" = score >= 2 ? "win" : score <= -1 ? "lose" : "draw";
-    setResolved(outcome);
-    onComplete(outcome === "win" ? 6 : outcome === "draw" ? 4 : 2);
+  } else if (r < missChance + saveChance) {
+    outcome = kicker.shotType === "speed" || keeper.zone !== kicker.zone ? "deflected" : "save";
+    ballEnd = keeper.zone;
+  } else {
+    outcome = "goal";
+    ballEnd = kicker.zone;
+  }
+
+  return {
+    outcome,
+    ballEnd,
+    gloveDir: zoneToDir(keeper.zone),
+    goalScored: outcome === "goal",
+    explain:
+      outcome === "goal"
+        ? "Clean finish."
+        : outcome === "save"
+          ? "Keeper read it perfectly."
+          : outcome === "deflected"
+            ? "Touch on the shot."
+            : outcome === "woodwork"
+              ? "Clipped the frame."
+              : "Pulled wide/over.",
+  };
+}
+
+function RivalPitchActivity({ onComplete }: { onComplete: (score: number) => void }) {
+  const { activePlayer, playersById, ownedPlayersById } = useGameProgress();
+  const hasOwned = Object.keys(ownedPlayersById).length > 0;
+  const localSessionId = "local-session-alpha";
+  const [tab, setTab] = useState<PvPTab>("local");
+  const [challengers, setChallengers] = useState<PvPChallenger[]>(() =>
+    mockRivals.map((r, i) => ({
+      id: r.id,
+      userName: r.name,
+      level: r.level,
+      playerId: r.signaturePlayerId,
+      wins: 8 + i * 2,
+      losses: 4 + i,
+      status: i === 2 ? "cooldown" : "available",
+      localSessionId: i === 1 ? "local-session-beta" : "local-session-alpha",
+      region: "New Haven",
+      cooldownUntilMs: i === 2 ? Date.now() + 18000 : undefined,
+    }))
+  );
+  const [recentRows, setRecentRows] = useState<RecentPvPRow[]>([
+    { id: "rp1", challenger: "Daniel", opponent: "Alex", score: "3-2", result: "Daniel beat Alex", atMs: Date.now() - 2 * 60 * 1000 },
+    { id: "rp2", challenger: "Chris", opponent: "Maya", score: "1-1", result: "Chris drew with Maya", atMs: Date.now() - 5 * 60 * 1000 },
+  ]);
+  const [pendingChallengeId, setPendingChallengeId] = useState<string | null>(null);
+  const [incomingPrompt, setIncomingPrompt] = useState<string | null>(null);
+  const [requestExpiresAt, setRequestExpiresAt] = useState<number | null>(null);
+
+  const [duelTargetId, setDuelTargetId] = useState<string | null>(null);
+  const [duelTurnIndex, setDuelTurnIndex] = useState(0);
+  const [turnPhase, setTurnPhase] = useState<DuelTurnPhase>("pick");
+  const [turnTimer, setTurnTimer] = useState(8);
+  const [youScore, setYouScore] = useState(0);
+  const [themScore, setThemScore] = useState(0);
+  const [yourDecision, setYourDecision] = useState<TurnDecision | null>(null);
+  const [theirDecision, setTheirDecision] = useState<TurnDecision | null>(null);
+  const [lockedYou, setLockedYou] = useState(false);
+  const [lockedThem, setLockedThem] = useState(false);
+  const [powerPct, setPowerPct] = useState(20);
+  const [ballAt, setBallAt] = useState<keyof typeof PVP_BALL_POS | null>(null);
+  const [gloveDir, setGloveDir] = useState<Direction | null>(null);
+  const [lastOutcome, setLastOutcome] = useState<PvPOutcome | null>(null);
+  const [lastExplain, setLastExplain] = useState("");
+  const [matchDone, setMatchDone] = useState(false);
+  const powerDirRef = useRef(1);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setChallengers((prev) =>
+        prev.map((c) => {
+          if (c.status !== "cooldown" || !c.cooldownUntilMs) return c;
+          if (Date.now() >= c.cooldownUntilMs) return { ...c, status: "available", cooldownUntilMs: undefined };
+          return c;
+        })
+      );
+      if (requestExpiresAt && Date.now() >= requestExpiresAt) {
+        setPendingChallengeId(null);
+        setIncomingPrompt(null);
+        setRequestExpiresAt(null);
+        setChallengers((prev) => prev.map((c) => (c.status === "pending_challenge" ? { ...c, status: "available" } : c)));
+      }
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [requestExpiresAt]);
+
+  const duelTurns: PvPTurn[] = [
+    { round: 1, sudden: false, kicker: "you", keeper: "them" },
+    { round: 1, sudden: false, kicker: "them", keeper: "you" },
+    { round: 2, sudden: false, kicker: "you", keeper: "them" },
+    { round: 2, sudden: false, kicker: "them", keeper: "you" },
+    { round: 3, sudden: false, kicker: "you", keeper: "them" },
+    { round: 3, sudden: false, kicker: "them", keeper: "you" },
+    { round: 4, sudden: true, kicker: "you", keeper: "them" },
+    { round: 4, sudden: true, kicker: "them", keeper: "you" },
+    { round: 5, sudden: true, kicker: "you", keeper: "them" },
+    { round: 5, sudden: true, kicker: "them", keeper: "you" },
+    { round: 6, sudden: true, kicker: "you", keeper: "them" },
+    { round: 6, sudden: true, kicker: "them", keeper: "you" },
+  ];
+  const curTurn = duelTurns[Math.min(duelTurnIndex, duelTurns.length - 1)]!;
+  const isYourKick = curTurn.kicker === "you";
+
+  useEffect(() => {
+    if (!duelTargetId || matchDone) return;
+    setTurnTimer(8);
+    setLockedYou(false);
+    setLockedThem(false);
+    setYourDecision(null);
+    setTheirDecision(null);
+    setTurnPhase("pick");
+    setBallAt(null);
+    setGloveDir(null);
+    setLastOutcome(null);
+    setLastExplain("");
+  }, [duelTargetId, duelTurnIndex, matchDone]);
+
+  useEffect(() => {
+    if (!duelTargetId || matchDone) return;
+    if (turnPhase !== "pick") return;
+    const id = window.setInterval(() => {
+      setTurnTimer((prev) => {
+        if (prev <= 1) return 0;
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [duelTargetId, turnPhase, matchDone]);
+
+  useEffect(() => {
+    if (!duelTargetId || turnPhase !== "pick" || matchDone) return;
+    const myRole = isYourKick ? "kicker" : "keeper";
+    if (!lockedThem) {
+      const aiLockDelay = 1000 + Math.random() * 2500;
+      const t = window.setTimeout(() => {
+        const ai: TurnDecision = {
+          zone: randomPvPZone(),
+          powerPct: 35 + Math.random() * 55,
+          shotType: randomShotType(),
+          auto: false,
+        };
+        setTheirDecision(ai);
+        setLockedThem(true);
+      }, aiLockDelay);
+      return () => window.clearTimeout(t);
+    }
+    if (lockedYou && lockedThem) {
+      const k = curTurn.kicker === "you" ? yourDecision : theirDecision;
+      const g = curTurn.keeper === "you" ? yourDecision : theirDecision;
+      if (!k || !g) return;
+      const resolved = resolvePvPTurn(
+        k,
+        g,
+        curTurn.kicker === "you" ? activePlayer.stats.overall : 74,
+        curTurn.keeper === "you" ? activePlayer.stats.overall : 74
+      );
+      setTurnPhase("reveal");
+      setBallAt(resolved.ballEnd);
+      setGloveDir(resolved.gloveDir);
+      setLastOutcome(resolved.outcome);
+      setLastExplain(resolved.explain);
+      if (resolved.goalScored) {
+        if (curTurn.kicker === "you") setYouScore((s) => s + 1);
+        else setThemScore((s) => s + 1);
+      }
+      const nextT = window.setTimeout(() => {
+        const nextIdx = duelTurnIndex + 1;
+        const afterRegulation = nextIdx >= 6;
+        const scoreDiff = Math.abs((curTurn.kicker === "you" ? youScore + (resolved.goalScored ? 1 : 0) : youScore) - (curTurn.kicker === "them" ? themScore + (resolved.goalScored ? 1 : 0) : themScore));
+        if (afterRegulation) {
+          const y = curTurn.kicker === "you" ? youScore + (resolved.goalScored ? 1 : 0) : youScore;
+          const t = curTurn.kicker === "them" ? themScore + (resolved.goalScored ? 1 : 0) : themScore;
+          if (nextIdx >= 12 || (nextIdx % 2 === 0 && y !== t)) {
+            setMatchDone(true);
+            const targetName = challengers.find((c) => c.id === duelTargetId)?.userName ?? "Rival";
+            const resultText = y > t ? `${activePlayer.name} beat ${targetName}` : y < t ? `${targetName} beat ${activePlayer.name}` : `${activePlayer.name} drew with ${targetName}`;
+            setRecentRows((prev) => [
+              { id: `r-${Date.now()}`, challenger: activePlayer.name, opponent: targetName, score: `${y}-${t}`, result: resultText, atMs: Date.now() },
+              ...prev.slice(0, 5),
+            ]);
+            setChallengers((prev) =>
+              prev.map((c) =>
+                c.id === duelTargetId || c.status === "dueling"
+                  ? { ...c, status: "cooldown", cooldownUntilMs: Date.now() + 20000 }
+                  : c
+              )
+            );
+            const outcomeScore = y > t ? 6 : y === t ? 4 : 2;
+            onComplete(outcomeScore);
+            return;
+          }
+        }
+        setDuelTurnIndex(nextIdx);
+      }, 1400);
+      return () => window.clearTimeout(nextT);
+    }
+
+    if (turnTimer <= 0) {
+      if (!lockedYou) {
+        const autoMe: TurnDecision = { zone: randomPvPZone(), powerPct: 48, shotType: randomShotType(), auto: true };
+        setYourDecision(autoMe);
+        setLockedYou(true);
+      }
+      if (!lockedThem) {
+        const autoThem: TurnDecision = { zone: randomPvPZone(), powerPct: 48, shotType: randomShotType(), auto: true };
+        setTheirDecision(autoThem);
+        setLockedThem(true);
+      }
+    }
+    return undefined;
+  }, [
+    duelTargetId,
+    turnPhase,
+    lockedYou,
+    lockedThem,
+    yourDecision,
+    theirDecision,
+    turnTimer,
+    curTurn,
+    duelTurnIndex,
+    activePlayer.stats.overall,
+    activePlayer.name,
+    challengers,
+    duelTargetId,
+    youScore,
+    themScore,
+    onComplete,
+    isYourKick,
+  ]);
+
+  useEffect(() => {
+    if (!duelTargetId || matchDone || turnPhase !== "pick") return;
+    if (!(isYourKick && !lockedYou)) return;
+    setPowerPct(20);
+    const id = window.setInterval(() => {
+      setPowerPct((prev) => {
+        const next = prev + powerDirRef.current * 4;
+        if (next >= 100) {
+          powerDirRef.current = -1;
+          return 100;
+        }
+        if (next <= 0) {
+          powerDirRef.current = 1;
+          return 0;
+        }
+        return next;
+      });
+    }, 40);
+    return () => window.clearInterval(id);
+  }, [duelTargetId, matchDone, turnPhase, isYourKick, lockedYou]);
+
+  const issueChallenge = (id: string) => {
+    if (!hasOwned || duelTargetId || pendingChallengeId) return;
+    setPendingChallengeId(id);
+    setIncomingPrompt(id);
+    setRequestExpiresAt(Date.now() + 15000);
+    setChallengers((prev) => prev.map((c) => (c.id === id ? { ...c, status: "pending_challenge" } : c)));
   };
 
-  if (selectedRival !== null && resolved === null && moves.length >= 3) {
+  const acceptChallenge = () => {
+    if (!incomingPrompt) return;
+    setRequestExpiresAt(null);
+    setPendingChallengeId(null);
+    setIncomingPrompt(null);
+    setDuelTargetId(incomingPrompt);
+    setDuelTurnIndex(0);
+    setMatchDone(false);
+    setYouScore(0);
+    setThemScore(0);
+    setChallengers((prev) => prev.map((c) => (c.id === incomingPrompt ? { ...c, status: "dueling" } : c)));
+  };
+
+  const declineChallenge = () => {
+    if (!incomingPrompt) return;
+    const id = incomingPrompt;
+    setIncomingPrompt(null);
+    setPendingChallengeId(null);
+    setRequestExpiresAt(null);
+    setChallengers((prev) => prev.map((c) => (c.id === id ? { ...c, status: "available" } : c)));
+  };
+
+  const lockMyChoice = (zone: PvPGoalZone, shotType: PvPShotType) => {
+    if (!duelTargetId || turnPhase !== "pick" || lockedYou) return;
+    const decision: TurnDecision = {
+      zone,
+      powerPct: isYourKick ? powerPct : 50,
+      shotType,
+      auto: false,
+    };
+    setYourDecision(decision);
+    setLockedYou(true);
+  };
+
+  const localFiltered = challengers.filter((c) => c.localSessionId === localSessionId && c.region === "New Haven");
+  const target = duelTargetId ? challengers.find((c) => c.id === duelTargetId) : null;
+
+  if (duelTargetId && target) {
+    const theirPlayer = playersById[target.playerId] ?? getPlayerById(target.playerId);
+    const canPickZone = turnPhase === "pick" && !lockedYou;
+    const yourIsKicker = curTurn.kicker === "you";
+    const selectPrompt = yourIsKicker ? "Pick shot zone and lock power" : "Pick defend zone + shot read";
     return (
       <div className="py-3 space-y-3">
-        <p className="text-xs font-black text-foreground">3-Move Tactical Duel</p>
-        <p className="text-[10px] text-muted-foreground">Moves locked: {moves.join(" · ")}</p>
-        <button
-          type="button"
-          onClick={resolve}
-          className="w-full py-3 rounded-2xl bg-red-500/15 border border-red-500/30 text-xs font-black text-foreground"
-        >
-          Resolve Duel
-        </button>
-      </div>
-    );
-  }
+        <div className="rounded-2xl border border-red-500/20 bg-red-950/20 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-black text-foreground">PvP Penalty Duel</p>
+            <p className="text-[10px] font-black text-red-300">
+              {curTurn.sudden ? `Sudden Death ${Math.max(1, Math.floor((duelTurnIndex - 6) / 2) + 1)}` : `Round ${curTurn.round}`}
+            </p>
+          </div>
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-foreground font-bold">{activePlayer.name}</span>
+            <span className="text-muted-foreground">Score</span>
+            <span className="text-foreground font-bold">{target.userName}</span>
+          </div>
+          <div className="text-center text-lg font-black text-foreground mt-0.5">{youScore} - {themScore}</div>
+          <div className="flex items-center justify-between mt-2 text-[10px]">
+            <span className={`${curTurn.kicker === "you" ? "text-primary font-black" : "text-muted-foreground"}`}>
+              You: {curTurn.kicker === "you" ? "Kicker" : "Goalkeeper"}
+            </span>
+            <span className="text-amber-300 font-black">{turnPhase === "pick" ? `${turnTimer}s` : "Resolving…"}</span>
+            <span className={`${curTurn.kicker === "them" ? "text-red-300 font-black" : "text-muted-foreground"}`}>
+              {target.userName}: {curTurn.kicker === "them" ? "Kicker" : "Goalkeeper"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between mt-1 text-[9px]">
+            <span className={lockedYou ? "text-emerald-300 font-bold" : "text-muted-foreground"}>{lockedYou ? "You locked" : "You picking"}</span>
+            <span className={lockedThem ? "text-emerald-300 font-bold" : "text-muted-foreground"}>{lockedThem ? "Rival locked" : "Rival picking"}</span>
+          </div>
+        </div>
 
-  if (selectedRival !== null && resolved !== null) {
-    return (
-      <div className="py-4 text-center">
-        <p className="text-sm font-black text-foreground mb-1">
-          {resolved === "win" ? "Duel Won" : resolved === "draw" ? "Duel Draw" : "Duel Lost"}
-        </p>
-        <p className="text-[10px] text-muted-foreground">Confidence + XP + points resolved (mock leaderboard impact).</p>
-      </div>
-    );
-  }
-
-  if (selectedRival !== null && moves.length < 3) {
-    const rival = rivals[selectedRival];
-    const rivalPlayer = playersById[rival.signaturePlayerId] ?? getPlayerById(rival.signaturePlayerId);
-    if (rivalPlayer) {
-      return (
-        <div className="py-3 space-y-2">
-          <p className="text-xs font-black text-foreground">Pick 3 moves vs @{rival.name}</p>
-          <div className="grid grid-cols-2 gap-2">
-            {movePool.map((m) => (
+        <div className="relative mx-auto w-full max-w-[320px] aspect-[5/3] rounded-t-2xl border border-border/30 bg-background/45 overflow-hidden">
+          <div className="absolute inset-0 grid grid-cols-3 grid-rows-2 gap-px p-1.5">
+            {(["tl", "tc", "tr", "bl", "bc", "br"] as PvPGoalZone[]).map((z) => (
               <button
-                key={m}
+                key={z}
                 type="button"
-                disabled={moves.length >= 3}
-                onClick={() => setMoves((prev) => [...prev, m])}
-                className="p-2 rounded-xl bg-red-500/5 border border-red-500/10 text-[10px] font-bold text-foreground active:scale-[0.98]"
+                disabled={!canPickZone}
+                onClick={() => lockMyChoice(z, yourIsKicker ? randomShotType() : "speed")}
+                className={`rounded-md border text-[8px] font-black transition-all ${
+                  canPickZone ? "border-border/25 bg-background/20 text-foreground/70" : "border-border/20 bg-background/10 text-muted-foreground/60"
+                }`}
               >
-                {m}
+                {z.toUpperCase()}
               </button>
             ))}
           </div>
-          <p className="text-[10px] text-muted-foreground">Selected: {moves.join(" · ") || "None yet"}</p>
+          <div className={`absolute bottom-1 left-1/2 -translate-x-1/2 text-3xl transition-all ${
+            gloveDir === "left" ? "animate-duel-dive-left" : gloveDir === "right" ? "animate-duel-dive-right" : gloveDir === "center" ? "animate-duel-dive-center" : ""
+          }`}>
+            🧤
+          </div>
+          {ballAt && (
+            <div
+              className="absolute w-9 h-9 flex items-center justify-center text-2xl animate-duel-ball-flight"
+              style={{ left: PVP_BALL_POS[ballAt].left, top: PVP_BALL_POS[ballAt].top, transform: "translate(-50%, -50%)" }}
+            >
+              ⚽
+            </div>
+          )}
         </div>
-      );
-    }
+
+        {turnPhase === "pick" && (
+          <div className="space-y-2">
+            <p className="text-[10px] text-muted-foreground">{selectPrompt}</p>
+            {yourIsKicker && (
+              <div>
+                <div className="relative h-4 rounded-full overflow-hidden bg-muted border border-border/20">
+                  <div className="absolute top-0 bottom-0 left-[34%] w-[34%] bg-emerald-500/25" />
+                  <div className="absolute top-0 bottom-0 w-2 bg-amber-300" style={{ left: `${Math.max(0, powerPct - 2)}%` }} />
+                </div>
+                <p className="text-[9px] text-muted-foreground mt-1">Power: {Math.round(powerPct)}%</p>
+              </div>
+            )}
+            {!yourIsKicker && (
+              <div className="grid grid-cols-3 gap-2">
+                {(["high", "curve", "speed"] as PvPShotType[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      if (!canPickZone || !yourDecision) return;
+                      setYourDecision((prev) => (prev ? { ...prev, shotType: t } : prev));
+                    }}
+                    className="rounded-xl py-2 text-[10px] font-black uppercase tracking-wide border border-border/35 bg-background/40 text-foreground/80"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {turnPhase === "reveal" && (
+          <p className="text-[10px] text-muted-foreground">{lastOutcome?.toUpperCase()} · {lastExplain}</p>
+        )}
+      </div>
+    );
   }
 
+  const topNearby = localFiltered
+    .slice()
+    .sort((a, b) => (b.wins - b.losses) - (a.wins - a.losses))
+    .slice(0, 5);
+  const youScoreLabel = `${Math.max(0, activePlayer.level * 18 + activePlayer.attributes.confidence * 3)}`;
+
   return (
-    <div className="py-3 space-y-2">
-      <p className="text-xs font-black text-foreground mb-2">Choose your rival</p>
-      {rivals.map((rival, i) => {
-        const rp = playersById[rival.signaturePlayerId] ?? getPlayerById(rival.signaturePlayerId);
-        if (!rp) return null;
-        return (
+    <div className="py-3 space-y-3">
+      <div className="flex gap-2">
+        {(["local", "global", "recent"] as PvPTab[]).map((t) => (
           <button
-            key={rival.id}
+            key={t}
             type="button"
-            onClick={() => setSelectedRival(i)}
-            className="w-full flex items-center gap-3 p-3 rounded-2xl bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 transition-colors active:scale-[0.98]"
+            onClick={() => setTab(t)}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase ${tab === t ? "bg-red-500/20 text-red-300 border border-red-500/40" : "bg-background/40 text-muted-foreground border border-border/20"}`}
           >
-            <AnimatedPortrait player={rp} size="xs" />
-            <div className="flex-1 min-w-0 text-left">
-              <p className="text-xs font-black text-foreground truncate">{rp.name}</p>
-              <p className="text-[10px] text-muted-foreground">
-                {rp.position} · OVR {rp.stats.overall} · @{rival.name}
-              </p>
-            </div>
-            <Swords className="w-4 h-4 text-red-400 shrink-0" />
+            {t}
           </button>
-        );
-      })}
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-red-500/20 bg-red-950/20 p-3">
+        <p className="text-xs font-black text-foreground mb-2">Zone Leaderboard</p>
+        <div className="flex items-center justify-between text-[10px] mb-2">
+          <span className="text-muted-foreground">Local Rank</span>
+          <span className="font-black text-foreground">#{Math.max(1, 8 - activePlayer.level)}</span>
+        </div>
+        <div className="flex items-center justify-between text-[10px] mb-2">
+          <span className="text-muted-foreground">Your Score</span>
+          <span className="font-black text-amber-300">{youScoreLabel}</span>
+        </div>
+        <div className="space-y-1.5">
+          {(tab === "global" ? challengers : topNearby).slice(0, 4).map((c, i) => (
+            <div key={c.id} className="flex items-center justify-between text-[10px]">
+              <span className="text-foreground font-bold">#{i + 1} @{c.userName}</span>
+              <span className="text-muted-foreground">{c.wins}-{c.losses}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border/20 bg-background/40 p-3">
+        <p className="text-xs font-black text-foreground mb-2">Recently Played</p>
+        <div className="space-y-1.5">
+          {(tab === "recent" ? recentRows : recentRows.slice(0, 2)).map((row) => (
+            <p key={row.id} className="text-[10px] text-muted-foreground">
+              {row.result} {row.score} · {Math.max(1, Math.round((Date.now() - row.atMs) / 60000))}m ago
+            </p>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-black text-foreground">Available Challengers</p>
+        {!hasOwned && (
+          <div className="rounded-2xl border border-border/20 bg-background/40 p-3 text-[10px] text-muted-foreground">
+            Recruit at least one player to challenge nearby users.
+          </div>
+        )}
+        {localFiltered.map((c) => {
+          const rp = playersById[c.playerId] ?? getPlayerById(c.playerId);
+          if (!rp) return null;
+          const isChallengeable =
+            hasOwned &&
+            c.status === "available" &&
+            !duelTargetId &&
+            !pendingChallengeId &&
+            c.localSessionId === localSessionId &&
+            c.region === "New Haven";
+          return (
+            <div key={c.id} className="rounded-2xl border border-red-500/15 bg-red-950/10 p-3">
+              <div className="flex items-center gap-3">
+                <AnimatedPortrait player={rp} size="xs" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-black text-foreground truncate">@{c.userName}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Lvl {c.level} · {c.wins}-{c.losses} · {c.status}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!isChallengeable}
+                  onClick={() => issueChallenge(c.id)}
+                  className={`px-3 py-2 rounded-xl text-[10px] font-black ${isChallengeable ? "bg-gradient-to-r from-red-500 to-rose-600 text-white" : "bg-background/40 text-muted-foreground border border-border/20"}`}
+                >
+                  {c.status === "dueling"
+                    ? "In Duel"
+                    : c.status === "pending_challenge"
+                      ? "Pending"
+                      : c.status === "cooldown"
+                        ? `Cooldown ${Math.max(1, Math.ceil(((c.cooldownUntilMs ?? Date.now()) - Date.now()) / 1000))}s`
+                        : c.status === "offline"
+                          ? "Offline"
+                          : "Challenge"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {incomingPrompt && (
+        <div className="rounded-2xl border border-amber-400/40 bg-amber-950/20 p-3">
+          <p className="text-xs font-black text-foreground">Incoming Challenge</p>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            @{challengers.find((c) => c.id === incomingPrompt)?.userName} challenged you. Expires in{" "}
+            {Math.max(1, Math.ceil(((requestExpiresAt ?? Date.now()) - Date.now()) / 1000))}s.
+          </p>
+          <div className="flex gap-2 mt-2">
+            <button type="button" onClick={acceptChallenge} className="flex-1 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black">
+              Accept
+            </button>
+            <button type="button" onClick={declineChallenge} className="flex-1 py-2 rounded-xl bg-background/50 border border-border/20 text-[10px] font-black text-foreground">
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
+
+      <p className="text-[9px] text-muted-foreground">
+        Mock/local mode: grouped by <span className="font-bold text-foreground">localSessionId + region</span>. No real WiFi fingerprint in-browser.
+      </p>
     </div>
   );
 }
