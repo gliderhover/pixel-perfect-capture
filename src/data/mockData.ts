@@ -1175,6 +1175,13 @@ export const mockZones: MapZone[] = [
 
 /** Player encounters spread across all 12 host-corridor metros (40+ markers for 40 players) */
 export const mockPlayerMarkers: PlayerMarker[] = [
+  // New Haven
+  { id: "pm-nhv-1",  playerId: "5",  lat: 41.3089, lng: -72.9276 }, // Foden
+  { id: "pm-nhv-2",  playerId: "12", lat: 41.3116, lng: -72.9311 }, // Musiala
+  { id: "pm-nhv-3",  playerId: "17", lat: 41.3048, lng: -72.9342 }, // Alphonso Davies
+  { id: "pm-nhv-4",  playerId: "23", lat: 41.3032, lng: -72.9191 }, // Kubo
+  { id: "pm-nhv-5",  playerId: "31", lat: 41.3151, lng: -72.9223 }, // Pedro Neto
+  { id: "pm-nhv-6",  playerId: "39", lat: 41.2996, lng: -72.9268 }, // Hwang Hee-chan
   // New York
   { id: "pm-nyc-1",  playerId: "1",  lat: 40.7484, lng: -73.9857 }, // Mbappé
   { id: "pm-nyc-2",  playerId: "9",  lat: 40.7614, lng: -73.9776 }, // Haaland
